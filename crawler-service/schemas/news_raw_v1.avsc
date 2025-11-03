@@ -1,0 +1,120 @@
+{
+  "type": "record",
+  "name": "NewsRaw",
+  "namespace": "com.sentiment_analyzer.crawler",
+  "doc": "Raw news article from crawler service",
+  "fields": [
+    {
+      "name": "article_id",
+      "type": "string",
+      "doc": "Unique article identifier (ULID)"
+    },
+    {
+      "name": "canonical_url",
+      "type": "string",
+      "doc": "Canonical/normalized article URL"
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "doc": "Article headline"
+    },
+    {
+      "name": "body",
+      "type": "string",
+      "doc": "Article main content"
+    },
+    {
+      "name": "url",
+      "type": "string",
+      "doc": "Original article URL"
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "doc": "Publication/source name"
+    },
+    {
+      "name": "language",
+      "type": "string",
+      "doc": "Detected language code (ISO 639-1)"
+    },
+    {
+      "name": "published_at",
+      "type": "string",
+      "doc": "Publication timestamp (ISO-8601, UTC)"
+    },
+    {
+      "name": "crawled_at",
+      "type": "string",
+      "doc": "Crawl timestamp (ISO-8601, UTC)"
+    },
+    {
+      "name": "country",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null,
+      "doc": "Country code (ISO 3166-1 alpha-2) if detected"
+    },
+    {
+      "name": "checksum",
+      "type": "string",
+      "doc": "SHA-256 checksum of article body"
+    },
+    {
+      "name": "validation_score",
+      "type": "float",
+      "doc": "Data quality validation score (0.0-1.0)"
+    },
+    {
+      "name": "schema_version",
+      "type": "string",
+      "doc": "Schema version tag"
+    },
+    {
+      "name": "ingest_job_id",
+      "type": "string",
+      "doc": "Crawler job identifier"
+    },
+    {
+      "name": "publisher_id",
+      "type": "string",
+      "doc": "Feed source/publisher identifier"
+    },
+    {
+      "name": "author",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null,
+      "doc": "Article author name if available"
+    },
+    {
+      "name": "raw_html",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null,
+      "doc": "Original HTML content (optional, for debugging)"
+    },
+    {
+      "name": "extraction_method",
+      "type": "string",
+      "doc": "Parser type used (rss, html, etc.)"
+    },
+    {
+      "name": "metadata",
+      "type": {
+        "type": "map",
+        "values": "string"
+      },
+      "default": {},
+      "doc": "Additional metadata as key-value pairs"
+    }
+  ]
+}
+

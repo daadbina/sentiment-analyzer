@@ -1,0 +1,28 @@
+apiVersion: v2
+name: crawler-service
+description: A Helm chart for Crawler Service - Multilingual news article crawler
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - crawler
+  - news
+  - sentiment-analyzer
+  - kafka
+  - microservice
+
+home: https://github.com/sentiment-analyzer-v2/crawler-service
+sources:
+  - https://github.com/sentiment-analyzer-v2/crawler-service
+
+maintainers:
+  - name: Sentiment Analyzer Team
+    email: team@sentiment-analyzer.dev
+
+dependencies: []
+
+annotations:
+  category: Integration
+  licenses: Apache-2.0
+

@@ -1,0 +1,50 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: crawler-service
+  namespace: crawler-service
+  labels:
+    app: crawler-service
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - crawler.example.com
+    secretName: crawler-service-tls
+  rules:
+  - host: crawler.example.com
+    http:
+      paths:
+      - path: /metrics
+        pathType: Prefix
+        backend:
+          service:
+            name: crawler-service
+            port:
+              number: 9101
+      - path: /health
+        pathType: Prefix
+        backend:
+          service:
+            name: crawler-service
+            port:
+              number: 9101
+      - path: /ready
+        pathType: Prefix
+        backend:
+          service:
+            name: crawler-service
+            port:
+              number: 9101
+      - path: /live
+        pathType: Prefix
+        backend:
+          service:
+            name: crawler-service
+            port:
+              number: 9101
+

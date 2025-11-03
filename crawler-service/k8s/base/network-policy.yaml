@@ -1,0 +1,53 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: crawler-service
+  namespace: crawler-service
+  labels:
+    app: crawler-service
+spec:
+  podSelector:
+    matchLabels:
+      app: crawler-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 9101
+  - from:
+    - podSelector:
+        matchLabels:
+          app: crawler-service
+    ports:
+    - protocol: TCP
+      port: 9101
+  egress:
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 9092
+    - protocol: TCP
+      port: 8081
+    - protocol: TCP
+      port: 5432
+    - protocol: TCP
+      port: 6379
+    - protocol: TCP
+      port: 443
+    - protocol: UDP
+      port: 53
+  - to:
+    - podSelector:
+        matchLabels:
+          app: crawler-service
+    ports:
+    - protocol: TCP
+      port: 9101
+

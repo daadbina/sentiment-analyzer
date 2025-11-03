@@ -1,0 +1,45 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+bases:
+- ../../base
+
+namespace: crawler-service
+
+namePrefix: prod-
+
+commonLabels:
+  environment: production
+
+commonAnnotations:
+  environment: production
+
+replicas:
+- name: crawler-service
+  count: 5
+
+images:
+- name: crawler-service
+  newTag: "1.0.0"
+
+patchesStrategicMerge:
+- deployment-patch.yaml
+
+configMapGenerator:
+- name: crawler-config
+  behavior: merge
+  literals:
+  - LOG_LEVEL=INFO
+  - ENVIRONMENT=production
+  - CRAWL_INTERVAL_MINUTES=15
+  - MAX_CONCURRENT_REQUESTS=100
+
+secretGenerator:
+- name: crawler-secrets
+  behavior: merge
+  envs:
+  - secrets.env
+
+resources:
+- ingress.yaml
+

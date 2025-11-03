@@ -1,0 +1,163 @@
+# Default values for crawler-service Helm chart
+
+replicaCount: 3
+
+image:
+  repository: crawler-service
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9101"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+    - ALL
+
+service:
+  type: ClusterIP
+  port: 9101
+  targetPort: 9101
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: crawler.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: crawler-service-tls
+      hosts:
+        - crawler.example.com
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - crawler-service
+        topologyKey: kubernetes.io/hostname
+
+# Crawler Service Configuration
+config:
+  crawlIntervalMinutes: 30
+  maxConcurrentRequests: 50
+  requestTimeoutSeconds: 10
+  retryBackoffSeconds: 30
+  maxRetries: 5
+  langConfThreshold: 0.8
+  schemaVersion: "v1.0"
+  logLevel: INFO
+  logFormat: json
+  environment: production
+
+# Kafka Configuration
+kafka:
+  brokers: "kafka:9092"
+  topic: "news_raw"
+  acks: "all"
+  maxRetries: 5
+  dlqTopic: "news_raw_dlq"
+
+# Schema Registry Configuration
+schemaRegistry:
+  url: "http://schema-registry:8081"
+
+# Database Configuration
+database:
+  host: "154.53.166.231"
+  port: 5432
+  name: "sentiment"
+  minPoolSize: 5
+  maxPoolSize: 20
+
+# Monitoring Configuration
+monitoring:
+  prometheus:
+    port: 9101
+    host: "0.0.0.0"
+  jaeger:
+    enabled: true
+    agentHost: "jaeger"
+    agentPort: 6831
+
+# Health Check Configuration
+healthCheck:
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Network Policy
+networkPolicy:
+  enabled: true
+
+# Secrets (use Vault or sealed-secrets in production)
+secrets:
+  kafkaUsername: ""
+  kafkaPassword: ""
+  schemaRegistryUsername: ""
+  schemaRegistryPassword: ""
+  postgresUser: "adminsentiment"
+  postgresPassword: "wp2400!!!!"
+  redisUrl: ""
+

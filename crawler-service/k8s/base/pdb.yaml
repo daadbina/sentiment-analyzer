@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: crawler-service
+  namespace: crawler-service
+  labels:
+    app: crawler-service
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: crawler-service
+  unhealthyPodEvictionPolicy: AlwaysAllow
+

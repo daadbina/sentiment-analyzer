@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Ruff (Python linter)
+.ruff_cache/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+venv/
+ENV/
+env/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+.cache/
+temp/
+tmp/
+
+# Service-specific documentation (except CHANGELOG and README)
+NETWORK_FIX_REPORT.md
+INTEGRATION.md
+TODO.md
+API_DOCUMENTATION.md
+DEPLOYMENT.md
+COMPLETION_SUMMARY.md
+IMPLEMENTATION_COMPLETE.md
+SERVICE_STATUS_EXPLANATION.md
+

@@ -1,0 +1,30 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'crawler-service'
+
+scrape_configs:
+  # Crawler Service metrics
+  - job_name: 'crawler'
+    static_configs:
+      - targets: ['localhost:9101']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Kafka metrics (if using JMX exporter)
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['localhost:9999']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+    scrape_interval: 30s
+    scrape_timeout: 10s
+

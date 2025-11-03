@@ -1,0 +1,210 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'crawler-service/**'
+      - '.github/workflows/pr.yaml'
+
+jobs:
+  lint:
+    name: Lint & Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          cd crawler-service
+          pip install -r requirements.txt
+      
+      - name: Run ruff linter
+        run: |
+          cd crawler-service
+          python -m ruff check . --select=E,W,F
+      
+      - name: Run ruff formatter check
+        run: |
+          cd crawler-service
+          python -m ruff format . --check
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          cd crawler-service
+          pip install -r requirements.txt
+      
+      - name: Run unit tests
+        run: |
+          cd crawler-service
+          python -m pytest tests/unit -v --tb=short
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: unit-test-results
+          path: crawler-service/test-results.xml
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          cd crawler-service
+          pip install -r requirements.txt
+      
+      - name: Run tests with coverage
+        run: |
+          cd crawler-service
+          python -m pytest tests/ --cov=src --cov-report=xml --cov-report=html
+      
+      - name: Check coverage threshold
+        run: |
+          cd crawler-service
+          python -m pytest tests/ --cov=src --cov-fail-under=90
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./crawler-service/coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: true
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: crawler
+          POSTGRES_PASSWORD: crawler_password
+          POSTGRES_DB: crawler_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+      
+      kafka:
+        image: confluentinc/cp-kafka:7.5.0
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+          KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        ports:
+          - 9092:9092
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          cd crawler-service
+          pip install -r requirements.txt
+      
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgresql://crawler:crawler_password@localhost:5432/crawler_db
+          REDIS_URL: redis://localhost:6379/0
+          KAFKA_BROKERS: localhost:9092
+        run: |
+          cd crawler-service
+          python -m pytest tests/integration -v --tb=short
+
+  security:
+    name: Security Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          cd crawler-service
+          pip install -r requirements.txt bandit
+      
+      - name: Run Bandit security check
+        run: |
+          cd crawler-service
+          python -m bandit -r src/ -f json -o bandit-report.json || true
+      
+      - name: Upload security report
+        uses: actions/upload-artifact@v3
+        with:
+          name: bandit-report
+          path: crawler-service/bandit-report.json
+
+  docker-build:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./crawler-service
+          push: false
+          tags: crawler-service:pr-${{ github.event.pull_request.number }}
+

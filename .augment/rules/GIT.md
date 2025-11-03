@@ -1,3 +1,7 @@
+---
+type: "always_apply"
+---
+
 # Git Workflow & Versioning Guide
 
 **Project**: Sentiment Analyzer v2 - Multilingual News Analysis System  
@@ -68,7 +72,7 @@ This project uses a **modified Git Flow** optimized for microservices:
 #### `main` (Production)
 - **Purpose**: Production-ready code only
 - **Protection Rules**:
-  - ✅ Require pull request reviews (2 approvals minimum)
+  - ✅ Require pull request reviews (1 approval minimum)
   - ✅ Require status checks to pass (all CI/CD pipelines)
   - ✅ Require branches to be up to date before merging
   - ✅ No direct pushes allowed
@@ -644,10 +648,10 @@ Related to #456
 
 | Branch | Min Approvals | Status Checks | Stale PR |
 |--------|---------------|---------------|----------|
-| main | 2 | All pass | Auto-dismiss |
+| main | 1 | All pass | Auto-dismiss |
 | develop | 1 | All pass | Auto-dismiss |
 | feature/* | 0 | All pass | N/A |
-| hotfix/* | 2 | All pass | Auto-dismiss |
+| hotfix/* | 1 | All pass | Auto-dismiss |
 
 ### Merge Strategy
 

@@ -1,0 +1,48 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'canonicalizer-normalizer-service'
+
+scrape_configs:
+  # Canonicalizer Service Metrics
+  - job_name: 'canonicalizer-service'
+    static_configs:
+      - targets: ['localhost:9103']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # Prometheus Self-Monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Kafka Metrics (if using JMX exporter)
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['localhost:9308']
+    scrape_interval: 30s
+
+  # PostgreSQL Metrics (if using postgres_exporter)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['localhost:9187']
+    scrape_interval: 30s
+
+  # Redis Metrics (if using redis_exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['localhost:9121']
+    scrape_interval: 30s
+
+# Alerting rules
+rule_files:
+  - 'alerting_rules.yml'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['localhost:9093']
+

@@ -1,0 +1,235 @@
+{
+  "type": "record",
+  "name": "NewsCanonical",
+  "namespace": "com.sentiment_analyzer.canonicalizer",
+  "doc": "Canonicalized and normalized news article with enriched metadata",
+  "fields": [
+    {
+      "name": "article_id",
+      "type": "string",
+      "doc": "Unique article identifier (ULID format)"
+    },
+    {
+      "name": "canonical_url",
+      "type": "string",
+      "doc": "Canonical URL from validator"
+    },
+    {
+      "name": "normalized_url",
+      "type": "string",
+      "doc": "Fully normalized and deduplicated URL"
+    },
+    {
+      "name": "url_hash",
+      "type": "string",
+      "doc": "SHA-256 hash of normalized URL"
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "doc": "Original article title"
+    },
+    {
+      "name": "normalized_title",
+      "type": "string",
+      "doc": "Cleaned and normalized title"
+    },
+    {
+      "name": "body",
+      "type": "string",
+      "doc": "Original article body"
+    },
+    {
+      "name": "normalized_body",
+      "type": "string",
+      "doc": "Cleaned and normalized body content"
+    },
+    {
+      "name": "url",
+      "type": "string",
+      "doc": "Original article URL"
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "doc": "News source identifier"
+    },
+    {
+      "name": "publisher_id",
+      "type": "string",
+      "doc": "Verified publisher identifier"
+    },
+    {
+      "name": "publisher_name",
+      "type": "string",
+      "doc": "Publisher display name"
+    },
+    {
+      "name": "publisher_credibility",
+      "type": "double",
+      "doc": "Publisher credibility score (0.0-1.0)"
+    },
+    {
+      "name": "publisher_country",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Publisher country code"
+    },
+    {
+      "name": "language",
+      "type": "string",
+      "doc": "Detected language code (ISO 639-1)"
+    },
+    {
+      "name": "source_published_at_utc",
+      "type": "string",
+      "doc": "Publication timestamp in UTC ISO-8601"
+    },
+    {
+      "name": "validated_at",
+      "type": "string",
+      "doc": "Validation timestamp"
+    },
+    {
+      "name": "canonicalized_at",
+      "type": "string",
+      "doc": "Canonicalization timestamp"
+    },
+    {
+      "name": "country",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Country code extracted from article"
+    },
+    {
+      "name": "region",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Geographic region"
+    },
+    {
+      "name": "domain_category",
+      "type": "string",
+      "doc": "Content domain category (politics, economy, technology, conflict, etc.)"
+    },
+    {
+      "name": "content_type",
+      "type": "string",
+      "doc": "Content type (article, opinion, analysis, press_release, etc.)"
+    },
+    {
+      "name": "readability_score",
+      "type": "double",
+      "doc": "Flesch reading ease score"
+    },
+    {
+      "name": "word_count",
+      "type": "int",
+      "doc": "Word count of normalized body"
+    },
+    {
+      "name": "sentence_count",
+      "type": "int",
+      "doc": "Sentence count of normalized body"
+    },
+    {
+      "name": "checksum",
+      "type": "string",
+      "doc": "SHA-256 checksum of original content"
+    },
+    {
+      "name": "normalized_checksum",
+      "type": "string",
+      "doc": "SHA-256 checksum of normalized content"
+    },
+    {
+      "name": "validation_score",
+      "type": "double",
+      "doc": "Validation score from validator"
+    },
+    {
+      "name": "normalization_score",
+      "type": "double",
+      "doc": "Normalization quality score (0.0-1.0)"
+    },
+    {
+      "name": "normalization_details",
+      "type": {
+        "type": "record",
+        "name": "NormalizationDetails",
+        "fields": [
+          {
+            "name": "url_canonicalized",
+            "type": "boolean",
+            "doc": "URL canonicalization succeeded"
+          },
+          {
+            "name": "redirects_resolved",
+            "type": "boolean",
+            "doc": "Redirects were resolved"
+          },
+          {
+            "name": "publisher_identified",
+            "type": "boolean",
+            "doc": "Publisher was identified"
+          },
+          {
+            "name": "content_cleaned",
+            "type": "boolean",
+            "doc": "Content was cleaned"
+          },
+          {
+            "name": "metadata_enriched",
+            "type": "boolean",
+            "doc": "Metadata was enriched"
+          },
+          {
+            "name": "domain_classified",
+            "type": "boolean",
+            "doc": "Domain was classified"
+          },
+          {
+            "name": "fuzzy_dedup_checked",
+            "type": "boolean",
+            "doc": "Fuzzy deduplication was checked"
+          },
+          {
+            "name": "transformations_applied",
+            "type": {
+              "type": "array",
+              "items": "string"
+            },
+            "doc": "List of transformation codes applied"
+          }
+        ]
+      },
+      "doc": "Detailed normalization transformation flags"
+    },
+    {
+      "name": "schema_version",
+      "type": "string",
+      "doc": "Schema version identifier"
+    },
+    {
+      "name": "ingest_job_id",
+      "type": "string",
+      "doc": "Crawler job ID"
+    },
+    {
+      "name": "validation_job_id",
+      "type": "string",
+      "doc": "Validator job ID"
+    },
+    {
+      "name": "canonicalization_job_id",
+      "type": "string",
+      "doc": "Canonicalizer job ID"
+    },
+    {
+      "name": "trace_id",
+      "type": "string",
+      "doc": "Distributed trace ID for tracking"
+    }
+  ]
+}
+

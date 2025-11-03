@@ -1,0 +1,134 @@
+{
+  "type": "record",
+  "name": "EntitiesExtractedMessage",
+  "namespace": "com.sentiment_analyzer.ner",
+  "doc": "Extracted and linked entities from news articles",
+  "fields": [
+    {
+      "name": "article_id",
+      "type": "string",
+      "doc": "Unique identifier for the article"
+    },
+    {
+      "name": "entities",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Entity",
+          "fields": [
+            {
+              "name": "entity_id",
+              "type": "string",
+              "doc": "Unique identifier for the entity"
+            },
+            {
+              "name": "text",
+              "type": "string",
+              "doc": "Original entity text as found in article"
+            },
+            {
+              "name": "normalized_text",
+              "type": "string",
+              "doc": "Normalized entity text for linking"
+            },
+            {
+              "name": "entity_type",
+              "type": "string",
+              "doc": "Entity type: PERSON, ORGANIZATION, LOCATION, GPE, CURRENCY, DATE, EVENT"
+            },
+            {
+              "name": "start_char",
+              "type": "int",
+              "doc": "Character offset start position in article"
+            },
+            {
+              "name": "end_char",
+              "type": "int",
+              "doc": "Character offset end position in article"
+            },
+            {
+              "name": "confidence",
+              "type": "double",
+              "doc": "NER model confidence score (0.0-1.0)"
+            },
+            {
+              "name": "wikidata_id",
+              "type": ["null", "string"],
+              "default": null,
+              "doc": "Wikidata identifier if linked"
+            },
+            {
+              "name": "dbpedia_uri",
+              "type": ["null", "string"],
+              "default": null,
+              "doc": "DBpedia URI if linked"
+            },
+            {
+              "name": "country",
+              "type": ["null", "string"],
+              "default": null,
+              "doc": "Country code if applicable"
+            },
+            {
+              "name": "aliases",
+              "type": {
+                "type": "array",
+                "items": "string"
+              },
+              "default": [],
+              "doc": "Known aliases for this entity"
+            },
+            {
+              "name": "context_snippet",
+              "type": "string",
+              "doc": "Context window around entity mention"
+            }
+          ]
+        }
+      },
+      "doc": "Array of extracted entities"
+    },
+    {
+      "name": "language",
+      "type": "string",
+      "doc": "Language code of the article"
+    },
+    {
+      "name": "ner_model",
+      "type": "string",
+      "doc": "NER model used for extraction"
+    },
+    {
+      "name": "entity_count",
+      "type": "int",
+      "doc": "Total number of entities extracted"
+    },
+    {
+      "name": "coverage_score",
+      "type": "double",
+      "doc": "Entity coverage score (0.0-1.0)"
+    },
+    {
+      "name": "linking_success_rate",
+      "type": "double",
+      "doc": "Ratio of successfully linked entities"
+    },
+    {
+      "name": "extracted_at",
+      "type": "string",
+      "doc": "ISO-8601 timestamp of extraction"
+    },
+    {
+      "name": "trace_id",
+      "type": "string",
+      "doc": "Distributed trace identifier"
+    },
+    {
+      "name": "schema_version",
+      "type": "string",
+      "doc": "Schema version for compatibility tracking"
+    }
+  ]
+}
+

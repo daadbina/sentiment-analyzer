@@ -1,0 +1,124 @@
+groups:
+  - name: canonicalizer_alerts
+    interval: 30s
+    rules:
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: rate(canonicalizer_errors_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected in canonicalizer service"
+          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      # Low throughput alert
+      - alert: LowThroughput
+        expr: rate(canonicalizer_messages_processed_total[5m]) < 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low throughput detected in canonicalizer service"
+          description: "Throughput is {{ $value | humanize }} messages/sec"
+
+      # High processing latency alert
+      - alert: HighProcessingLatency
+        expr: histogram_quantile(0.95, rate(canonicalizer_processing_time_ms_bucket[5m])) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High processing latency detected"
+          description: "P95 latency is {{ $value | humanize }}ms"
+
+      # Cache hit rate too low
+      - alert: LowCacheHitRate
+        expr: rate(canonicalizer_cache_hits_total[5m]) / (rate(canonicalizer_cache_hits_total[5m]) + rate(canonicalizer_cache_misses_total[5m])) < 0.3
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "Cache hit rate is below threshold"
+          description: "Cache hit rate is {{ $value | humanizePercentage }}"
+
+      # Database connection pool exhaustion
+      - alert: DatabaseConnectionPoolExhausted
+        expr: canonicalizer_db_pool_available_connections < 2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool is nearly exhausted"
+          description: "Only {{ $value }} connections available in pool"
+
+      # Redis connection failure
+      - alert: RedisConnectionFailure
+        expr: increase(canonicalizer_redis_connection_errors_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis connection failures detected"
+          description: "{{ $value }} connection errors in the last 5 minutes"
+
+      # Kafka consumer lag too high
+      - alert: HighKafkaConsumerLag
+        expr: canonicalizer_kafka_consumer_lag > 10000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer lag is high"
+          description: "Consumer lag is {{ $value }} messages"
+
+      # Service unavailable
+      - alert: ServiceUnavailable
+        expr: up{job="canonicalizer-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Canonicalizer service is down"
+          description: "Service has been unavailable for more than 1 minute"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value | humanize }}MB"
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+
+      # Deduplication rate too low
+      - alert: LowDeduplicationRate
+        expr: rate(canonicalizer_duplicates_detected_total[5m]) / rate(canonicalizer_messages_processed_total[5m]) < 0.01
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: "Deduplication rate is below expected threshold"
+          description: "Deduplication rate is {{ $value | humanizePercentage }}"
+
+      # Message rejection rate too high
+      - alert: HighRejectionRate
+        expr: rate(canonicalizer_messages_rejected_total[5m]) / rate(canonicalizer_messages_processed_total[5m]) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High message rejection rate"
+          description: "Rejection rate is {{ $value | humanizePercentage }}"
+

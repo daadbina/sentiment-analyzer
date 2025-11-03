@@ -1,0 +1,145 @@
+{
+  "type": "record",
+  "name": "NewsRejected",
+  "namespace": "com.sentiment_analyzer.validator",
+  "doc": "Rejected news article with error details",
+  "fields": [
+    {
+      "name": "article_id",
+      "type": "string",
+      "doc": "Unique article identifier"
+    },
+    {
+      "name": "url",
+      "type": "string",
+      "doc": "Article URL"
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "doc": "News source identifier"
+    },
+    {
+      "name": "rejected_at",
+      "type": "string",
+      "doc": "Timestamp when article was rejected"
+    },
+    {
+      "name": "validation_score",
+      "type": "double",
+      "doc": "Final validation score (0.0-1.0)"
+    },
+    {
+      "name": "rejection_reason",
+      "type": "string",
+      "doc": "Primary reason for rejection"
+    },
+    {
+      "name": "error_codes",
+      "type": {
+        "type": "array",
+        "items": "string"
+      },
+      "doc": "List of error codes encountered"
+    },
+    {
+      "name": "error_details",
+      "type": {
+        "type": "map",
+        "values": "string"
+      },
+      "doc": "Detailed error information by error code"
+    },
+    {
+      "name": "retry_count",
+      "type": "int",
+      "default": 0,
+      "doc": "Number of retry attempts"
+    },
+    {
+      "name": "original_message",
+      "type": {
+        "type": "record",
+        "name": "OriginalMessage",
+        "fields": [
+          {
+            "name": "id",
+            "type": "string"
+          },
+          {
+            "name": "title",
+            "type": ["null", "string"],
+            "default": null
+          },
+          {
+            "name": "body",
+            "type": ["null", "string"],
+            "default": null
+          },
+          {
+            "name": "url",
+            "type": ["null", "string"],
+            "default": null
+          },
+          {
+            "name": "published_at",
+            "type": ["null", "string"],
+            "default": null
+          },
+          {
+            "name": "language",
+            "type": ["null", "string"],
+            "default": null
+          },
+          {
+            "name": "source",
+            "type": ["null", "string"],
+            "default": null
+          },
+          {
+            "name": "feed_id",
+            "type": ["null", "string"],
+            "default": null
+          },
+          {
+            "name": "job_id",
+            "type": ["null", "string"],
+            "default": null
+          },
+          {
+            "name": "validation_score",
+            "type": ["null", "double"],
+            "default": null
+          },
+          {
+            "name": "crawled_at",
+            "type": ["null", "string"],
+            "default": null
+          },
+          {
+            "name": "checksum",
+            "type": ["null", "string"],
+            "default": null
+          }
+        ]
+      },
+      "doc": "Original message from news_raw topic"
+    },
+    {
+      "name": "trace_id",
+      "type": "string",
+      "doc": "Distributed trace ID for tracking"
+    },
+    {
+      "name": "validation_job_id",
+      "type": "string",
+      "doc": "Validator job ID that processed this article"
+    },
+    {
+      "name": "schema_version",
+      "type": "string",
+      "doc": "Schema version identifier"
+    }
+  ]
+}
+

@@ -5,6 +5,43 @@ All notable changes to the Crawler Service project will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2025-11-03
+
+### Added
+
+#### Core Crawling Functionality
+- RSS and HTML feed parsers for multiple news sources
+- Support for 8 news sources: CNN, BBC, Reuters, Al Jazeera, Xinhua, RT, Tasnim, ISNA
+- Feed registry with source configuration management
+- Scheduling system for periodic crawling
+- Language detection with FastText
+- Deduplication using MinHash and cosine similarity
+- Content validation and normalization
+
+#### Kafka Integration
+- Kafka producer for news_raw topic
+- Avro schema validation and serialization
+- Schema registry integration
+- Error handling and retry logic
+
+#### Monitoring & Metrics
+- Prometheus metrics (15+ metrics)
+- Health check endpoints
+- Structured logging with configurable levels
+- Performance monitoring
+
+#### Testing
+- Unit tests (40+ tests) for all components
+- Integration tests (15+ tests) for end-to-end pipeline
+- Contract tests for Avro schema compatibility
+- Performance tests for throughput and latency
+
+#### Deployment
+- Docker containerization with multi-stage build
+- Docker Compose for local development
+- Kubernetes manifests with Kustomize overlays (dev, staging, prod)
+- Helm charts for production deployment
+
 ## [Unreleased]
 
 #### Task.md Sources Verification & Testing (COMPLETED - 2025-11-02)

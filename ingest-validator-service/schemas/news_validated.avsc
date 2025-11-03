@@ -1,0 +1,161 @@
+{
+  "type": "record",
+  "name": "NewsValidated",
+  "namespace": "com.sentiment_analyzer.validator",
+  "doc": "Validated news article with comprehensive metadata",
+  "fields": [
+    {
+      "name": "article_id",
+      "type": "string",
+      "doc": "Unique article identifier (ULID format)"
+    },
+    {
+      "name": "canonical_url",
+      "type": "string",
+      "doc": "Canonical URL of the article"
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "doc": "Article title"
+    },
+    {
+      "name": "body",
+      "type": "string",
+      "doc": "Article body content"
+    },
+    {
+      "name": "url",
+      "type": "string",
+      "doc": "Original article URL"
+    },
+    {
+      "name": "source",
+      "type": "string",
+      "doc": "News source identifier"
+    },
+    {
+      "name": "language",
+      "type": "string",
+      "doc": "Detected language code (ISO 639-1)"
+    },
+    {
+      "name": "language_confidence",
+      "type": "double",
+      "doc": "Language detection confidence score (0.0-1.0)"
+    },
+    {
+      "name": "language_detection_method",
+      "type": "string",
+      "doc": "Method used for detection (fasttext, transformer, consensus)"
+    },
+    {
+      "name": "source_published_at_raw",
+      "type": "string",
+      "doc": "Original published timestamp from source"
+    },
+    {
+      "name": "source_published_at_utc",
+      "type": "string",
+      "doc": "Normalized published timestamp in UTC ISO-8601"
+    },
+    {
+      "name": "ingested_at",
+      "type": "string",
+      "doc": "Timestamp when article was ingested"
+    },
+    {
+      "name": "validated_at",
+      "type": "string",
+      "doc": "Timestamp when article was validated"
+    },
+    {
+      "name": "country",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Country code extracted from article"
+    },
+    {
+      "name": "checksum",
+      "type": "string",
+      "doc": "SHA-256 checksum of article content"
+    },
+    {
+      "name": "validation_score",
+      "type": "double",
+      "doc": "Overall validation score (0.0-1.0)"
+    },
+    {
+      "name": "validation_details",
+      "type": {
+        "type": "record",
+        "name": "ValidationDetails",
+        "fields": [
+          {
+            "name": "schema_valid",
+            "type": "boolean",
+            "doc": "Schema validation passed"
+          },
+          {
+            "name": "encoding_valid",
+            "type": "boolean",
+            "doc": "Encoding validation passed"
+          },
+          {
+            "name": "timestamp_valid",
+            "type": "boolean",
+            "doc": "Timestamp validation passed"
+          },
+          {
+            "name": "source_verified",
+            "type": "boolean",
+            "doc": "Source verification passed"
+          },
+          {
+            "name": "language_detected",
+            "type": "boolean",
+            "doc": "Language detection succeeded"
+          },
+          {
+            "name": "not_duplicate",
+            "type": "boolean",
+            "doc": "Duplicate check passed"
+          },
+          {
+            "name": "content_quality_ok",
+            "type": "boolean",
+            "doc": "Content quality check passed"
+          }
+        ]
+      },
+      "doc": "Detailed validation results per stage"
+    },
+    {
+      "name": "schema_version",
+      "type": "string",
+      "doc": "Schema version identifier"
+    },
+    {
+      "name": "ingest_job_id",
+      "type": "string",
+      "doc": "Crawler job ID that produced this article"
+    },
+    {
+      "name": "validation_job_id",
+      "type": "string",
+      "doc": "Validator job ID that processed this article"
+    },
+    {
+      "name": "trace_id",
+      "type": "string",
+      "doc": "Distributed trace ID for tracking"
+    },
+    {
+      "name": "publisher_id",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Publisher identifier from source registry"
+    }
+  ]
+}
+

@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  # Kafka broker
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    networks:
+      - validator-network
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - validator-network
+
+  # Schema Registry
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    container_name: schema-registry
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    ports:
+      - "8081:8081"
+    depends_on:
+      - kafka
+    networks:
+      - validator-network
+
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - validator-network
+
+  # PostgreSQL for source registry
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_DB: validator_db
+      POSTGRES_USER: validator
+      POSTGRES_PASSWORD: validator_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - validator-network
+
+  # TimescaleDB for audit logs (extends PostgreSQL)
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: timescaledb
+    environment:
+      POSTGRES_DB: audit_db
+      POSTGRES_USER: validator
+      POSTGRES_PASSWORD: validator_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescaledb-data:/var/lib/postgresql/data
+    networks:
+      - validator-network
+
+  # Ingest Validator Service
+  validator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ingest-validator
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      KAFKA_CONSUMER_GROUP: ingest-validator-group
+      KAFKA_INPUT_TOPIC: news_raw
+      KAFKA_OUTPUT_VALID_TOPIC: news_validated
+      KAFKA_OUTPUT_INVALID_TOPIC: news_rejected
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: validator_db
+      POSTGRES_USER: validator
+      POSTGRES_PASSWORD: validator_password
+      TIMESCALEDB_HOST: timescaledb
+      TIMESCALEDB_PORT: 5432
+      TIMESCALEDB_DB: audit_db
+      TIMESCALEDB_USER: validator
+      TIMESCALEDB_PASSWORD: validator_password
+      DEDUP_SERVICE_URL: dedup-service:50051
+      LOG_LEVEL: INFO
+      METRICS_PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka
+      - schema-registry
+      - redis
+      - postgres
+      - timescaledb
+    networks:
+      - validator-network
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  postgres-data:
+  timescaledb-data:
+
+networks:
+  validator-network:
+    driver: bridge
+

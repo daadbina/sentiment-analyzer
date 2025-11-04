@@ -50,7 +50,7 @@ class KafkaConsumerClient:
             # Initialize Avro deserializer
             self.avro_deserializer = AvroDeserializer(self.schema_registry_client)
 
-            # Initialize consumer with value deserializer
+            # Initialize consumer
             self.consumer = Consumer(
                 {
                     "bootstrap.servers": brokers,
@@ -59,7 +59,6 @@ class KafkaConsumerClient:
                     "session.timeout.ms": session_timeout_ms,
                     "request.timeout.ms": request_timeout_ms,
                     "enable.auto.commit": False,
-                    "value.deserializer": self.avro_deserializer,
                 }
             )
 
@@ -89,9 +88,10 @@ class KafkaConsumerClient:
             if msg_record is None:
                 return None, None
 
-            # Deserialize message
+            # Deserialize message using Avro deserializer
             try:
-                message_data = msg_record.value
+                # Manually deserialize the Avro message
+                message_data = self.avro_deserializer(msg_record.value(), None)
                 message = NewsCanonicalMessage(**message_data)
                 MetricsCollector.record_message_consumed()
                 logger.debug(f"Consumed message: {message.article_id}")

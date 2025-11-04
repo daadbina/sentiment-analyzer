@@ -1,0 +1,18 @@
+apiVersion: v2
+name: embedding-service
+description: Multilingual embedding generation service for sentiment analyzer
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - embeddings
+  - nlp
+  - multilingual
+  - sentiment-analysis
+home: https://github.com/daadbina/sentiment-analyzer
+sources:
+  - https://github.com/daadbina/sentiment-analyzer
+maintainers:
+  - name: Sentiment Analyzer Team
+    email: team@sentiment-analyzer.dev
+

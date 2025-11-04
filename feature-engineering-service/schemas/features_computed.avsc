@@ -1,0 +1,70 @@
+{
+  "type": "record",
+  "name": "FeaturesComputedMessage",
+  "namespace": "com.sentiment_analyzer.feature_engineering",
+  "doc": "Computed features for machine learning models",
+  "fields": [
+    {
+      "name": "group_id",
+      "type": "string",
+      "doc": "Semantic group identifier"
+    },
+    {
+      "name": "features",
+      "type": {
+        "type": "map",
+        "values": ["null", "double", "int", "string"],
+        "doc": "Computed features as key-value pairs"
+      },
+      "doc": "Feature dictionary with 24 computed features"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "doc": "Feature computation timestamp (milliseconds since epoch)"
+    },
+    {
+      "name": "feature_version",
+      "type": "string",
+      "doc": "Feature engineering version"
+    },
+    {
+      "name": "feature_count",
+      "type": "int",
+      "doc": "Total number of features computed"
+    },
+    {
+      "name": "validation_status",
+      "type": {
+        "type": "enum",
+        "name": "ValidationStatus",
+        "symbols": ["VALID", "INVALID", "PARTIAL"]
+      },
+      "doc": "Feature validation status"
+    },
+    {
+      "name": "validation_failures",
+      "type": {
+        "type": "array",
+        "items": "string"
+      },
+      "doc": "List of validation failures if any"
+    },
+    {
+      "name": "computation_duration_ms",
+      "type": "long",
+      "doc": "Time taken to compute features in milliseconds"
+    },
+    {
+      "name": "trace_id",
+      "type": "string",
+      "doc": "Distributed trace identifier"
+    },
+    {
+      "name": "schema_version",
+      "type": "string",
+      "doc": "Schema version for compatibility tracking"
+    }
+  ]
+}
+

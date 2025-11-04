@@ -1,7 +1,11 @@
 """Kafka producer for computed features."""
 
+import json
+import os
 from confluent_kafka import Producer
 from confluent_kafka.avro import AvroProducer
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.schema_registry_client import Schema
 from typing import Dict, Any, Optional, Callable
 from ..config import config
 from ..utils import StructuredLogger
@@ -26,6 +30,31 @@ class FeaturesProducer:
             True if connection successful
         """
         try:
+            # Register schema with Schema Registry
+            schema_registry_client = SchemaRegistryClient(
+                {"url": self.config.kafka.schema_registry_url}
+            )
+
+            # Load schema from file
+            schema_path = os.path.join(
+                os.path.dirname(__file__),
+                "../../schemas/features_computed.avsc"
+            )
+            with open(schema_path, "r") as f:
+                schema_str = f.read()
+
+            # Register schema
+            schema = Schema(schema_str, schema_type="AVRO")
+            schema_id = schema_registry_client.register_schema(
+                subject_name=f"{self.topic}-value",
+                schema=schema
+            )
+            logger.info(
+                "Schema registered",
+                schema_id=schema_id,
+                topic=self.topic,
+            )
+
             producer_config = {
                 "bootstrap.servers": self.config.kafka.brokers,
                 "acks": "all",  # Wait for all replicas

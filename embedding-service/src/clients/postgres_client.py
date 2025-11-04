@@ -29,9 +29,6 @@ class PostgresClient:
                 min_size=self.config.min_pool_size,
                 max_size=self.config.max_pool_size,
                 command_timeout=120,
-                connection_class=None,
-                init=None,
-                loop=None,
             )
 
             await self._create_tables()

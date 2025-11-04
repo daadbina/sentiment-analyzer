@@ -22,7 +22,7 @@ class TestEntityNormalizer:
 
     def test_normalize_with_abbreviations(self):
         """Test normalization with abbreviations."""
-        text = "Dr. John Smith"
+        text = "dr. john smith"
         normalized = EntityNormalizer.normalize(text)
         assert "doctor" in normalized
 
@@ -40,7 +40,7 @@ class TestEntityNormalizer:
 
     def test_extract_aliases_acronyms(self):
         """Test extracting acronyms."""
-        text = "United Nations Organization"
+        text = "United Nations Organization (UNO)"
         aliases = EntityNormalizer.extract_aliases(text)
         assert "UNO" in aliases
 

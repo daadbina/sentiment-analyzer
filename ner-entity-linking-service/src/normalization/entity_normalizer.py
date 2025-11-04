@@ -52,9 +52,11 @@ class EntityNormalizer:
         # Remove diacritics and accents
         text = unidecode(text)
 
-        # Expand common abbreviations
+        # Expand common abbreviations (before normalizing whitespace)
         for abbr, expansion in EntityNormalizer.ABBREVIATIONS.items():
-            text = re.sub(r"\b" + re.escape(abbr) + r"\b", expansion, text)
+            # Match abbreviation with optional spaces around it
+            pattern = re.escape(abbr)
+            text = re.sub(pattern, expansion, text, flags=re.IGNORECASE)
 
         # Normalize whitespace
         text = re.sub(r"\s+", " ", text).strip()

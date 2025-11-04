@@ -100,6 +100,11 @@ class ClusterValidator:
 
         # Check source diversity
         sources = set(a.get("source") for a in cluster_articles if a.get("source"))
+        logger.info(f"Cluster articles: {len(cluster_articles)}")
+        if cluster_articles:
+            logger.info(f"First article fields: {list(cluster_articles[0].keys())}")
+            logger.info(f"First article: {cluster_articles[0]}")
+        logger.debug(f"Cluster sources: {sources}, min_sources: {self.min_sources}")
         if len(sources) < self.min_sources:
             report["valid"] = False
             report["issues"].append(f"Insufficient sources: {len(sources)} < {self.min_sources}")

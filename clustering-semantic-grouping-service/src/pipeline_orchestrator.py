@@ -182,15 +182,18 @@ class PipelineOrchestrator:
             logger.info(f"Clustering complete: {len(set(labels))} clusters")
 
             # Step 3.5: Handle outliers
+            # Use a lower threshold for outlier handling to avoid marking all points as noise
+            outlier_purity_threshold = 0.3  # Much lower than validation threshold
             labels = self.outlier_handler.handle_mixed_clusters(
-                embeddings, labels, purity_threshold=config.validation.min_cluster_purity
+                embeddings, labels, purity_threshold=outlier_purity_threshold
             )
-            logger.debug("Outlier handling complete")
+            logger.info(f"Outlier handling complete. Unique labels: {set(labels)}")
 
             # Step 4: Process clusters
             valid_clusters = []
             invalid_clusters = []
 
+            logger.info(f"Processing {len(set(labels))} unique cluster labels")
             for cluster_id in set(labels):
                 if cluster_id == -1:  # Noise points
                     logger.debug(f"Skipping noise cluster")
@@ -200,6 +203,8 @@ class PipelineOrchestrator:
                 mask = labels == cluster_id
                 cluster_embeddings = embeddings[mask]
                 cluster_articles = [metadata[i] for i in range(len(metadata)) if mask[i]]
+
+                logger.info(f"Processing cluster {cluster_id} with {len(cluster_articles)} articles")
 
                 # Validate cluster
                 is_valid, report = self.validator.validate_cluster(

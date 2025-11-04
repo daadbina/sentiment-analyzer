@@ -4,11 +4,25 @@ import logging
 from datetime import datetime
 from typing import List, Optional, Dict
 import asyncpg
+import numpy as np
 from sqlalchemy import create_engine, Column, String, Float, DateTime, JSON, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)
+
+
+def convert_numpy_types(obj):
+    """Convert numpy types to Python native types for JSON serialization."""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.floating, np.integer)):
+        return obj.item()
+    elif isinstance(obj, dict):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_numpy_types(item) for item in obj]
+    return obj
 
 Base = declarative_base()
 
@@ -76,19 +90,22 @@ class ClusterRegistry:
         """
         try:
             session = self.Session()
+            # Convert numpy types to Python native types
+            cluster_converted = convert_numpy_types(cluster)
+
             record = ClusterRecord(
-                group_id=cluster.get("group_id"),
-                article_count=cluster.get("article_count"),
-                similarity_avg=cluster.get("similarity_avg"),
-                topic_label=cluster.get("topic_label"),
-                centroid_vector=cluster.get("centroid_vector"),
-                cluster_metadata=cluster,
+                group_id=cluster_converted.get("group_id"),
+                article_count=cluster_converted.get("article_count"),
+                similarity_avg=float(cluster_converted.get("similarity_avg", 0.0)),
+                topic_label=cluster_converted.get("topic_label"),
+                centroid_vector=cluster_converted.get("centroid_vector"),
+                cluster_metadata=cluster_converted,
             )
             session.add(record)
             session.commit()
             session.close()
 
-            logger.info(f"Registered cluster: {cluster.get('group_id')}")
+            logger.info(f"Registered cluster: {cluster_converted.get('group_id')}")
             return True
 
         except Exception as e:

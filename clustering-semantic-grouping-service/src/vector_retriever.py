@@ -109,8 +109,11 @@ class VectorRetriever:
                         "article_id": point.payload.get("article_id"),
                         "embedded_at": point.payload.get("embedded_at"),
                         "publisher_credibility": point.payload.get("publisher_credibility"),
+                        "publisher_id": point.payload.get("publisher_id"),
+                        "source": point.payload.get("source"),
                         "language": point.payload.get("language"),
                         "domain": point.payload.get("domain"),
+                        "content_type": point.payload.get("content_type"),
                     }
                     all_embeddings.append(embedding)
                     all_metadata.append(metadata)

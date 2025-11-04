@@ -171,6 +171,7 @@ class EmbeddingService:
                     "domain": msg.get("domain", ""),
                     "content_type": msg.get("content_type", "article"),
                 }
+                logger.info(f"Extracted metadata for article {msg.get('article_id', 'unknown')}: {meta}")
                 metadata.append(meta)
 
             # Compute embeddings

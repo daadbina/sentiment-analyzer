@@ -7,8 +7,22 @@ from confluent_kafka import Consumer, Producer, KafkaError
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.json_schema import JSONDeserializer, JSONSerializer
 import fastavro
+import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+def convert_numpy_types(obj):
+    """Convert numpy types to Python native types for JSON serialization."""
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.floating, np.integer)):
+        return obj.item()
+    elif isinstance(obj, dict):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_numpy_types(item) for item in obj]
+    return obj
 
 
 class KafkaConsumer:
@@ -163,7 +177,9 @@ class KafkaProducer:
             True if successful
         """
         try:
-            value = json.dumps(cluster).encode("utf-8")
+            # Convert numpy types to Python native types
+            cluster_converted = convert_numpy_types(cluster)
+            value = json.dumps(cluster_converted).encode("utf-8")
             key_bytes = key.encode("utf-8") if key else None
 
             self.producer.produce(
@@ -173,7 +189,7 @@ class KafkaProducer:
                 on_delivery=self._delivery_report,
             )
 
-            logger.debug(f"Produced cluster: {cluster.get('group_id')}")
+            logger.debug(f"Produced cluster: {cluster_converted.get('group_id')}")
             return True
 
         except Exception as e:

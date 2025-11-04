@@ -7,44 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Initial project setup with directory structure
-- TODO.md and CHANGELOG.md files
-- Python 3.11 venv configuration
-- Configuration management with Pydantic
-- Custom exception hierarchy
-- Prometheus metrics infrastructure
-- Device detection utilities (GPU/CPU)
-- Model checksum and tokenizer hashing utilities
-- Distributed tracing support
-
 ### In Progress
-- Model management system (loader, registry, pool, router)
-- Model strategy implementations (SentenceTransformers, HuggingFace, ONNX)
-- Text preprocessing pipeline
-- Batch processing system
-- Embedding computation engine
-- Vector normalization and validation
-- Qdrant vector database integration
-- Drift detection system
-- Kafka consumer/producer integration
-- Outbox pattern for atomic writes
-- Comprehensive test suite
-
-### Planned
-- Kubernetes manifests
-- Helm charts
-- Docker images (CPU and GPU)
-- Integration documentation
+- Model strategy implementations (HuggingFace, ONNX)
+- Batch optimizer for dynamic batch sizing
+- Pooling strategies for embeddings
+- GPU memory manager
+- Anomaly detector for quality checks
+- Statistical tests for drift detection
+- Baseline tracker for drift detection
+- Outbox worker for async processing
+- Integration tests with Testcontainers
+- Contract tests for Avro schemas
 - Performance benchmarks
 - Operational runbooks
+
+### Planned
+- Advanced monitoring dashboards
+- Custom model support
+- Multi-GPU support
+- Distributed embedding computation
 
 ## [0.1.0] - 2025-11-04
 
 ### Added
-- Project initialization
-- Service structure and configuration
-- Initial documentation
+- Complete project initialization and setup
+- Configuration management with Pydantic frozen dataclasses
+- Custom exception hierarchy for all error types
+- Prometheus metrics infrastructure with 10+ metrics
+- Device detection utilities (GPU/CPU) with optimal batch sizing
+- Model checksum and tokenizer hashing utilities
+- Distributed tracing support with context variables
+- Model management system (loader, registry, pool, router)
+- SentenceTransformer model strategy implementation
+- Language-specific model routing for 14+ languages
+- Text preprocessing pipeline with Unicode normalization
+- HTML/URL removal and whitespace handling
+- Tokenizer manager with caching
+- Smart text truncation (by sentences, words, characters)
+- Batch manager for efficient batch creation
+- Dynamic batcher with resource-aware sizing
+- Embedding computation engine with full orchestration
+- L2/L1 normalization utilities
+- Cosine similarity computation
+- Embedding validation with dimension and quality checks
+- Quality checker for diversity, statistics, and sparsity
+- Qdrant vector database client wrapper
+- Collection manager for point operations
+- Drift detection using Kolmogorov-Smirnov test
+- Kafka consumer with Avro deserialization
+- Kafka producer with Avro serialization
+- PostgreSQL client for audit logging
+- Outbox coordinator for atomic dual-writes
+- Main service orchestrator with lifecycle management
+- FastAPI application with health/readiness/metrics endpoints
+- Comprehensive unit tests (preprocessing, validation, normalization, drift, config)
+- Multi-stage Dockerfile for CPU deployment
+- GPU-enabled Dockerfile with CUDA support
+- Docker Compose with all required services
+- Kubernetes manifests (deployment, service, configmap, secret, serviceaccount)
+- Helm chart with configurable values
+- Integration documentation with data flow and schemas
+
+### Architecture
+- 9-stage embedding pipeline
+- Exactly-once Kafka semantics with outbox pattern
+- LRU model caching with Object Pool pattern
+- Circuit breaker for fault tolerance
+- Distributed tracing with OpenTelemetry
+- Prometheus metrics for monitoring
+- PostgreSQL audit logging
+- Redis caching for model artifacts
 
 ---
 

@@ -8,6 +8,7 @@ import time
 
 from .config import config
 from .scheduler import ClusteringScheduler
+from .migrations import MigrationRunner
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,13 @@ async def startup_event():
     """Startup event handler."""
     logger.info("Starting clustering service")
     try:
+        # Run database migrations
+        logger.info("Running database migrations")
+        migration_runner = MigrationRunner()
+        migration_runner.run_all_migrations()
+        logger.info("Database migrations completed")
+
+        # Start scheduler
         scheduler.start()
         logger.info("Service started successfully")
     except Exception as e:

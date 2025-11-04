@@ -7,6 +7,7 @@ from .clients import (
     FeaturesProducer,
     PostgresClient,
 )
+from .clients.qdrant_client import QdrantVectorClient
 from .extractors import (
     SourceExtractor,
     TemporalExtractor,
@@ -34,6 +35,7 @@ class FeatureEngineeringService:
         self.consumer = SemanticGroupConsumer()
         self.producer = FeaturesProducer()
         self.postgres_client = PostgresClient()
+        self.qdrant_client = QdrantVectorClient()
 
         # Initialize extractors
         self.extractors = [
@@ -70,6 +72,7 @@ class FeatureEngineeringService:
             self.consumer.connect()
             self.producer.connect()
             self.postgres_client.connect()
+            self.qdrant_client.connect()
 
             logger.info("All connections established")
 
@@ -175,31 +178,30 @@ class FeatureEngineeringService:
                 article_count=len(article_ids),
             )
 
-            # Fetch full article data from database
+            # Fetch article metadata from Qdrant using article IDs
             articles = []
             if article_ids:
-                articles = self.postgres_client.get_articles_by_ids(article_ids)
-                logger.debug(
-                    "Articles fetched",
-                    requested=len(article_ids),
-                    fetched=len(articles),
-                )
-
-            # Fetch actors from database
-            actors = []
-            try:
-                actors = self.postgres_client.get_all_actors()
-                logger.debug("Actors fetched", actor_count=len(actors))
-            except Exception as e:
-                logger.warning("Failed to fetch actors", error=str(e))
-                actors = []
+                try:
+                    articles = self.qdrant_client.get_articles_by_ids(article_ids)
+                    logger.debug(
+                        "Articles fetched from Qdrant",
+                        requested=len(article_ids),
+                        fetched=len(articles),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to fetch articles from Qdrant",
+                        error=str(e),
+                        article_count=len(article_ids),
+                    )
+                    articles = []
 
             # Extract using all extractors
             for extractor in self.extractors:
                 extracted = extractor.extract(
                     group=message,
                     articles=articles,
-                    actors=actors,
+                    actors=[],
                 )
                 features.update(extracted)
 

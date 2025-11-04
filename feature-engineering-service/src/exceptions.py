@@ -65,3 +65,9 @@ class PostgresError(FeatureError):
     """Raised when PostgreSQL operations fail."""
 
     pass
+
+
+class QdrantError(FeatureError):
+    """Raised when Qdrant operations fail."""
+
+    pass

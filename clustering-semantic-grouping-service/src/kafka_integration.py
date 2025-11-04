@@ -3,7 +3,8 @@
 import logging
 import json
 from typing import Optional, Callable, List
-from confluent_kafka import Consumer, Producer, KafkaError, SerializationContext, MessageField
+from confluent_kafka import Consumer, Producer, KafkaError
+from confluent_kafka.serialization import SerializationContext, MessageField
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroDeserializer, AvroSerializer
 from confluent_kafka.schema_registry.json_schema import JSONDeserializer, JSONSerializer

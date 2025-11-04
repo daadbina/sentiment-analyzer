@@ -4,13 +4,22 @@ import logging
 import json
 from typing import Dict, Callable, Optional
 from confluent_kafka import Producer
-from confluent_kafka.schema_registry import SchemaRegistryClient, SerializationContext, MessageField
+from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroSerializer
 
 from src.config import config
 from src.exceptions import KafkaProducerError
 
 logger = logging.getLogger(__name__)
+
+
+class SerializationContext:
+    """Simple serialization context for Avro serializer."""
+
+    def __init__(self, topic: str, field=None):
+        """Initialize context with topic name."""
+        self.topic = topic
+        self.field = field
 
 
 class KafkaProducer:
@@ -87,10 +96,7 @@ class KafkaProducer:
             logger.debug(f"Serializing message: {message}")
 
             # Create serialization context with topic information
-            ctx = SerializationContext(
-                self.config.output_topic,
-                MessageField.VALUE
-            )
+            ctx = SerializationContext(self.config.output_topic)
 
             # Serialize the message with proper context
             serialized_value = self.serializer(message, ctx)

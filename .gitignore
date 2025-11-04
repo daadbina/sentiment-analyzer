@@ -73,12 +73,9 @@ k8s/secrets/
 *.md
 !CHANGELOG.md
 !README.md
-!TODO.md
-!INTEGRATION.md
 !**/CHANGELOG.md
 !**/README.md
-!**/TODO.md
-!**/INTEGRATION.md
+
 
 
 # Temporary files

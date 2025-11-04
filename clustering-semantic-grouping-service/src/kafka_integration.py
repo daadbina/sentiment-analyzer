@@ -196,6 +196,16 @@ class KafkaProducer:
 
             # Serialize using Avro
             value = self.avro_serializer(cluster_converted, ctx)
+
+            # Debug logging
+            logger.info(f"Serialized value type: {type(value)}, length: {len(value) if value else 0}")
+            if value:
+                logger.info(f"First 20 bytes (hex): {value[:20].hex()}")
+                if value[0] == 0x00:
+                    logger.info("Avro magic byte (0x00) found!")
+                else:
+                    logger.warning(f"Avro magic byte NOT found! First byte: {hex(value[0])}")
+
             key_bytes = key.encode("utf-8") if key else None
 
             self.producer.produce(

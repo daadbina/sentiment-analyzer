@@ -1,7 +1,9 @@
 """Kafka consumer for semantic groups."""
 
 from confluent_kafka import Consumer, KafkaError
-from confluent_kafka.avro import AvroConsumer
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroDeserializer
+from confluent_kafka.serialization import SerializationContext, MessageField
 from typing import Optional, Dict, Any
 import json
 from ..config import config
@@ -17,8 +19,10 @@ class SemanticGroupConsumer:
     def __init__(self):
         """Initialize consumer."""
         self.config = config
-        self.consumer: Optional[AvroConsumer] = None
+        self.consumer: Optional[Consumer] = None
         self.topic = "semantic_groups"
+        self.schema_registry_client: Optional[SchemaRegistryClient] = None
+        self.avro_deserializer: Optional[AvroDeserializer] = None
 
     def connect(self) -> bool:
         """Connect to Kafka.
@@ -27,16 +31,23 @@ class SemanticGroupConsumer:
             True if connection successful
         """
         try:
+            # Initialize schema registry client
+            self.schema_registry_client = SchemaRegistryClient(
+                {"url": self.config.kafka.schema_registry_url}
+            )
+
+            # Initialize Avro deserializer
+            self.avro_deserializer = AvroDeserializer(self.schema_registry_client)
+
             consumer_config = {
                 "bootstrap.servers": self.config.kafka.brokers,
                 "group.id": self.config.kafka.consumer_group,
                 "auto.offset.reset": "earliest",
                 "enable.auto.commit": False,
                 "isolation.level": "read_committed",  # Exactly-once semantics
-                "schema.registry.url": self.config.kafka.schema_registry_url,
             }
 
-            self.consumer = AvroConsumer(consumer_config)
+            self.consumer = Consumer(consumer_config)
             self.consumer.subscribe([self.topic])
 
             logger.info(
@@ -47,7 +58,7 @@ class SemanticGroupConsumer:
             return True
 
         except Exception as e:
-            logger.error("Failed to connect to Kafka", error=str(e))
+            logger.error("Failed to connect to Kafka", error=str(e), exc_info=True)
             raise KafkaErrorException(f"Failed to connect to Kafka: {str(e)}")
 
     def consume_message(self, timeout_ms: int = 1000) -> Optional[Dict[str, Any]]:
@@ -63,7 +74,7 @@ class SemanticGroupConsumer:
             raise KafkaErrorException("Consumer not connected")
 
         try:
-            msg = self.consumer.poll(timeout_ms)
+            msg = self.consumer.poll(timeout_ms / 1000)
 
             if msg is None:
                 return None
@@ -76,14 +87,26 @@ class SemanticGroupConsumer:
                     logger.warning("Consumer error", error=str(msg.error()))
                     return None
 
-            # Message is in Avro format, already deserialized
-            message_data = msg.value()
+            # Deserialize Avro message
+            try:
+                ctx = SerializationContext(msg.topic(), MessageField.VALUE)
+                message_data = self.avro_deserializer(msg.value(), ctx)
+            except Exception as e:
+                logger.error(
+                    "Error deserializing Avro message",
+                    error=str(e),
+                    exc_info=True,
+                    partition=msg.partition(),
+                    offset=msg.offset(),
+                )
+                return None
 
             logger.debug(
                 "Message consumed",
                 topic=msg.topic(),
                 partition=msg.partition(),
                 offset=msg.offset(),
+                group_id=message_data.get("group_id") if message_data else None,
             )
 
             return message_data

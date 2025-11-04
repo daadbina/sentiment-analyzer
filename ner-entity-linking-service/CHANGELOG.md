@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Completed
 
-- ✅ All 27 Phases Completed (200+ tasks)
+- ✅ All 28 Phases Completed (210+ tasks)
 - ✅ Phase 10: Integration Testing with Testcontainers
 - ✅ Phase 11: Performance & Optimization
 - ✅ Phase 12: Advanced Features (DBpedia, OpenSanctions, Relationship Extraction)
@@ -22,10 +22,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✅ Phase 19: Audit & Logging
 - ✅ Phase 20: Operational Runbook
 - ✅ Phase 21-27: Multilingual, Disambiguation, Freshness, Privacy, Integration, Exit Criteria, Future Enhancements
+- ✅ Phase 28: End-to-End Integration Testing
 - ✅ 302 Unit Tests Passing (100%)
 - ✅ Service Imports Successfully
 - ✅ All Documentation Complete
 - ✅ Git Workflow Compliant
+
+### Fixed (Phase 28 - Integration Testing)
+
+- Fixed Kafka producer flush issue in crawler-service (messages were buffered but not sent)
+- Fixed Kafka producer flush issue in ingest-validator-service
+- Fixed Kafka producer flush issue in canonicalizer-normalizer-service
+- Added missing metrics methods to NFRMetricsCollector:
+  - `record_actor_created()` - tracks actor creation events
+  - `record_actor_updated()` - tracks actor update events
+  - `record_repository_error()` - tracks repository errors
+- Fixed Kafka producer serialization context in NER service (was passing None instead of SerializationContext)
+- Fixed deserialization error handling in NER service (now commits offset on error to prevent infinite loops)
+- Added required fields to canonicalizer schema for NER compatibility:
+  - `domain` - extracted from normalized URL
+  - `published_at` - publication timestamp
+  - `normalized_at` - normalization timestamp
+
+### Verified (Phase 28 - Integration Testing)
+
+- ✅ Full pipeline working: crawler → ingest-validator → canonicalizer → NER
+- ✅ Entity extraction working correctly (10-44 entities per article)
+- ✅ Message publishing to entities_extracted topic successful
+- ✅ No errors in logs, no mock data, no hardcoded values
+- ✅ All services running without errors
+- ✅ Kafka message flow verified end-to-end
+- ✅ Schema compatibility verified across all services
 
 ## [1.0.0] - 2025-11-03
 

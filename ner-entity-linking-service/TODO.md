@@ -261,10 +261,25 @@
 - [x] 27.8 - Explainable NER with confidence explanations
 - [x] 27.9 - Active learning for continuous model improvement
 
+## Phase 28: End-to-End Integration Testing ✅ COMPLETED
+
+- [x] 28.1 - Fixed Kafka producer flush issue in crawler-service
+- [x] 28.2 - Fixed Kafka producer flush issue in ingest-validator-service
+- [x] 28.3 - Fixed Kafka producer flush issue in canonicalizer-normalizer-service
+- [x] 28.4 - Added required fields to canonicalizer schema (domain, published_at, normalized_at)
+- [x] 28.5 - Added missing metrics methods to NFRMetricsCollector
+- [x] 28.6 - Fixed Kafka producer serialization context in NER service
+- [x] 28.7 - Fixed deserialization error handling in NER service
+- [x] 28.8 - Verified full pipeline: crawler → ingest → canonicalizer → NER
+- [x] 28.9 - Verified entity extraction working correctly (10-44 entities per article)
+- [x] 28.10 - Verified message publishing to entities_extracted topic
+- [x] 28.11 - Verified no errors, no mock data, no hardcoded values in logs
+- [x] 28.12 - Verified all services running without errors
+
 ## Summary
 
-- **Total Tasks**: 200+
-- **Completed**: 200+ (Phase 1-27) ✅ 100% COMPLETE
+- **Total Tasks**: 210+
+- **Completed**: 210+ (Phase 1-28) ✅ 100% COMPLETE
 - **In Progress**: 0
 - **Remaining**: 0
 - **Progress**: 100% ✅✅✅
@@ -297,6 +312,7 @@
 - Phase 25: Downstream Service Integration ✅
 - Phase 26: Exit Criteria for Deployment ✅
 - Phase 27: Future Enhancements ✅
+- Phase 28: End-to-End Integration Testing ✅
 
 ## Key Metrics
 

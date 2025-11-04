@@ -50,7 +50,7 @@ class KafkaConsumerClient:
             # Initialize Avro deserializer
             self.avro_deserializer = AvroDeserializer(self.schema_registry_client)
 
-            # Initialize consumer
+            # Initialize consumer with value deserializer
             self.consumer = Consumer(
                 {
                     "bootstrap.servers": brokers,
@@ -59,6 +59,7 @@ class KafkaConsumerClient:
                     "session.timeout.ms": session_timeout_ms,
                     "request.timeout.ms": request_timeout_ms,
                     "enable.auto.commit": False,
+                    "value.deserializer": self.avro_deserializer,
                 }
             )
 

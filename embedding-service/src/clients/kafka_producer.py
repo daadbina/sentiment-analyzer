@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 class SerializationContext:
     """Simple serialization context for Avro serializer."""
 
-    def __init__(self, topic: str, field=None):
-        """Initialize context with topic name."""
+    def __init__(self, topic: str, field: str = "value"):
+        """Initialize context with topic name and field."""
         self.topic = topic
         self.field = field
 

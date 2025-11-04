@@ -288,11 +288,11 @@ class FeatureEngineeringService:
         try:
             # Write to Feast (offline)
             self.feast_writer.write_features(group_id, features)
-            metrics.feature_feast_writes_total.inc()
+            metrics.feast_writes.inc()
 
             # Write to Redis (online)
             self.redis_writer.write_features(group_id, features)
-            metrics.feature_redis_writes_total.inc()
+            metrics.redis_writes.inc()
 
             logger.info("Features written to storage", group_id=group_id)
 

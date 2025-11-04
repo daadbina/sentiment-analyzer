@@ -44,7 +44,7 @@ class FeaturesProducer:
             with open(schema_path, "r") as f:
                 self.schema_str = f.read()
 
-            # Register schema
+            # Register value schema
             schema = Schema(self.schema_str, schema_type="AVRO")
             schema_id = schema_registry_client.register_schema(
                 subject_name=f"{self.topic}-value",
@@ -55,6 +55,15 @@ class FeaturesProducer:
                 schema_id=schema_id,
                 topic=self.topic,
             )
+
+            # Register key schema (simple string)
+            key_schema_str = '{"type": "string"}'
+            key_schema = Schema(key_schema_str, schema_type="AVRO")
+            key_schema_id = schema_registry_client.register_schema(
+                subject_name=f"{self.topic}-key",
+                schema=key_schema
+            )
+            self.key_schema_str = key_schema_str
 
             producer_config = {
                 "bootstrap.servers": self.config.kafka.brokers,
@@ -144,6 +153,7 @@ class FeaturesProducer:
                 value=message_value,
                 key=group_id,
                 value_schema=self.schema_str,
+                key_schema=self.key_schema_str,
                 on_delivery=delivery_callback,
             )
 

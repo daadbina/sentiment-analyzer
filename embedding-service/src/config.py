@@ -36,8 +36,8 @@ class PostgresConfig:
     user: str = os.getenv("POSTGRES_USER", "adminsentiment")
     password: str = os.getenv("POSTGRES_PASSWORD", "wp2400!!!!")
     database: str = os.getenv("POSTGRES_DB", "sentiment")
-    min_pool_size: int = int(os.getenv("DB_MIN_POOL_SIZE", "5"))
-    max_pool_size: int = int(os.getenv("DB_MAX_POOL_SIZE", "20"))
+    min_pool_size: int = int(os.getenv("DB_MIN_POOL_SIZE", "1"))
+    max_pool_size: int = int(os.getenv("DB_MAX_POOL_SIZE", "10"))
 
     @property
     def dsn(self) -> str:

@@ -33,7 +33,9 @@ class EmbeddingService:
         self.config = config
         self.model_loader = ModelLoader(config.model.cache_dir)
         self.model_router = ModelRouter()
-        self.model_registry = ModelRegistry()
+        self.postgres_client = PostgresClient()
+        # Pass shared pool to model registry
+        self.model_registry = ModelRegistry(pool=None)  # Will create its own pool initially
         self.model_pool = ModelPool(
             self.model_loader,
             max_models=config.model.model_pool_size,
@@ -56,7 +58,6 @@ class EmbeddingService:
         self.collection_manager = CollectionManager(self.qdrant_client)
         self.kafka_consumer = KafkaConsumer()
         self.kafka_producer = KafkaProducer()
-        self.postgres_client = PostgresClient()
         self.drift_detector = DriftDetector(
             sample_size=config.validation.drift_sample_size,
             drift_threshold=config.validation.drift_threshold,
@@ -80,19 +81,15 @@ class EmbeddingService:
             self.kafka_consumer.initialize()
             self.kafka_producer.initialize()
 
-            # Initialize PostgreSQL (optional - log warning if fails)
-            try:
-                await self.postgres_client.initialize()
-            except Exception as e:
-                logger.warning(f"PostgreSQL initialization failed (optional): {e}")
-                logger.warning("Continuing without PostgreSQL audit logging")
+            # Initialize PostgreSQL (creates shared connection pool)
+            await self.postgres_client.initialize()
 
-            # Initialize model registry (optional - log warning if fails)
-            try:
-                await self.model_registry.initialize()
-            except Exception as e:
-                logger.warning(f"Model registry initialization failed (optional): {e}")
-                logger.warning("Continuing without model registry")
+            # Share the PostgreSQL pool with model registry
+            self.model_registry.pool = self.postgres_client.pool
+            self.model_registry._owns_pool = False
+
+            # Initialize model registry (uses shared pool)
+            await self.model_registry.initialize()
 
             logger.info("Embedding service initialized successfully")
 

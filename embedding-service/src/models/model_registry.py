@@ -14,21 +14,32 @@ logger = logging.getLogger(__name__)
 class ModelRegistry:
     """PostgreSQL-based model registry for version tracking."""
 
-    def __init__(self):
-        """Initialize model registry."""
-        self.pool = None
+    def __init__(self, pool=None):
+        """
+        Initialize model registry.
+
+        Args:
+            pool: Optional shared asyncpg connection pool. If None, creates its own.
+        """
+        self.pool = pool
         self.config = config.postgres
+        self._owns_pool = pool is None
 
     async def initialize(self) -> None:
         """Initialize database connection pool."""
         try:
-            logger.info("Initializing model registry connection pool")
-            self.pool = await asyncpg.create_pool(
-                self.config.dsn,
-                min_size=self.config.min_pool_size,
-                max_size=self.config.max_pool_size,
-                command_timeout=60,
-            )
+            logger.info("Initializing model registry")
+
+            # Only create pool if not provided
+            if self._owns_pool:
+                logger.info("Creating model registry connection pool")
+                self.pool = await asyncpg.create_pool(
+                    self.config.dsn,
+                    min_size=self.config.min_pool_size,
+                    max_size=self.config.max_pool_size,
+                    command_timeout=60,
+                )
+
             await self._create_tables()
             logger.info("Model registry initialized")
         except Exception as e:
@@ -180,7 +191,7 @@ class ModelRegistry:
 
     async def close(self) -> None:
         """Close database connection pool."""
-        if self.pool:
+        if self.pool and self._owns_pool:
             await self.pool.close()
             logger.info("Model registry connection pool closed")
 

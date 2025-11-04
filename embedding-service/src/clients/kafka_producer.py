@@ -30,15 +30,22 @@ class KafkaProducer:
             )
 
             # Initialize schema registry
+            logger.debug(f"Connecting to schema registry: {self.config.schema_registry_url}")
             schema_registry_client = SchemaRegistryClient(
                 {"url": self.config.schema_registry_url}
             )
 
+            # Get schema
+            schema_str = self._get_embeddings_schema()
+            logger.debug(f"Using Avro schema: {schema_str}")
+
             # Create Avro serializer
             self.serializer = AvroSerializer(
                 schema_registry_client,
-                schema_str=self._get_embeddings_schema(),
+                schema_str=schema_str,
             )
+
+            logger.debug("Avro serializer created successfully")
 
             # Create producer
             producer_config = {
@@ -49,11 +56,12 @@ class KafkaProducer:
             }
 
             self.producer = Producer(producer_config)
+            logger.debug(f"Producer created with config: {producer_config}")
 
             logger.info("Kafka producer initialized successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize Kafka producer: {e}")
+            logger.error(f"Failed to initialize Kafka producer: {e}", exc_info=True)
             raise KafkaProducerError(
                 f"Failed to initialize Kafka producer: {e}"
             )
@@ -76,15 +84,18 @@ class KafkaProducer:
             KafkaProducerError: If production fails
         """
         try:
-            # Try Avro serialization first
-            try:
-                serialized_value = self.serializer(message, None)
-                if serialized_value is None:
-                    raise ValueError("Avro serializer returned None")
-            except Exception as avro_error:
-                logger.warning(f"Avro serialization failed: {avro_error}, falling back to JSON")
-                # Fallback to JSON serialization
-                serialized_value = json.dumps(message).encode('utf-8')
+            logger.debug(f"Serializing message: {message}")
+
+            # Serialize the message
+            serialized_value = self.serializer(message, None)
+
+            logger.debug(f"Serialized value type: {type(serialized_value)}, length: {len(serialized_value) if serialized_value else 0}")
+
+            if serialized_value is None:
+                logger.error(f"Serializer returned None for message: {message}")
+                raise KafkaProducerError("Avro serializer returned None")
+
+            logger.debug(f"Producing message to {self.config.output_topic}")
 
             self.producer.produce(
                 topic=self.config.output_topic,
@@ -96,7 +107,7 @@ class KafkaProducer:
             logger.debug(f"Produced message to {self.config.output_topic}")
 
         except Exception as e:
-            logger.error(f"Failed to produce message: {e}")
+            logger.error(f"Failed to produce message: {e}", exc_info=True)
             raise KafkaProducerError(f"Failed to produce message: {e}")
 
     def flush(self, timeout_ms: int = 10000) -> int:

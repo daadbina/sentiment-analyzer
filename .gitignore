@@ -69,12 +69,16 @@ k8s/secrets/
 .augment/rules/
 !.augment/rules/GIT.md
 
-# Ignore ALL markdown files EXCEPT CHANGELOG and README
+# Ignore ALL markdown files EXCEPT CHANGELOG, README, TODO, and INTEGRATION
 *.md
 !CHANGELOG.md
 !README.md
+!TODO.md
+!INTEGRATION.md
 !**/CHANGELOG.md
 !**/README.md
+!**/TODO.md
+!**/INTEGRATION.md
 
 # Temporary files
 *.tmp

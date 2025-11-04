@@ -94,13 +94,13 @@ class FeatureEngineeringService:
                     # Process message
                     self._process_message(message)
                 except Exception as e:
-                    logger.warning("Error processing message, continuing", error=str(e))
+                    logger.warning("Error processing message, continuing", error=str(e), exc_info=True)
                     continue
 
         except KeyboardInterrupt:
             logger.info("Service interrupted")
         except Exception as e:
-            logger.error("Fatal error in consumption loop", error=str(e))
+            logger.error("Fatal error in consumption loop", error=str(e), exc_info=True)
         finally:
             self.shutdown()
 

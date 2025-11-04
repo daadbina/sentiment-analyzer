@@ -89,7 +89,7 @@ class SemanticGroupConsumer:
             return message_data
 
         except Exception as e:
-            logger.warning("Error consuming message", error=str(e))
+            logger.warning("Error consuming message", error=str(e), exc_info=True)
             return None
 
     def commit_offset(self) -> bool:

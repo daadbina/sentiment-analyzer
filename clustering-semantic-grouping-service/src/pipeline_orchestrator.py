@@ -176,6 +176,12 @@ class PipelineOrchestrator:
                 return 0, 0, 0
 
             logger.info(f"Retrieved {len(embeddings)} embeddings")
+            logger.info(f"Metadata count: {len(metadata)}")
+
+            # Ensure embeddings and metadata have the same length
+            if len(embeddings) != len(metadata):
+                logger.error(f"Embeddings ({len(embeddings)}) and metadata ({len(metadata)}) length mismatch")
+                return 0, 0, 0
 
             # Step 3: Perform clustering
             labels = self.clustering_engine.cluster(embeddings)
@@ -202,7 +208,12 @@ class PipelineOrchestrator:
                 # Get cluster articles and embeddings
                 mask = labels == cluster_id
                 cluster_embeddings = embeddings[mask]
-                cluster_articles = [metadata[i] for i in range(len(metadata)) if mask[i]]
+                # Use numpy array indexing to get metadata for this cluster
+                indices = np.where(mask)[0]
+                logger.info(f"Cluster {cluster_id}: mask shape={mask.shape}, indices shape={indices.shape}, metadata type={type(metadata)}, metadata len={len(metadata)}")
+                if len(indices) > 0:
+                    logger.info(f"First index: {indices[0]}, type: {type(indices[0])}")
+                cluster_articles = [metadata[int(i)] for i in indices]
 
                 logger.info(f"Processing cluster {cluster_id} with {len(cluster_articles)} articles")
 
@@ -230,18 +241,46 @@ class PipelineOrchestrator:
                     cluster_articles, method="extractive"
                 )
 
-                # Create cluster record
+                # Create cluster record with all required Avro schema fields
+                cluster_metadata = self.metadata_aggregator.aggregate_cluster_metadata(
+                    cluster_articles
+                )
+
                 cluster_record = {
                     "group_id": str(uuid4()),
                     "article_ids": [a.get("article_id") for a in cluster_articles],
                     "article_count": len(cluster_articles),
-                    "similarity_avg": report["metrics"].get("similarity_avg", 0.0),
+                    "similarity_avg": float(report["metrics"].get("similarity_avg", 0.0)),
+                    "similarity_min": float(report["metrics"].get("similarity_min", 0.0)),
+                    "similarity_std": float(report["metrics"].get("similarity_std", 0.0)),
                     "topic_label": topic_label,
+                    "topic_label_method": "extractive",
                     "centroid_vector": centroid.tolist(),
-                    "metadata": self.metadata_aggregator.aggregate_cluster_metadata(
-                        cluster_articles
-                    ),
+                    "centroid_article_id": None,
+                    "languages": cluster_metadata.get("languages", []),
+                    "domains": cluster_metadata.get("domains", []),
+                    "sources": cluster_metadata.get("sources", []),
+                    "countries": cluster_metadata.get("countries", []),
+                    "publisher_credibility_avg": float(cluster_metadata.get("publisher_credibility_avg", 0.5)),
+                    "earliest_published_at": cluster_metadata.get("earliest_published_at", ""),
+                    "latest_published_at": cluster_metadata.get("latest_published_at", ""),
+                    "time_span_hours": float(cluster_metadata.get("time_span_hours", 0.0)),
                     "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat(),
+                    "clustering_algorithm": "hdbscan",
+                    "clustering_parameters": {
+                        "min_cluster_size": "3",
+                        "metric": "cosine",
+                    },
+                    "embedding_model": "multilingual-e5-large",
+                    "embedding_version": "v1.0",
+                    "parent_group_id": None,
+                    "child_group_ids": [],
+                    "evolution_type": None,
+                    "cluster_stability_score": 0.5,
+                    "job_id": str(uuid4()),
+                    "trace_id": str(uuid4()),
+                    "schema_version": "1.0",
                 }
 
                 valid_clusters.append(cluster_record)

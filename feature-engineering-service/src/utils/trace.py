@@ -107,23 +107,23 @@ class StructuredLogger:
         context.update(extra)
         return context
 
-    def debug(self, message: str, **kwargs):
+    def debug(self, message: str, exc_info: bool = False, **kwargs):
         """Log debug message."""
-        self.logger.debug(message, extra=self._add_context(kwargs))
+        self.logger.debug(message, extra=self._add_context(kwargs), exc_info=exc_info)
 
-    def info(self, message: str, **kwargs):
+    def info(self, message: str, exc_info: bool = False, **kwargs):
         """Log info message."""
-        self.logger.info(message, extra=self._add_context(kwargs))
+        self.logger.info(message, extra=self._add_context(kwargs), exc_info=exc_info)
 
-    def warning(self, message: str, **kwargs):
+    def warning(self, message: str, exc_info: bool = False, **kwargs):
         """Log warning message."""
-        self.logger.warning(message, extra=self._add_context(kwargs))
+        self.logger.warning(message, extra=self._add_context(kwargs), exc_info=exc_info)
 
-    def error(self, message: str, **kwargs):
+    def error(self, message: str, exc_info: bool = False, **kwargs):
         """Log error message."""
-        self.logger.error(message, extra=self._add_context(kwargs))
+        self.logger.error(message, extra=self._add_context(kwargs), exc_info=exc_info)
 
-    def critical(self, message: str, **kwargs):
+    def critical(self, message: str, exc_info: bool = False, **kwargs):
         """Log critical message."""
-        self.logger.critical(message, extra=self._add_context(kwargs))
+        self.logger.critical(message, extra=self._add_context(kwargs), exc_info=exc_info)
 

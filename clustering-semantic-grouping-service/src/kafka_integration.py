@@ -4,7 +4,8 @@ import logging
 import json
 from typing import Optional, Callable, List
 from confluent_kafka import Consumer, Producer, KafkaError
-from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry import SchemaRegistryClient, SerializationContext, MessageField
+from confluent_kafka.schema_registry.avro import AvroDeserializer, AvroSerializer
 from confluent_kafka.schema_registry.json_schema import JSONDeserializer, JSONSerializer
 import fastavro
 import numpy as np
@@ -153,6 +154,15 @@ class KafkaProducer:
             {"url": schema_registry_url}
         )
 
+        # Import the schema here to avoid circular imports
+        from .avro_schemas import SEMANTIC_GROUPS_SCHEMA
+
+        # Create Avro serializer with schema as JSON string
+        self.avro_serializer = AvroSerializer(
+            self.schema_registry_client,
+            json.dumps(SEMANTIC_GROUPS_SCHEMA)
+        )
+
         self.producer = Producer({
             "bootstrap.servers": brokers,
             "acks": "all",
@@ -179,7 +189,12 @@ class KafkaProducer:
         try:
             # Convert numpy types to Python native types
             cluster_converted = convert_numpy_types(cluster)
-            value = json.dumps(cluster_converted).encode("utf-8")
+
+            # Create serialization context with topic information
+            ctx = SerializationContext(self.topic, MessageField.VALUE)
+
+            # Serialize using Avro
+            value = self.avro_serializer(cluster_converted, ctx)
             key_bytes = key.encode("utf-8") if key else None
 
             self.producer.produce(

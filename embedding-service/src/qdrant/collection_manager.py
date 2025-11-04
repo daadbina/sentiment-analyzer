@@ -74,6 +74,9 @@ class CollectionManager:
 
             if metadata and i < len(metadata):
                 payload.update(metadata[i])
+                # Debug log first point's metadata
+                if i == 0:
+                    logger.info(f"Sample metadata for first point: {metadata[i]}")
 
             # Create point with UUID as ID
             point = PointStruct(

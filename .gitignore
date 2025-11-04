@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -67,18 +68,15 @@ k8s/secrets/
 
 # Augment rules (but allow GIT.md)
 .augment/rules/
-!.augment/rules/GIT.md
+
 
 # Ignore ALL markdown files EXCEPT CHANGELOG, README, TODO, and INTEGRATION
 *.md
 !CHANGELOG.md
 !README.md
-!TODO.md
-!INTEGRATION.md
 !**/CHANGELOG.md
 !**/README.md
-!**/TODO.md
-!**/INTEGRATION.md
+
 
 
 # Temporary files

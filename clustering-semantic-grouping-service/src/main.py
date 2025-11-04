@@ -1,0 +1,168 @@
+"""Main FastAPI application."""
+
+import logging
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from prometheus_client import Counter, Histogram, generate_latest
+import time
+
+from .config import config
+from .scheduler import ClusteringScheduler
+from .migrations import MigrationRunner
+
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Clustering-Semantic-Grouping-Service",
+    description="Phase 2 semantic clustering service",
+    version="0.1.0",
+)
+
+# Initialize scheduler
+scheduler = ClusteringScheduler()
+
+# Prometheus metrics
+clustering_jobs_total = Counter(
+    "clustering_jobs_total",
+    "Total clustering jobs executed",
+    ["status"],
+)
+clustering_duration_seconds = Histogram(
+    "clustering_duration_seconds",
+    "Clustering job duration in seconds",
+)
+clusters_created_total = Counter(
+    "clusters_created_total",
+    "Total clusters created",
+)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Startup event handler."""
+    logger.info("Starting clustering service")
+    try:
+        # Run database migrations
+        logger.info("Running database migrations")
+        migration_runner = MigrationRunner()
+        migration_runner.reset_migrations()  # Reset for development
+        migration_runner.run_all_migrations()
+        logger.info("Database migrations completed")
+
+        # Start scheduler
+        scheduler.start()
+        logger.info("Service started successfully")
+    except Exception as e:
+        logger.error(f"Startup failed: {e}", exc_info=True)
+        raise
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown event handler."""
+    logger.info("Shutting down clustering service")
+    try:
+        scheduler.stop()
+        logger.info("Service shut down successfully")
+    except Exception as e:
+        logger.error(f"Shutdown failed: {e}", exc_info=True)
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "service": "clustering-semantic-grouping-service",
+        "version": "0.1.0",
+    }
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Readiness check endpoint."""
+    try:
+        status = scheduler.get_job_status()
+        return {
+            "ready": True,
+            "scheduler": status,
+        }
+    except Exception as e:
+        logger.error(f"Readiness check failed: {e}", exc_info=True)
+        raise HTTPException(status_code=503, detail="Service not ready")
+
+
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint."""
+    return generate_latest()
+
+
+@app.get("/status")
+async def get_status():
+    """Get service status."""
+    try:
+        status = scheduler.get_job_status()
+        return {
+            "service": "clustering-semantic-grouping-service",
+            "version": "0.1.0",
+            "scheduler": status,
+            "config": {
+                "algorithm": config.clustering.algorithm,
+                "min_cluster_size": config.clustering.min_cluster_size,
+                "similarity_threshold": config.clustering.similarity_threshold,
+                "execution_frequency_hours": config.clustering.execution_frequency_hours,
+            },
+        }
+    except Exception as e:
+        logger.error(f"Error getting status: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error getting status")
+
+
+@app.post("/jobs/clustering/run")
+async def run_clustering_job():
+    """Manually trigger clustering job."""
+    try:
+        start_time = time.time()
+        total, valid, invalid = scheduler.orchestrator.run_clustering_job()
+        duration = time.time() - start_time
+
+        clustering_jobs_total.labels(status="success").inc()
+        clustering_duration_seconds.observe(duration)
+        clusters_created_total.inc(valid)
+
+        return {
+            "status": "success",
+            "total_clusters": total,
+            "valid_clusters": valid,
+            "invalid_clusters": invalid,
+            "duration_seconds": duration,
+        }
+
+    except Exception as e:
+        logger.error(f"Error running clustering job: {e}", exc_info=True)
+        clustering_jobs_total.labels(status="error").inc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/jobs/clustering/status")
+async def get_clustering_status():
+    """Get clustering job status."""
+    try:
+        return scheduler.get_job_status()
+    except Exception as e:
+        logger.error(f"Error getting job status: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error getting job status")
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        app,
+        host=config.service.api_host,
+        port=config.service.api_port,
+        log_level=config.service.log_level.lower(),
+    )
+

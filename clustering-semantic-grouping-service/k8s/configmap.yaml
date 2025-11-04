@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clustering-config
+  namespace: sentiment-analyzer
+data:
+  kafka.brokers: "kafka-broker-0.kafka-headless.sentiment-analyzer.svc.cluster.local:9092,kafka-broker-1.kafka-headless.sentiment-analyzer.svc.cluster.local:9092,kafka-broker-2.kafka-headless.sentiment-analyzer.svc.cluster.local:9092"
+  schema.registry.url: "http://schema-registry.sentiment-analyzer.svc.cluster.local:8081"
+  kafka.input.topic: "embeddings"
+  kafka.output.topic: "semantic_groups"
+  kafka.consumer.group: "clustering-service-group"
+  qdrant.host: "qdrant.sentiment-analyzer.svc.cluster.local"
+  qdrant.port: "6333"
+  qdrant.collection.name: "news_embeddings_v1"
+  postgres.host: "postgres.sentiment-analyzer.svc.cluster.local"
+  postgres.port: "5432"
+  postgres.db: "sentiment"
+  redis.host: "redis.sentiment-analyzer.svc.cluster.local"
+  redis.port: "6379"
+  clustering.algorithm: "hdbscan"
+  min.cluster.size: "3"
+  min.samples: "2"
+  cluster.selection.epsilon: "0.15"
+  similarity.threshold: "0.85"
+  max.cluster.size: "1000"
+  time.window.hours: "24"
+  overlap.hours: "6"
+  execution.frequency.hours: "4"
+  min.cluster.purity: "0.85"
+  max.time.span.hours: "168"
+  min.sources: "2"
+  language.consistency.threshold: "0.70"
+  domain.consistency.threshold: "0.60"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: clustering-secrets
+  namespace: sentiment-analyzer
+type: Opaque
+stringData:
+  postgres.user: "adminsentiment"
+  postgres.password: "wp2400!!!!"
+

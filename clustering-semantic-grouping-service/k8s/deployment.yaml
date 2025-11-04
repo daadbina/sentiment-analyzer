@@ -1,0 +1,148 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clustering-semantic-grouping-service
+  namespace: sentiment-analyzer
+  labels:
+    app: clustering-service
+    version: v0.1.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: clustering-service
+  template:
+    metadata:
+      labels:
+        app: clustering-service
+        version: v0.1.0
+    spec:
+      serviceAccountName: clustering-service
+      containers:
+      - name: clustering-service
+        image: sentiment-analyzer/clustering-service:0.1.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8082
+          protocol: TCP
+        - name: metrics
+          containerPort: 9104
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: clustering-config
+              key: kafka.brokers
+        - name: SCHEMA_REGISTRY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: clustering-config
+              key: schema.registry.url
+        - name: QDRANT_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: clustering-config
+              key: qdrant.host
+        - name: QDRANT_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: clustering-config
+              key: qdrant.port
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: clustering-config
+              key: postgres.host
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: clustering-config
+              key: postgres.port
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: clustering-secrets
+              key: postgres.user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: clustering-secrets
+              key: postgres.password
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: clustering-config
+              key: postgres.db
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: clustering-config
+              key: redis.host
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: clustering-config
+              key: redis.port
+        - name: CLUSTERING_ALGORITHM
+          value: "hdbscan"
+        - name: MIN_CLUSTER_SIZE
+          value: "3"
+        - name: SIMILARITY_THRESHOLD
+          value: "0.85"
+        - name: EXECUTION_FREQUENCY_HOURS
+          value: "4"
+        resources:
+          requests:
+            cpu: 2
+            memory: 2Gi
+          limits:
+            cpu: 4
+            memory: 4Gi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        volumeMounts:
+        - name: config
+          mountPath: /etc/clustering
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: clustering-config
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - clustering-service
+              topologyKey: kubernetes.io/hostname
+

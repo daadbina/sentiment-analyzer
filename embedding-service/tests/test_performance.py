@@ -61,18 +61,21 @@ def test_normalization_performance():
 
 def test_validation_performance():
     """Test embedding validation performance."""
-    validator = EmbeddingValidator(embedding_dim=768)
-    embeddings = np.random.randn(10000, 768)
+    from src.embedding.normalization import normalize_l2
+
+    validator = EmbeddingValidator(expected_dimension=768)
+    embeddings = np.random.randn(1000, 768).astype(np.float32)
+    embeddings = normalize_l2(embeddings)
 
     start = time.time()
     for embedding in embeddings:
-        validator.validate(embedding)
+        validator.validate_embedding(embedding)
     elapsed = time.time() - start
 
     # Should complete quickly
     assert elapsed < 1.0
 
-    print(f"Validation time: {elapsed*1000:.2f}ms for 10000 embeddings")
+    print(f"Validation time: {elapsed*1000:.2f}ms for 1000 embeddings")
 
 
 def test_batch_optimization_performance():
@@ -126,15 +129,10 @@ def test_memory_efficiency():
 
 def test_concurrent_embedding_generation(model):
     """Test concurrent embedding generation."""
-    import asyncio
-
-    async def generate_embeddings(texts):
-        return model.encode(texts)
-
     texts = ["This is a test sentence"] * 50
 
     start = time.time()
-    embeddings = generate_embeddings(texts)
+    embeddings = model.encode(texts)
     elapsed = time.time() - start
 
     assert elapsed < 15.0

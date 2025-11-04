@@ -1,0 +1,107 @@
+replicaCount: 3
+
+image:
+  repository: sentiment-analyzer/ner-entity-linking-service
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: "ner-entity-linking-service"
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9104"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+
+service:
+  type: ClusterIP
+  port: 9104
+  targetPort: 9104
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - ner-entity-linking-service
+        topologyKey: kubernetes.io/hostname
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 9104
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 9104
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+
+config:
+  service_name: "ner-entity-linking-service"
+  kafka_brokers: "kafka-broker-0.kafka-headless.sentiment-analyzer.svc.cluster.local:9092"
+  consumer_group: "ner-service-group"
+  input_topic: "news_canonical"
+  output_topic: "entities_extracted"
+  postgres_host: "postgres.sentiment-analyzer.svc.cluster.local"
+  postgres_port: "5432"
+  postgres_database: "sentiment"
+  redis_host: "redis.sentiment-analyzer.svc.cluster.local"
+  redis_port: "6379"
+  log_level: "INFO"
+
+secrets:
+  postgres_user: "adminsentiment"
+  postgres_password: "wp2400!!!!"
+
+terminationGracePeriodSeconds: 30
+

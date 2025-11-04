@@ -49,21 +49,20 @@ class EntityLinker:
             if wikidata_result:
                 entity.wikidata_id = wikidata_result.get("wikidata_id")
                 entity.country = wikidata_result.get("country")
-                MetricsCollector.record_entity_linked("wikidata")
+                MetricsCollector.record_entities_linked(1)
                 logger.debug(f"Linked entity {entity.text} to Wikidata: {entity.wikidata_id}")
             else:
                 logger.debug(f"Could not link entity {entity.text} to Wikidata")
-                MetricsCollector.record_entity_unlinked()
 
             # Record linking duration
             duration_seconds = time.time() - start_time
-            MetricsCollector.record_linking_duration(duration_seconds, "wikidata")
+            MetricsCollector.record_linking_latency(duration_seconds)
 
             return entity
 
         except Exception as e:
             logger.error(f"Error linking entity {entity.text}: {e}")
-            MetricsCollector.record_entity_unlinked()
+            MetricsCollector.record_linking_error("linking_error")
             return entity
 
     def link_entities(self, entities: list) -> tuple:

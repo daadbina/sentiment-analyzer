@@ -8,29 +8,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned
-- Initial implementation of clustering-semantic-grouping-service
-- HDBSCAN and DBSCAN clustering algorithms
-- Temporal cluster evolution tracking
-- Multi-write coordination (Kafka + Delta Lake + PostgreSQL)
-- Comprehensive validation and quality scoring
-- Topic labeling with TF-IDF and optional LLM
-- Prometheus metrics and OpenTelemetry tracing
 - Kubernetes and Helm deployment
+- OpenTelemetry tracing integration
+- Advanced outlier handling
+- Incremental clustering for online updates
+- Cluster stability scoring
 
-## [0.0.0] - 2025-11-04
+## [0.1.0] - 2025-11-04
 
 ### Added
-- Project initialization
-- TODO.md with implementation roadmap
-- CHANGELOG.md for version tracking
-- Design document: clustering-semantic-grouping-service.md
-- Integration guide: INTEGRATION.md (planned)
+- TimeWindowManager for sliding window calculation with overlap
+- VectorRetriever for Qdrant queries with metadata filtering
+- ClusteringEngine with HDBSCAN and DBSCAN support
+- ParameterTuner for automatic parameter optimization
+- ClusterValidator for quality checks (R7 + purity)
+- CentroidCalculator for weighted centroid computation
+- MetadataAggregator for cluster property aggregation
+- TopicLabeler with extractive TF-IDF method
+- TemporalTracker for cluster evolution and lineage
+- DeltaLakeWriter for ACID writes with versioning
+- ClusterRegistry (PostgreSQL) with audit trail
+- CacheManager (Redis) for incremental state
+- KafkaConsumer and KafkaProducer for message integration
+- PipelineOrchestrator for complete pipeline orchestration
+- ClusteringScheduler with APScheduler for batch jobs
+- FastAPI application with health checks and metrics
+- Comprehensive unit tests for all components
+- Docker and docker-compose configuration
+- README and INTEGRATION documentation
+- Configuration management with environment variables
 
 ### Status
-- **Phase**: Initial setup
-- **Completeness**: 0%
-- **Tests**: Not started
-- **Documentation**: In progress
+- **Phase**: 1-7 Complete, 8-10 In Progress
+- **Completeness**: ~70%
+- **Tests**: Unit tests complete, integration tests pending
+- **Documentation**: README and INTEGRATION complete
 
 ---
 

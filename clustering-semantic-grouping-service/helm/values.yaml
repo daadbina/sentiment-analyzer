@@ -1,0 +1,134 @@
+replicaCount: 2
+
+image:
+  repository: sentiment-analyzer/clustering-service
+  pullPolicy: IfNotPresent
+  tag: "0.1.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+
+service:
+  type: ClusterIP
+  port: 8082
+  metricsPort: 9104
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: clustering-service.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 4
+    memory: 4Gi
+  requests:
+    cpu: 2
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - clustering-service
+        topologyKey: kubernetes.io/hostname
+
+config:
+  environment: production
+  logLevel: INFO
+  kafka:
+    brokers: "kafka-broker-0.kafka-headless:9092,kafka-broker-1.kafka-headless:9092,kafka-broker-2.kafka-headless:9092"
+    schemaRegistryUrl: "http://schema-registry:8081"
+    inputTopic: "embeddings"
+    outputTopic: "semantic_groups"
+    consumerGroup: "clustering-service-group"
+  qdrant:
+    host: "qdrant"
+    port: 6333
+    collectionName: "news_embeddings_v1"
+  postgres:
+    host: "postgres"
+    port: 5432
+    database: "sentiment"
+  redis:
+    host: "redis"
+    port: 6379
+  clustering:
+    algorithm: "hdbscan"
+    minClusterSize: 3
+    minSamples: 2
+    clusterSelectionEpsilon: 0.15
+    metric: "cosine"
+    similarityThreshold: 0.85
+    maxClusterSize: 1000
+    timeWindowHours: 24
+    overlapHours: 6
+    executionFrequencyHours: 4
+  validation:
+    minClusterPurity: 0.85
+    maxTimeSpanHours: 168
+    minSources: 2
+    languageConsistencyThreshold: 0.70
+    domainConsistencyThreshold: 0.60
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 20
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+

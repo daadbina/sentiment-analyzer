@@ -1,0 +1,19 @@
+apiVersion: v2
+name: clustering-semantic-grouping-service
+description: Phase 2 semantic clustering and grouping service for multilingual news
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - clustering
+  - semantic-grouping
+  - news-analysis
+  - sentiment-analyzer
+home: https://github.com/daadbina/sentiment-analyzer
+sources:
+  - https://github.com/daadbina/sentiment-analyzer
+maintainers:
+  - name: Sentiment Analyzer Team
+    email: team@sentiment-analyzer.dev
+dependencies: []
+

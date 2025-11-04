@@ -25,7 +25,7 @@ from .drift import DriftDetector
 from .utils import StructuredLogger, TraceContext, FeatureLineage
 from .metrics import metrics
 from .exceptions import FeatureError
-from .config import QdrantConfig
+from .config import QdrantConfig, FeastConfig
 
 logger = StructuredLogger(__name__)
 
@@ -40,6 +40,8 @@ class FeatureEngineeringService:
         self.postgres_client = PostgresClient()
         qdrant_config = QdrantConfig()
         self.qdrant_client = QdrantVectorClient(config=qdrant_config)
+        feast_config = FeastConfig()
+        self.feature_version = feast_config.feature_version
 
         # Initialize extractors
         self.extractors = [
@@ -147,7 +149,7 @@ class FeatureEngineeringService:
                 self.producer.produce_message(
                     group_id=group_id,
                     features=features,
-                    feature_version="v1.0",
+                    feature_version=self.feature_version,
                     validation_status="VALID",
                     validation_failures=[],
                     computation_duration_ms=int((time.time() - start_time) * 1000),

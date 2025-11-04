@@ -39,20 +39,24 @@ class DeltaLakeWriter:
             for key, value in cluster.items():
                 # Replace None with appropriate default values
                 if value is None:
-                    if isinstance(key, str):
-                        if "id" in key or "label" in key or "model" in key or "algorithm" in key or "version" in key or "type" in key:
-                            sanitized_cluster[key] = ""
-                        elif "count" in key or "score" in key or "avg" in key or "min" in key or "max" in key or "std" in key:
-                            sanitized_cluster[key] = 0.0
-                        elif isinstance(value, list):
-                            sanitized_cluster[key] = []
-                        else:
-                            sanitized_cluster[key] = ""
+                    if "vector" in key:
+                        # For vector fields, use empty list
+                        sanitized_cluster[key] = []
+                    elif "count" in key or "score" in key or "avg" in key or "min" in key or "max" in key or "std" in key or "duration" in key:
+                        # For numeric fields
+                        sanitized_cluster[key] = 0.0
+                    elif isinstance(value, list):
+                        sanitized_cluster[key] = []
                     else:
+                        # For string fields
                         sanitized_cluster[key] = ""
                 # Handle lists with None values
                 elif isinstance(value, list):
-                    sanitized_cluster[key] = [v if v is not None else "" for v in value]
+                    # For numeric lists (like centroid_vector), replace None with 0.0
+                    if key == "centroid_vector":
+                        sanitized_cluster[key] = [float(v) if v is not None else 0.0 for v in value]
+                    else:
+                        sanitized_cluster[key] = [v if v is not None else "" for v in value]
                 # Handle dicts with None values
                 elif isinstance(value, dict):
                     sanitized_cluster[key] = {k: (v if v is not None else "") for k, v in value.items()}
@@ -103,6 +107,14 @@ class DeltaLakeWriter:
 
             logger.debug(f"DataFrame dtypes:\n{df.dtypes}")
             logger.debug(f"DataFrame null counts:\n{df.isnull().sum()}")
+
+            # Convert list columns to strings to avoid nullable types
+            for col in df.columns:
+                if df[col].dtype == 'object':
+                    # Check if column contains lists
+                    if df[col].apply(lambda x: isinstance(x, list)).any():
+                        # Convert lists to JSON strings
+                        df[col] = df[col].apply(lambda x: str(x) if isinstance(x, list) else x)
 
             # Write to Delta Lake
             write_deltalake(

@@ -26,6 +26,7 @@ class MigrationRunner:
             pool_size=5,
             max_overflow=10,
             pool_pre_ping=True,
+            connect_args={"connect_timeout": 10},
         )
         self.migrations_dir = Path(__file__).parent.parent / "schemas" / "migrations"
         logger.info(f"MigrationRunner initialized with DSN: {self.dsn}")
@@ -95,6 +96,16 @@ class MigrationRunner:
         except Exception as e:
             logger.error(f"Failed to execute migration {migration_name}: {e}")
             raise
+
+    def reset_migrations(self):
+        """Reset migration tracking (for development/debugging)."""
+        try:
+            with self.engine.connect() as conn:
+                conn.execute(text("DELETE FROM schema_migrations"))
+                conn.commit()
+            logger.info("Reset migration tracking")
+        except Exception as e:
+            logger.debug(f"Could not reset migrations (table may not exist): {e}")
 
     def run_all_migrations(self):
         """Run all pending migrations."""

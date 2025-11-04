@@ -46,6 +46,7 @@ async def startup_event():
         # Run database migrations
         logger.info("Running database migrations")
         migration_runner = MigrationRunner()
+        migration_runner.reset_migrations()  # Reset for development
         migration_runner.run_all_migrations()
         logger.info("Database migrations completed")
 

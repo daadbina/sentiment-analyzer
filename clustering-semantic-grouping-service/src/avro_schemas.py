@@ -1,8 +1,12 @@
 """Avro schema definitions and registration for Kafka topics."""
 
+import json
 import logging
 from typing import Dict, Any
-from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry import (
+    Schema,
+    SchemaRegistryClient,
+)
 from confluent_kafka.schema_registry.schema_registry_client import SchemaRegistryError
 
 logger = logging.getLogger(__name__)
@@ -81,20 +85,22 @@ class AvroSchemaRegistry:
             Schema ID
         """
         try:
-            import json
+            # Convert schema dict to JSON string
             schema_str = json.dumps(schema)
-            
-            schema_id = self.client.register_schema(
-                subject_name=subject,
-                schema_str=schema_str,
-                schema_type=schema_type
-            )
-            
+            logger.debug(f"Schema string for {subject}: {schema_str[:100]}...")
+
+            # Create Schema object (required by confluent_kafka)
+            schema_obj = Schema(schema_str, schema_type=schema_type)
+            logger.debug(f"Created Schema object for {subject}")
+
+            # Register schema using the client's register_schema method
+            schema_id = self.client.register_schema(subject, schema_obj)
+
             logger.info(f"Registered schema {subject}: ID={schema_id}")
             return schema_id
-            
-        except SchemaRegistryError as e:
-            logger.error(f"Failed to register schema {subject}: {e}")
+
+        except Exception as e:
+            logger.error(f"Failed to register schema {subject}: {e}", exc_info=True)
             raise
 
     def get_schema(self, schema_id: int) -> Dict[str, Any]:
@@ -153,15 +159,24 @@ class AvroSchemaRegistry:
             Schema ID
         """
         try:
-            # Try to get latest schema for subject
-            schema_metadata = self.client.get_latest_schema(subject)
-            logger.info(f"Schema {subject} already exists: ID={schema_metadata.schema_id}")
-            return schema_metadata.schema_id
-            
-        except SchemaRegistryError:
-            # Schema doesn't exist, register it
-            logger.info(f"Schema {subject} not found, registering...")
-            return self.register_schema(subject, schema)
+            # Try to get the latest version of the schema for this subject
+            try:
+                latest_schema = self.client.get_latest_version(subject)
+                logger.info(f"Schema {subject} already exists with ID={latest_schema.schema_id}")
+                return latest_schema.schema_id
+            except SchemaRegistryError as e:
+                # Schema doesn't exist yet, need to register it
+                if "Subject not found" in str(e) or "404" in str(e):
+                    logger.info(f"Schema {subject} not found, registering new schema...")
+                    return self.register_schema(subject, schema)
+                else:
+                    # Some other error occurred
+                    logger.error(f"Error checking schema existence: {e}", exc_info=True)
+                    raise
+
+        except Exception as e:
+            logger.error(f"Failed to ensure schema exists for {subject}: {e}", exc_info=True)
+            raise
 
 
 def initialize_schemas(schema_registry_url: str) -> AvroSchemaRegistry:

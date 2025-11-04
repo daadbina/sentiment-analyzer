@@ -22,7 +22,7 @@ class ClusterRecord(Base):
     similarity_avg = Column(Float)
     topic_label = Column(String)
     centroid_vector = Column(JSON)
-    metadata = Column(JSON)
+    cluster_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -82,7 +82,7 @@ class ClusterRegistry:
                 similarity_avg=cluster.get("similarity_avg"),
                 topic_label=cluster.get("topic_label"),
                 centroid_vector=cluster.get("centroid_vector"),
-                metadata=cluster,
+                cluster_metadata=cluster,
             )
             session.add(record)
             session.commit()
@@ -117,7 +117,7 @@ class ClusterRegistry:
                     "similarity_avg": record.similarity_avg,
                     "topic_label": record.topic_label,
                     "centroid_vector": record.centroid_vector,
-                    "metadata": record.metadata,
+                    "cluster_metadata": record.cluster_metadata,
                     "created_at": record.created_at.isoformat(),
                 }
 

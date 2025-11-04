@@ -16,10 +16,7 @@ CREATE TABLE IF NOT EXISTS clustering.clusters (
     stability_score FLOAT DEFAULT 0.5,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    created_by VARCHAR(100) DEFAULT 'clustering-service',
-    INDEX idx_group_id (group_id),
-    INDEX idx_created_at (created_at),
-    INDEX idx_stability_score (stability_score)
+    created_by VARCHAR(100) DEFAULT 'clustering-service'
 );
 
 -- Cluster history table for temporal tracking
@@ -31,9 +28,7 @@ CREATE TABLE IF NOT EXISTS clustering.cluster_history (
     centroid_vector FLOAT8[],
     similarity_avg FLOAT,
     snapshot_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    FOREIGN KEY (group_id) REFERENCES clustering.clusters(group_id) ON DELETE CASCADE,
-    INDEX idx_group_id (group_id),
-    INDEX idx_snapshot_at (snapshot_at)
+    FOREIGN KEY (group_id) REFERENCES clustering.clusters(group_id) ON DELETE CASCADE
 );
 
 -- Cluster evolution table for tracking merges and splits
@@ -41,13 +36,11 @@ CREATE TABLE IF NOT EXISTS clustering.cluster_evolution (
     id SERIAL PRIMARY KEY,
     parent_group_id UUID,
     child_group_id UUID NOT NULL,
-    evolution_type VARCHAR(50) NOT NULL, -- 'merge', 'split', 'update'
+    evolution_type VARCHAR(50) NOT NULL,
     similarity_score FLOAT,
     evolved_at TIMESTAMP WITH TIME ZONE NOT NULL,
     metadata JSONB,
-    FOREIGN KEY (child_group_id) REFERENCES clustering.clusters(group_id) ON DELETE CASCADE,
-    INDEX idx_child_group_id (child_group_id),
-    INDEX idx_evolved_at (evolved_at)
+    FOREIGN KEY (child_group_id) REFERENCES clustering.clusters(group_id) ON DELETE CASCADE
 );
 
 -- Audit trail table
@@ -57,9 +50,7 @@ CREATE TABLE IF NOT EXISTS clustering.audit_log (
     action VARCHAR(100) NOT NULL,
     details JSONB,
     performed_by VARCHAR(100) DEFAULT 'clustering-service',
-    performed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_group_id (group_id),
-    INDEX idx_performed_at (performed_at)
+    performed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create indexes for performance

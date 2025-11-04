@@ -1,22 +1,61 @@
 """Configuration management for clustering service."""
 
 import os
+import logging
 from typing import Optional
+from pathlib import Path
+from pydantic import Field
 from pydantic_settings import BaseSettings
+from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
+
+# Load .env file from the service root directory
+env_file = Path(__file__).parent.parent / ".env"
+logger.info(f"Looking for .env file at: {env_file}")
+if env_file.exists():
+    logger.info(f"Loading .env file from: {env_file}")
+    load_dotenv(env_file, override=True)
+    logger.info(f"QDRANT_PORT after load_dotenv: {os.getenv('QDRANT_PORT')}")
+else:
+    logger.warning(f".env file not found at: {env_file}")
 
 
 class KafkaConfig(BaseSettings):
     """Kafka configuration."""
-    brokers: str = os.getenv("KAFKA_BROKERS")
-    schema_registry_url: str = os.getenv("SCHEMA_REGISTRY_URL")
-    input_topic: str = os.getenv("KAFKA_INPUT_TOPIC")
-    output_topic: str = os.getenv("KAFKA_OUTPUT_TOPIC")
-    consumer_group: str = os.getenv("KAFKA_CONSUMER_GROUP")
-    max_poll_interval_ms: int = int(os.getenv("MAX_POLL_INTERVAL_MS", "0"))
-    processing_timeout_seconds: int = int(os.getenv("PROCESSING_TIMEOUT_SECONDS", "0"))
+    brokers: str = Field(default=None)
+    schema_registry_url: str = Field(default=None)
+    input_topic: str = Field(default=None)
+    output_topic: str = Field(default=None)
+    consumer_group: str = Field(default=None)
+    max_poll_interval_ms: int = Field(default=0)
+    processing_timeout_seconds: int = Field(default=0)
+
+    class Config:
+        env_prefix = ""
+        case_sensitive = False
 
     def __init__(self, **data):
+        # Load from environment if not provided
+        if not data.get("brokers"):
+            data["brokers"] = os.getenv("KAFKA_BROKERS")
+        if not data.get("schema_registry_url"):
+            data["schema_registry_url"] = os.getenv("SCHEMA_REGISTRY_URL")
+        if not data.get("input_topic"):
+            data["input_topic"] = os.getenv("KAFKA_INPUT_TOPIC")
+        if not data.get("output_topic"):
+            data["output_topic"] = os.getenv("KAFKA_OUTPUT_TOPIC")
+        if not data.get("consumer_group"):
+            data["consumer_group"] = os.getenv("KAFKA_CONSUMER_GROUP")
+        if not data.get("max_poll_interval_ms"):
+            val = os.getenv("MAX_POLL_INTERVAL_MS")
+            data["max_poll_interval_ms"] = int(val) if val else 0
+        if not data.get("processing_timeout_seconds"):
+            val = os.getenv("PROCESSING_TIMEOUT_SECONDS")
+            data["processing_timeout_seconds"] = int(val) if val else 0
+
         super().__init__(**data)
+
         if not self.brokers:
             raise ValueError("KAFKA_BROKERS environment variable is required")
         if not self.schema_registry_url:
@@ -35,18 +74,41 @@ class KafkaConfig(BaseSettings):
 
 class QdrantConfig(BaseSettings):
     """Qdrant vector database configuration."""
-    host: str = os.getenv("QDRANT_HOST")
-    port: int = int(os.getenv("QDRANT_PORT", "0"))
-    collection_name: str = os.getenv("QDRANT_COLLECTION_NAME")
-    vector_size: int = int(os.getenv("QDRANT_VECTOR_SIZE", "0"))
-    timeout: int = int(os.getenv("QDRANT_TIMEOUT", "0"))
+    host: str = Field(default=None)
+    port: int = Field(default=0)
+    collection_name: str = Field(default=None)
+    vector_size: int = Field(default=0)
+    timeout: int = Field(default=0)
+
+    class Config:
+        env_prefix = ""
+        case_sensitive = False
 
     def __init__(self, **data):
+        # Load from environment if not provided
+        if not data.get("host"):
+            data["host"] = os.getenv("QDRANT_HOST")
+        if not data.get("port"):
+            val = os.getenv("QDRANT_PORT")
+            logger.info(f"QDRANT_PORT env var: {val}")
+            data["port"] = int(val) if val else 0
+            logger.info(f"QDRANT_PORT after conversion: {data['port']}")
+        if not data.get("collection_name"):
+            data["collection_name"] = os.getenv("QDRANT_COLLECTION_NAME")
+        if not data.get("vector_size"):
+            val = os.getenv("QDRANT_VECTOR_SIZE")
+            data["vector_size"] = int(val) if val else 0
+        if not data.get("timeout"):
+            val = os.getenv("QDRANT_TIMEOUT")
+            data["timeout"] = int(val) if val else 0
+
         super().__init__(**data)
+        logger.info(f"QdrantConfig initialized: host={self.host}, port={self.port}, collection={self.collection_name}")
+
         if not self.host:
             raise ValueError("QDRANT_HOST environment variable is required")
         if self.port == 0:
-            raise ValueError("QDRANT_PORT environment variable is required")
+            raise ValueError(f"QDRANT_PORT environment variable is required (got {self.port})")
         if not self.collection_name:
             raise ValueError("QDRANT_COLLECTION_NAME environment variable is required")
         if self.vector_size == 0:
@@ -57,16 +119,40 @@ class QdrantConfig(BaseSettings):
 
 class PostgresConfig(BaseSettings):
     """PostgreSQL configuration."""
-    host: str = os.getenv("POSTGRES_HOST")
-    port: int = int(os.getenv("POSTGRES_PORT", "0"))
-    user: str = os.getenv("POSTGRES_USER")
-    password: str = os.getenv("POSTGRES_PASSWORD")
-    database: str = os.getenv("POSTGRES_DB")
-    min_pool_size: int = int(os.getenv("DB_MIN_POOL_SIZE", "0"))
-    max_pool_size: int = int(os.getenv("DB_MAX_POOL_SIZE", "0"))
+    host: str = Field(default=None)
+    port: int = Field(default=0)
+    user: str = Field(default=None)
+    password: str = Field(default=None)
+    database: str = Field(default=None)
+    min_pool_size: int = Field(default=0)
+    max_pool_size: int = Field(default=0)
+
+    class Config:
+        env_prefix = ""
+        case_sensitive = False
 
     def __init__(self, **data):
+        # Load from environment if not provided
+        if not data.get("host"):
+            data["host"] = os.getenv("POSTGRES_HOST")
+        if not data.get("port"):
+            val = os.getenv("POSTGRES_PORT")
+            data["port"] = int(val) if val else 0
+        if not data.get("user"):
+            data["user"] = os.getenv("POSTGRES_USER")
+        if not data.get("password"):
+            data["password"] = os.getenv("POSTGRES_PASSWORD")
+        if not data.get("database"):
+            data["database"] = os.getenv("POSTGRES_DB")
+        if not data.get("min_pool_size"):
+            val = os.getenv("DB_MIN_POOL_SIZE")
+            data["min_pool_size"] = int(val) if val else 0
+        if not data.get("max_pool_size"):
+            val = os.getenv("DB_MAX_POOL_SIZE")
+            data["max_pool_size"] = int(val) if val else 0
+
         super().__init__(**data)
+
         if not self.host:
             raise ValueError("POSTGRES_HOST environment variable is required")
         if self.port == 0:
@@ -85,15 +171,38 @@ class PostgresConfig(BaseSettings):
 
 class RedisConfig(BaseSettings):
     """Redis configuration."""
-    host: str = os.getenv("REDIS_HOST")
-    port: int = int(os.getenv("REDIS_PORT", "0"))
-    password: Optional[str] = os.getenv("REDIS_PASSWORD")
-    cache_ttl_seconds: int = int(os.getenv("REDIS_CACHE_TTL_SECONDS", "0"))
-    db: int = int(os.getenv("REDIS_DB", "0"))
-    socket_timeout: int = int(os.getenv("REDIS_SOCKET_TIMEOUT", "0"))
+    host: str = Field(default=None)
+    port: int = Field(default=0)
+    password: Optional[str] = Field(default=None)
+    cache_ttl_seconds: int = Field(default=0)
+    db: int = Field(default=0)
+    socket_timeout: int = Field(default=0)
+
+    class Config:
+        env_prefix = ""
+        case_sensitive = False
 
     def __init__(self, **data):
+        # Load from environment if not provided
+        if not data.get("host"):
+            data["host"] = os.getenv("REDIS_HOST")
+        if not data.get("port"):
+            val = os.getenv("REDIS_PORT")
+            data["port"] = int(val) if val else 0
+        if data.get("password") is None:
+            data["password"] = os.getenv("REDIS_PASSWORD")
+        if not data.get("cache_ttl_seconds"):
+            val = os.getenv("REDIS_CACHE_TTL_SECONDS")
+            data["cache_ttl_seconds"] = int(val) if val else 0
+        if not data.get("db"):
+            val = os.getenv("REDIS_DB")
+            data["db"] = int(val) if val else 0
+        if not data.get("socket_timeout"):
+            val = os.getenv("REDIS_SOCKET_TIMEOUT")
+            data["socket_timeout"] = int(val) if val else 0
+
         super().__init__(**data)
+
         if not self.host:
             raise ValueError("REDIS_HOST environment variable is required")
         if self.port == 0:
@@ -106,19 +215,54 @@ class RedisConfig(BaseSettings):
 
 class ClusteringConfig(BaseSettings):
     """Clustering algorithm configuration."""
-    algorithm: str = os.getenv("CLUSTERING_ALGORITHM")
-    min_cluster_size: int = int(os.getenv("MIN_CLUSTER_SIZE", "0"))
-    min_samples: int = int(os.getenv("MIN_SAMPLES", "0"))
-    cluster_selection_epsilon: float = float(os.getenv("CLUSTER_SELECTION_EPSILON", "0.0"))
-    metric: str = os.getenv("CLUSTERING_METRIC")
-    similarity_threshold: float = float(os.getenv("SIMILARITY_THRESHOLD", "0.0"))
-    max_cluster_size: int = int(os.getenv("MAX_CLUSTER_SIZE", "0"))
-    time_window_hours: int = int(os.getenv("TIME_WINDOW_HOURS", "0"))
-    overlap_hours: int = int(os.getenv("OVERLAP_HOURS", "0"))
-    execution_frequency_hours: int = int(os.getenv("EXECUTION_FREQUENCY_HOURS", "0"))
+    algorithm: str = Field(default=None)
+    min_cluster_size: int = Field(default=0)
+    min_samples: int = Field(default=0)
+    cluster_selection_epsilon: float = Field(default=0.0)
+    metric: str = Field(default=None)
+    similarity_threshold: float = Field(default=0.0)
+    max_cluster_size: int = Field(default=0)
+    time_window_hours: int = Field(default=0)
+    overlap_hours: int = Field(default=0)
+    execution_frequency_hours: int = Field(default=0)
+
+    class Config:
+        env_prefix = ""
+        case_sensitive = False
 
     def __init__(self, **data):
+        # Load from environment if not provided
+        if not data.get("algorithm"):
+            data["algorithm"] = os.getenv("CLUSTERING_ALGORITHM")
+        if data.get("min_cluster_size") == 0:
+            val = os.getenv("MIN_CLUSTER_SIZE")
+            data["min_cluster_size"] = int(val) if val else 0
+        if data.get("min_samples") == 0:
+            val = os.getenv("MIN_SAMPLES")
+            data["min_samples"] = int(val) if val else 0
+        if data.get("cluster_selection_epsilon") == 0.0:
+            val = os.getenv("CLUSTER_SELECTION_EPSILON")
+            data["cluster_selection_epsilon"] = float(val) if val else 0.0
+        if not data.get("metric"):
+            data["metric"] = os.getenv("CLUSTERING_METRIC")
+        if data.get("similarity_threshold") == 0.0:
+            val = os.getenv("SIMILARITY_THRESHOLD")
+            data["similarity_threshold"] = float(val) if val else 0.0
+        if data.get("max_cluster_size") == 0:
+            val = os.getenv("MAX_CLUSTER_SIZE")
+            data["max_cluster_size"] = int(val) if val else 0
+        if data.get("time_window_hours") == 0:
+            val = os.getenv("TIME_WINDOW_HOURS")
+            data["time_window_hours"] = int(val) if val else 0
+        if data.get("overlap_hours") == 0:
+            val = os.getenv("OVERLAP_HOURS")
+            data["overlap_hours"] = int(val) if val else 0
+        if data.get("execution_frequency_hours") == 0:
+            val = os.getenv("EXECUTION_FREQUENCY_HOURS")
+            data["execution_frequency_hours"] = int(val) if val else 0
+
         super().__init__(**data)
+
         if not self.algorithm:
             raise ValueError("CLUSTERING_ALGORITHM environment variable is required")
         if self.min_cluster_size == 0:
@@ -143,15 +287,40 @@ class ClusteringConfig(BaseSettings):
 
 class ValidationConfig(BaseSettings):
     """Validation configuration."""
-    min_cluster_purity: float = float(os.getenv("MIN_CLUSTER_PURITY", "0.0"))
-    min_cluster_size: int = int(os.getenv("MIN_CLUSTER_SIZE", "0"))
-    max_time_span_hours: int = int(os.getenv("MAX_TIME_SPAN_HOURS", "0"))
-    min_sources: int = int(os.getenv("MIN_SOURCES", "0"))
-    language_consistency_threshold: float = float(os.getenv("LANGUAGE_CONSISTENCY_THRESHOLD", "0.0"))
-    domain_consistency_threshold: float = float(os.getenv("DOMAIN_CONSISTENCY_THRESHOLD", "0.0"))
+    min_cluster_purity: float = Field(default=0.0)
+    min_cluster_size: int = Field(default=0)
+    max_time_span_hours: int = Field(default=0)
+    min_sources: int = Field(default=0)
+    language_consistency_threshold: float = Field(default=0.0)
+    domain_consistency_threshold: float = Field(default=0.0)
+
+    class Config:
+        env_prefix = ""
+        case_sensitive = False
 
     def __init__(self, **data):
+        # Load from environment if not provided
+        if data.get("min_cluster_purity") == 0.0:
+            val = os.getenv("MIN_CLUSTER_PURITY")
+            data["min_cluster_purity"] = float(val) if val else 0.0
+        if data.get("min_cluster_size") == 0:
+            val = os.getenv("MIN_CLUSTER_SIZE")
+            data["min_cluster_size"] = int(val) if val else 0
+        if data.get("max_time_span_hours") == 0:
+            val = os.getenv("MAX_TIME_SPAN_HOURS")
+            data["max_time_span_hours"] = int(val) if val else 0
+        if data.get("min_sources") == 0:
+            val = os.getenv("MIN_SOURCES")
+            data["min_sources"] = int(val) if val else 0
+        if data.get("language_consistency_threshold") == 0.0:
+            val = os.getenv("LANGUAGE_CONSISTENCY_THRESHOLD")
+            data["language_consistency_threshold"] = float(val) if val else 0.0
+        if data.get("domain_consistency_threshold") == 0.0:
+            val = os.getenv("DOMAIN_CONSISTENCY_THRESHOLD")
+            data["domain_consistency_threshold"] = float(val) if val else 0.0
+
         super().__init__(**data)
+
         if self.min_cluster_purity == 0.0:
             raise ValueError("MIN_CLUSTER_PURITY environment variable is required")
         if self.min_cluster_size == 0:
@@ -168,17 +337,43 @@ class ValidationConfig(BaseSettings):
 
 class ServiceConfig(BaseSettings):
     """Service configuration."""
-    environment: str = os.getenv("ENVIRONMENT")
-    log_level: str = os.getenv("LOG_LEVEL")
-    api_host: str = os.getenv("API_HOST")
-    api_port: int = int(os.getenv("API_PORT", "0"))
-    prometheus_port: int = int(os.getenv("PROMETHEUS_PORT", "0"))
-    enable_tracing: str = os.getenv("ENABLE_TRACING")
-    jaeger_host: str = os.getenv("JAEGER_HOST")
-    jaeger_port: int = int(os.getenv("JAEGER_PORT", "0"))
+    environment: str = Field(default=None)
+    log_level: str = Field(default=None)
+    api_host: str = Field(default=None)
+    api_port: int = Field(default=0)
+    prometheus_port: int = Field(default=0)
+    enable_tracing: str = Field(default=None)
+    jaeger_host: str = Field(default=None)
+    jaeger_port: int = Field(default=0)
+
+    class Config:
+        env_prefix = ""
+        case_sensitive = False
 
     def __init__(self, **data):
+        # Load from environment if not provided
+        if not data.get("environment"):
+            data["environment"] = os.getenv("ENVIRONMENT")
+        if not data.get("log_level"):
+            data["log_level"] = os.getenv("LOG_LEVEL")
+        if not data.get("api_host"):
+            data["api_host"] = os.getenv("API_HOST")
+        if data.get("api_port") == 0:
+            val = os.getenv("API_PORT")
+            data["api_port"] = int(val) if val else 0
+        if data.get("prometheus_port") == 0:
+            val = os.getenv("PROMETHEUS_PORT")
+            data["prometheus_port"] = int(val) if val else 0
+        if not data.get("enable_tracing"):
+            data["enable_tracing"] = os.getenv("ENABLE_TRACING")
+        if not data.get("jaeger_host"):
+            data["jaeger_host"] = os.getenv("JAEGER_HOST")
+        if data.get("jaeger_port") == 0:
+            val = os.getenv("JAEGER_PORT")
+            data["jaeger_port"] = int(val) if val else 0
+
         super().__init__(**data)
+
         if not self.environment:
             raise ValueError("ENVIRONMENT environment variable is required")
         if not self.log_level:
@@ -198,14 +393,64 @@ class ServiceConfig(BaseSettings):
 
 
 class Config(BaseSettings):
-    """Main configuration class."""
-    kafka: KafkaConfig = KafkaConfig()
-    qdrant: QdrantConfig = QdrantConfig()
-    postgres: PostgresConfig = PostgresConfig()
-    redis: RedisConfig = RedisConfig()
-    clustering: ClusteringConfig = ClusteringConfig()
-    validation: ValidationConfig = ValidationConfig()
-    service: ServiceConfig = ServiceConfig()
+    """Main configuration class with lazy initialization."""
+
+    _kafka: Optional[KafkaConfig] = None
+    _qdrant: Optional[QdrantConfig] = None
+    _postgres: Optional[PostgresConfig] = None
+    _redis: Optional[RedisConfig] = None
+    _clustering: Optional[ClusteringConfig] = None
+    _validation: Optional[ValidationConfig] = None
+    _service: Optional[ServiceConfig] = None
+
+    @property
+    def kafka(self) -> KafkaConfig:
+        """Lazy load Kafka config."""
+        if self._kafka is None:
+            self._kafka = KafkaConfig()
+        return self._kafka
+
+    @property
+    def qdrant(self) -> QdrantConfig:
+        """Lazy load Qdrant config."""
+        if self._qdrant is None:
+            self._qdrant = QdrantConfig()
+        return self._qdrant
+
+    @property
+    def postgres(self) -> PostgresConfig:
+        """Lazy load PostgreSQL config."""
+        if self._postgres is None:
+            self._postgres = PostgresConfig()
+        return self._postgres
+
+    @property
+    def redis(self) -> RedisConfig:
+        """Lazy load Redis config."""
+        if self._redis is None:
+            self._redis = RedisConfig()
+        return self._redis
+
+    @property
+    def clustering(self) -> ClusteringConfig:
+        """Lazy load Clustering config."""
+        if self._clustering is None:
+            self._clustering = ClusteringConfig()
+        return self._clustering
+
+    @property
+    def validation(self) -> ValidationConfig:
+        """Lazy load Validation config."""
+        if self._validation is None:
+            self._validation = ValidationConfig()
+        return self._validation
+
+    @property
+    def service(self) -> ServiceConfig:
+        """Lazy load Service config."""
+        if self._service is None:
+            self._service = ServiceConfig()
+        return self._service
 
 
 # Global config instance

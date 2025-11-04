@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: feature-engineering-service
+  namespace: sentiment-analyzer
+  labels:
+    app: feature-engineering-service
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: feature-engineering-service
+  template:
+    metadata:
+      labels:
+        app: feature-engineering-service
+        version: v1
+    spec:
+      serviceAccountName: feature-engineering-service
+      containers:
+      - name: feature-engineering-service
+        image: sentiment-analyzer/feature-engineering-service:latest
+        imagePullPolicy: Always
+        ports:
+        - name: metrics
+          containerPort: 9106
+          protocol: TCP
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: feature-engineering-config
+              key: kafka.bootstrap_servers
+        - name: KAFKA_CONSUMER_GROUP
+          valueFrom:
+            configMapKeyRef:
+              name: feature-engineering-config
+              key: kafka.consumer_group
+        - name: KAFKA_SCHEMA_REGISTRY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: feature-engineering-config
+              key: kafka.schema_registry_url
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: feature-engineering-config
+              key: postgres.host
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: feature-engineering-config
+              key: postgres.port
+        - name: POSTGRES_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: feature-engineering-config
+              key: postgres.database
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: feature-engineering-secrets
+              key: postgres.user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: feature-engineering-secrets
+              key: postgres.password
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: feature-engineering-config
+              key: redis.host
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: feature-engineering-config
+              key: redis.port
+        - name: FEAST_REPO_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: feature-engineering-config
+              key: feast.repo_path
+        - name: METRICS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: feature-engineering-config
+              key: monitoring.metrics_port
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: feature-engineering-config
+              key: monitoring.log_level
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - feature-engineering-service
+              topologyKey: kubernetes.io/hostname
+

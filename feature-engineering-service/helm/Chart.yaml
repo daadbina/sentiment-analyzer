@@ -1,0 +1,18 @@
+apiVersion: v2
+name: feature-engineering-service
+description: Feature Engineering Service for sentiment-analyzer-v2
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - feature-engineering
+  - machine-learning
+  - sentiment-analysis
+maintainers:
+  - name: Development Team
+    email: dev@sentiment-analyzer.local
+home: https://github.com/daadbina/sentiment-analyzer
+source:
+  - https://github.com/daadbina/sentiment-analyzer
+dependencies: []
+

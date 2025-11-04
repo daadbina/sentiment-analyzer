@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: feature-engineering-config
+  namespace: sentiment-analyzer
+data:
+  kafka.bootstrap_servers: "kafka-broker-0.kafka-headless.sentiment-analyzer.svc.cluster.local:9092,kafka-broker-1.kafka-headless.sentiment-analyzer.svc.cluster.local:9092,kafka-broker-2.kafka-headless.sentiment-analyzer.svc.cluster.local:9092"
+  kafka.consumer_group: "feature-engineering-group"
+  kafka.schema_registry_url: "http://schema-registry.sentiment-analyzer.svc.cluster.local:8081"
+  postgres.host: "postgres.sentiment-analyzer.svc.cluster.local"
+  postgres.port: "5432"
+  postgres.database: "sentiment_db"
+  redis.host: "redis.sentiment-analyzer.svc.cluster.local"
+  redis.port: "6379"
+  redis.db: "0"
+  feast.repo_path: "/app/feast_repo"
+  monitoring.metrics_port: "9106"
+  monitoring.log_level: "INFO"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: feature-engineering-secrets
+  namespace: sentiment-analyzer
+type: Opaque
+stringData:
+  postgres.user: "admin"
+  postgres.password: "wp2400!!!!"
+

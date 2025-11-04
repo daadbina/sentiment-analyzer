@@ -5,6 +5,7 @@ pydantic-settings==2.1.0
 
 # Kafka & Messaging
 confluent-kafka==2.3.0
+kafka-python==2.0.2
 fastavro==1.12.1
 
 # NLP & NER Models
@@ -41,6 +42,7 @@ structlog==23.2.0
 tenacity==8.2.3
 fuzzywuzzy==0.18.0
 python-Levenshtein==0.21.1
+psutil==5.9.6
 
 # Testing
 pytest==7.4.3

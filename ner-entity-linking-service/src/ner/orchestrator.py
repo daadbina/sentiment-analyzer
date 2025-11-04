@@ -75,13 +75,9 @@ class NEROrchestrator:
 
             # Record metrics
             duration_seconds = time.time() - start_time
-            MetricsCollector.record_extraction_duration(
-                duration_seconds, language, strategy.get_model_name()
-            )
-            MetricsCollector.record_coverage_score(coverage_score, language)
-
-            for entity in entities:
-                MetricsCollector.record_entity_extracted(entity.entity_type, language)
+            MetricsCollector.record_extraction_latency(duration_seconds)
+            MetricsCollector.set_coverage_score(coverage_score)
+            MetricsCollector.record_entities_extracted(len(entities))
 
             logger.info(
                 f"Extracted {len(entities)} entities from article {article_id} "

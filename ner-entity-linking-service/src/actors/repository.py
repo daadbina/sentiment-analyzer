@@ -50,7 +50,7 @@ class ActorRepository:
                         normalized_name VARCHAR(500) NOT NULL UNIQUE,
                         type VARCHAR(50) NOT NULL,
                         aliases TEXT[] DEFAULT '{}',
-                        country VARCHAR(3),
+                        country VARCHAR(100),
                         wikidata_id VARCHAR(50),
                         dbpedia_uri VARCHAR(500),
                         sentiment_avg DOUBLE PRECISION DEFAULT 0.0,

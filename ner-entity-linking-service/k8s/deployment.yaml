@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ner-entity-linking-service
+  namespace: sentiment-analyzer
+  labels:
+    app: ner-entity-linking-service
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ner-entity-linking-service
+  template:
+    metadata:
+      labels:
+        app: ner-entity-linking-service
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9104"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ner-entity-linking-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: ner-entity-linking-service
+        image: sentiment-analyzer/ner-entity-linking-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: metrics
+          containerPort: 9104
+          protocol: TCP
+        env:
+        - name: SERVICE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: ner-config
+              key: service_name
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: ner-config
+              key: kafka_brokers
+        - name: CONSUMER_GROUP
+          valueFrom:
+            configMapKeyRef:
+              name: ner-config
+              key: consumer_group
+        - name: INPUT_TOPIC
+          valueFrom:
+            configMapKeyRef:
+              name: ner-config
+              key: input_topic
+        - name: OUTPUT_TOPIC
+          valueFrom:
+            configMapKeyRef:
+              name: ner-config
+              key: output_topic
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: ner-config
+              key: postgres_host
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: ner-config
+              key: postgres_port
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: ner-secrets
+              key: postgres_user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ner-secrets
+              key: postgres_password
+        - name: POSTGRES_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: ner-config
+              key: postgres_database
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: ner-config
+              key: redis_host
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: ner-config
+              key: redis_port
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: ner-config
+              key: log_level
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9104
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 9104
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+      volumes:
+      - name: config
+        configMap:
+          name: ner-config
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - ner-entity-linking-service
+              topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 30
+

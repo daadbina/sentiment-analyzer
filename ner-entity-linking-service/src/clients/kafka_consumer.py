@@ -83,7 +83,7 @@ class KafkaConsumerClient:
             Tuple of (message, error)
         """
         try:
-            msg_record = self.consumer.poll(timeout_ms=timeout_ms)
+            msg_record = self.consumer.poll(timeout_ms / 1000.0)
 
             if msg_record is None:
                 return None, None

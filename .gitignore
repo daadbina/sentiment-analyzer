@@ -80,6 +80,7 @@ k8s/secrets/
 !**/TODO.md
 !**/INTEGRATION.md
 
+
 # Temporary files
 *.tmp
 *.temp

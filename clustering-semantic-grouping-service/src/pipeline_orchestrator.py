@@ -22,6 +22,12 @@ from .kafka_integration import KafkaProducer
 from .outlier_handler import OutlierHandler
 from .incremental_clusterer import IncrementalClusterer
 from .cluster_stability_scorer import ClusterStabilityScorer
+from .avro_schemas import initialize_schemas
+from .offset_manager import OffsetManager
+from .job_manager import JobManager
+from .error_handler import ErrorHandler, RetryConfig, CircuitBreaker
+from .idempotency_manager import IdempotencyManager
+from .tracing import create_tracing_manager
 
 logger = logging.getLogger(__name__)
 
@@ -95,14 +101,49 @@ class PipelineOrchestrator:
             history_window_size=10,
         )
 
-        logger.info("Initialized PipelineOrchestrator")
+        # Initialize Phase 5-8 components
+        self.schema_registry = initialize_schemas(config.kafka.schema_registry_url)
+        self.offset_manager = OffsetManager(
+            host=config.postgres.host,
+            port=config.postgres.port,
+            user=config.postgres.user,
+            password=config.postgres.password,
+            database=config.postgres.database,
+        )
+        self.job_manager = JobManager(
+            host=config.postgres.host,
+            port=config.postgres.port,
+            user=config.postgres.user,
+            password=config.postgres.password,
+            database=config.postgres.database,
+        )
+        self.error_handler = ErrorHandler(RetryConfig(max_retries=3))
+        self.circuit_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=60)
+        self.idempotency_manager = IdempotencyManager(
+            postgres_host=config.postgres.host,
+            postgres_port=config.postgres.port,
+            postgres_user=config.postgres.user,
+            postgres_password=config.postgres.password,
+            postgres_db=config.postgres.database,
+            redis_host=config.redis.host,
+            redis_port=config.redis.port,
+            redis_db=config.redis.db,
+        )
+        self.tracing_manager = create_tracing_manager(
+            service_name="clustering-service",
+            jaeger_host="localhost",
+            jaeger_port=6831,
+            enabled=True,
+        )
+
+        logger.info("Initialized PipelineOrchestrator with all Phase 5-8 components")
 
     def run_clustering_job(
         self,
         last_run_time: datetime = None,
     ) -> Tuple[int, int, int]:
         """
-        Run complete clustering job.
+        Run complete clustering job with error handling and job management.
 
         Args:
             last_run_time: Timestamp of last successful run
@@ -110,9 +151,15 @@ class PipelineOrchestrator:
         Returns:
             Tuple of (total_clusters, valid_clusters, invalid_clusters)
         """
+        job_id = None
         logger.info("Starting clustering job")
 
         try:
+            # Check circuit breaker
+            if not self.circuit_breaker.can_execute():
+                logger.error("Circuit breaker is open, skipping job")
+                return 0, 0, 0
+
             # Step 1: Calculate time window
             window_start, window_end = self.time_window_manager.calculate_window(
                 last_run_time
@@ -233,6 +280,10 @@ class PipelineOrchestrator:
 
     def close(self):
         """Close all connections."""
-        self.producer.close()
-        logger.info("Closed PipelineOrchestrator")
+        try:
+            self.producer.close()
+            self.tracing_manager.shutdown()
+            logger.info("Closed PipelineOrchestrator")
+        except Exception as e:
+            logger.error(f"Error closing PipelineOrchestrator: {e}", exc_info=True)
 

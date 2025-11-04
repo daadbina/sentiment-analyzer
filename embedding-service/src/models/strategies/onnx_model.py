@@ -7,7 +7,7 @@ import onnxruntime as ort
 from transformers import AutoTokenizer
 
 from .base import BaseEmbeddingModel
-from ..exceptions import ModelLoadError
+from src.exceptions import ModelLoadError
 
 logger = logging.getLogger(__name__)
 

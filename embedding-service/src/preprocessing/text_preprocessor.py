@@ -18,10 +18,10 @@ class TextPreprocessor:
     def __init__(self):
         """Initialize text preprocessor."""
         self.stages = [
-            self._normalize_unicode,
-            self._remove_html_tags,
-            self._remove_urls,
-            self._remove_extra_whitespace,
+            self.normalize_unicode,
+            self.remove_html_tags,
+            self.remove_urls,
+            self.remove_extra_whitespace,
             self._remove_special_characters,
         ]
 
@@ -75,17 +75,17 @@ class TextPreprocessor:
         return [self.preprocess(text) for text in texts]
 
     @staticmethod
-    def _normalize_unicode(text: str) -> str:
+    def normalize_unicode(text: str) -> str:
         """Normalize Unicode characters (NFD normalization)."""
         return unicodedata.normalize("NFD", text)
 
     @staticmethod
-    def _remove_html_tags(text: str) -> str:
+    def remove_html_tags(text: str) -> str:
         """Remove HTML tags."""
         return re.sub(r"<[^>]+>", "", text)
 
     @staticmethod
-    def _remove_urls(text: str) -> str:
+    def remove_urls(text: str) -> str:
         """Remove URLs."""
         return re.sub(
             r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+",
@@ -94,7 +94,7 @@ class TextPreprocessor:
         )
 
     @staticmethod
-    def _remove_extra_whitespace(text: str) -> str:
+    def remove_extra_whitespace(text: str) -> str:
         """Remove extra whitespace."""
         # Replace multiple spaces with single space
         text = re.sub(r"\s+", " ", text)

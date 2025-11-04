@@ -29,7 +29,7 @@ class EmbeddingValidator:
         self.expected_dimension = expected_dimension
         self.expected_norm_range = expected_norm_range
 
-    def validate_embedding(self, embedding: np.ndarray) -> bool:
+    def validate_embedding(self, embedding: np.ndarray) -> Dict:
         """
         Validate a single embedding.
 
@@ -37,56 +37,61 @@ class EmbeddingValidator:
             embedding: 1D embedding array
 
         Returns:
-            True if valid, False otherwise
+            Dict with 'valid' (bool) and 'errors' (list) keys
         """
+        errors = []
         try:
             # Check dimension
             if len(embedding) != self.expected_dimension:
-                logger.warning(
+                error_msg = (
                     f"Invalid embedding dimension: {len(embedding)} "
                     f"(expected {self.expected_dimension})"
                 )
+                logger.warning(error_msg)
                 embedding_validation_failures_total.labels(
                     check_type="dimension"
                 ).inc()
-                return False
+                errors.append(error_msg)
 
             # Check for NaN or Inf
             if np.isnan(embedding).any() or np.isinf(embedding).any():
-                logger.warning("Embedding contains NaN or Inf values")
+                error_msg = "Embedding contains NaN or Inf values"
+                logger.warning(error_msg)
                 embedding_validation_failures_total.labels(
                     check_type="nan_inf"
                 ).inc()
-                return False
+                errors.append(error_msg)
 
             # Check norm (for normalized embeddings)
             norm = get_embedding_norm(embedding)
             if not (self.expected_norm_range[0] <= norm <= self.expected_norm_range[1]):
-                logger.warning(
+                error_msg = (
                     f"Embedding norm out of range: {norm} "
                     f"(expected {self.expected_norm_range})"
                 )
+                logger.warning(error_msg)
                 embedding_validation_failures_total.labels(
                     check_type="norm"
                 ).inc()
-                return False
+                errors.append(error_msg)
 
             # Check for zero embedding
             if np.allclose(embedding, 0):
-                logger.warning("Embedding is all zeros")
+                error_msg = "Embedding is all zeros"
+                logger.warning(error_msg)
                 embedding_validation_failures_total.labels(
                     check_type="zero"
                 ).inc()
-                return False
+                errors.append(error_msg)
 
-            return True
+            return {"valid": len(errors) == 0, "errors": errors}
 
         except Exception as e:
             logger.error(f"Validation error: {e}")
             embedding_validation_failures_total.labels(
                 check_type="error"
             ).inc()
-            return False
+            return {"valid": False, "errors": [str(e)]}
 
     def validate_batch(
         self,
@@ -113,7 +118,8 @@ class EmbeddingValidator:
         invalid_indices = []
 
         for i, embedding in enumerate(embeddings):
-            if not self.validate_embedding(embedding):
+            result = self.validate_embedding(embedding)
+            if not result["valid"]:
                 invalid_indices.append(i)
 
         valid_count = len(embeddings) - len(invalid_indices)

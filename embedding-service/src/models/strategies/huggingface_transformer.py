@@ -7,7 +7,7 @@ import torch
 from transformers import AutoTokenizer, AutoModel
 
 from .base import BaseEmbeddingModel
-from ..exceptions import ModelLoadError
+from src.exceptions import ModelLoadError
 
 logger = logging.getLogger(__name__)
 

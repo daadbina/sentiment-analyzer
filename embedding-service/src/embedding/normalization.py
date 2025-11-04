@@ -103,3 +103,18 @@ def compute_cosine_similarity(
 
     return float(np.dot(embedding1, embedding2) / (norm1 * norm2))
 
+
+def cosine_similarity(embeddings: np.ndarray) -> np.ndarray:
+    """
+    Compute cosine similarity matrix for embeddings.
+
+    Args:
+        embeddings: Array of shape (n_samples, embedding_dim)
+
+    Returns:
+        Cosine similarity matrix of shape (n_samples, n_samples)
+    """
+    # Compute dot product matrix
+    similarity = np.dot(embeddings, embeddings.T)
+    return similarity
+

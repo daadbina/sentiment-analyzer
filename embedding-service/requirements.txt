@@ -5,17 +5,20 @@ pydantic-settings==2.1.0
 
 # Kafka & Streaming
 confluent-kafka==2.3.0
-fastavro==1.8.13
+kafka-python==2.0.2
+fastavro==1.12.1
 
 # ML & Embeddings
 torch==2.1.1
 transformers==4.35.2
-sentence-transformers==2.2.2
+sentence-transformers==2.7.0
+huggingface-hub==0.20.3
+onnxruntime==1.17.1
 numpy==1.24.3
 scipy==1.11.4
 
 # Vector Database
-qdrant-client==2.7.0
+qdrant-client==1.15.1
 
 # Database
 psycopg2-binary==2.9.9

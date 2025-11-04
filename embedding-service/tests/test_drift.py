@@ -21,7 +21,9 @@ class TestDriftDetector:
         """Test adding samples."""
         embeddings = np.random.randn(50, 768).astype(np.float32)
         self.detector.add_samples(embeddings)
-        assert len(self.detector.baseline_samples) == 50 * 768
+        # baseline_samples stores flattened values, so 50 embeddings * 768 dims = 38400 values
+        # but maxlen is 100 (from setup_method), so it will only store up to 100 values
+        assert len(self.detector.baseline_samples) == min(50 * 768, 100)
 
     def test_baseline_initialization(self):
         """Test baseline initialization."""

@@ -96,6 +96,24 @@
       "doc": "Canonicalization timestamp"
     },
     {
+      "name": "domain",
+      "type": "string",
+      "default": "",
+      "doc": "Domain extracted from normalized URL (required by NER service)"
+    },
+    {
+      "name": "published_at",
+      "type": "string",
+      "default": "",
+      "doc": "Publication timestamp (alias for source_published_at_utc, required by NER service)"
+    },
+    {
+      "name": "normalized_at",
+      "type": "string",
+      "default": "",
+      "doc": "Normalization timestamp (alias for canonicalized_at, required by NER service)"
+    },
+    {
       "name": "country",
       "type": ["null", "string"],
       "default": null,

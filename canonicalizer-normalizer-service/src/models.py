@@ -78,6 +78,9 @@ class NewsCanonicalMessage(BaseModel):
     source_published_at_utc: str
     validated_at: str
     canonicalized_at: str
+    domain: str  # Domain extracted from normalized_url (required by NER service)
+    published_at: str  # Alias for source_published_at_utc (required by NER service)
+    normalized_at: str  # Alias for canonicalized_at (required by NER service)
     country: Optional[str] = None
     region: Optional[str] = None
     domain_category: str

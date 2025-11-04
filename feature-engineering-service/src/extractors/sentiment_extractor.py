@@ -38,7 +38,7 @@ class SentimentExtractor(FeatureExtractor):
             Dictionary of sentiment features
         """
         if not self.validate_inputs(group, articles, actors):
-            logger.warning("Invalid inputs for sentiment extraction", group_id=group.group_id)
+            logger.warning("Invalid inputs for sentiment extraction", group_id=self.get_group_id(group))
             return {}
 
         try:
@@ -53,7 +53,7 @@ class SentimentExtractor(FeatureExtractor):
 
             if not sentiment_scores:
                 logger.warning(
-                    "No sentiment scores found", group_id=group.group_id
+                    "No sentiment scores found", group_id=self.get_group_id(group)
                 )
                 return {
                     "sentiment_mean": 0.0,
@@ -100,7 +100,7 @@ class SentimentExtractor(FeatureExtractor):
 
             logger.info(
                 "Sentiment features extracted",
-                group_id=group.group_id,
+                group_id=self.get_group_id(group),
                 sentiment_mean=features["sentiment_mean"],
             )
             return features
@@ -108,7 +108,7 @@ class SentimentExtractor(FeatureExtractor):
         except Exception as e:
             logger.error(
                 "Error extracting sentiment features",
-                group_id=group.group_id,
+                group_id=self.get_group_id(group),
                 error=str(e),
             )
             return {}

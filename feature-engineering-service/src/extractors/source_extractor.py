@@ -39,7 +39,7 @@ class SourceExtractor(FeatureExtractor):
             Dictionary of source features
         """
         if not self.validate_inputs(group, articles, actors):
-            logger.warning("Invalid inputs for source extraction", group_id=group.group_id)
+            logger.warning("Invalid inputs for source extraction", group_id=self.get_group_id(group))
             return {}
 
         try:

@@ -15,6 +15,7 @@ from .extractors import (
     EntityExtractor,
     ContentExtractor,
     EmbeddingExtractor,
+    Article,
 )
 from .transformers import FeatureAggregator, FeatureNormalizer
 from .validation import FeatureValidator, QualityChecker
@@ -157,6 +158,39 @@ class FeatureEngineeringService:
             logger.error("Error processing message", error=str(e), exc_info=True)
             metrics.validation_failures.labels(feature_type="extraction").inc()
 
+    def _convert_articles(self, article_dicts: list) -> list:
+        """Convert article dictionaries to Article objects.
+
+        Args:
+            article_dicts: List of article dictionaries from Qdrant
+
+        Returns:
+            List of Article objects
+        """
+        articles = []
+        for article_dict in article_dicts:
+            try:
+                article = Article(
+                    article_id=article_dict.get("article_id", ""),
+                    title=article_dict.get("title", ""),
+                    body=article_dict.get("body", ""),
+                    language=article_dict.get("language", ""),
+                    domain=article_dict.get("domain", ""),
+                    source=article_dict.get("source", ""),
+                    published_at=article_dict.get("published_at", ""),
+                    sentiment_score=float(article_dict.get("sentiment_score", 0.0)),
+                    entities=article_dict.get("entities", []),
+                )
+                articles.append(article)
+            except Exception as e:
+                logger.warning(
+                    "Error converting article dict to Article object",
+                    article_id=article_dict.get("article_id"),
+                    error=str(e),
+                )
+                continue
+        return articles
+
     def _extract_features(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """Extract features from message.
 
@@ -179,14 +213,14 @@ class FeatureEngineeringService:
             )
 
             # Fetch article metadata from Qdrant using article IDs
-            articles = []
+            article_dicts = []
             if article_ids:
                 try:
-                    articles = self.qdrant_client.get_articles_by_ids(article_ids)
+                    article_dicts = self.qdrant_client.get_articles_by_ids(article_ids)
                     logger.debug(
                         "Articles fetched from Qdrant",
                         requested=len(article_ids),
-                        fetched=len(articles),
+                        fetched=len(article_dicts),
                     )
                 except Exception as e:
                     logger.warning(
@@ -194,7 +228,10 @@ class FeatureEngineeringService:
                         error=str(e),
                         article_count=len(article_ids),
                     )
-                    articles = []
+                    article_dicts = []
+
+            # Convert article dicts to Article objects
+            articles = self._convert_articles(article_dicts)
 
             # Extract using all extractors
             for extractor in self.extractors:

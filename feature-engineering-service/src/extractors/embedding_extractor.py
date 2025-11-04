@@ -39,30 +39,35 @@ class EmbeddingExtractor(FeatureExtractor):
             Dictionary of embedding features
         """
         if not self.validate_inputs(group, articles, actors):
-            logger.warning("Invalid inputs for embedding extraction", group_id=group.group_id)
+            logger.warning("Invalid inputs for embedding extraction", group_id=self.get_group_id(group))
             return {}
 
         try:
             features = {}
 
+            # Get centroid_vector safely from dict or object
+            centroid_vector = group.get("centroid_vector") if isinstance(group, dict) else getattr(group, "centroid_vector", None)
+            similarity_avg = group.get("similarity_avg") if isinstance(group, dict) else getattr(group, "similarity_avg", None)
+            metadata = group.get("metadata", {}) if isinstance(group, dict) else getattr(group, "metadata", {})
+
             # centroid_magnitude: L2 norm of cluster centroid
-            if group.centroid_vector:
-                centroid = np.array(group.centroid_vector)
+            if centroid_vector:
+                centroid = np.array(centroid_vector)
                 features["centroid_magnitude"] = float(np.linalg.norm(centroid))
             else:
                 features["centroid_magnitude"] = 0.0
 
             # intra_cluster_similarity_mean: Average pairwise similarity
             # Using the provided similarity_avg from group metadata
-            if hasattr(group, "similarity_avg") and group.similarity_avg is not None:
-                features["intra_cluster_similarity_mean"] = group.similarity_avg
+            if similarity_avg is not None:
+                features["intra_cluster_similarity_mean"] = similarity_avg
             else:
                 features["intra_cluster_similarity_mean"] = 0.0
 
             # intra_cluster_similarity_std: Std dev of pairwise similarities
             # Estimate based on group metadata if available
-            if group.metadata and "similarity_std" in group.metadata:
-                features["intra_cluster_similarity_std"] = group.metadata["similarity_std"]
+            if metadata and "similarity_std" in metadata:
+                features["intra_cluster_similarity_std"] = metadata["similarity_std"]
             else:
                 # Default to 0 if not available
                 features["intra_cluster_similarity_std"] = 0.0
@@ -70,9 +75,9 @@ class EmbeddingExtractor(FeatureExtractor):
             # embedding_drift_score: Distance from baseline embedding distribution
             # This would typically be computed against a baseline distribution
             # For now, use a placeholder based on centroid magnitude variance
-            if group.centroid_vector:
+            if centroid_vector:
                 # Normalize centroid and compute drift as deviation from unit norm
-                centroid = np.array(group.centroid_vector)
+                centroid = np.array(centroid_vector)
                 norm = np.linalg.norm(centroid)
                 if norm > 0:
                     normalized = centroid / norm
@@ -87,7 +92,7 @@ class EmbeddingExtractor(FeatureExtractor):
 
             logger.info(
                 "Embedding features extracted",
-                group_id=group.group_id,
+                group_id=self.get_group_id(group),
                 centroid_magnitude=features["centroid_magnitude"],
             )
             return features
@@ -95,7 +100,7 @@ class EmbeddingExtractor(FeatureExtractor):
         except Exception as e:
             logger.error(
                 "Error extracting embedding features",
-                group_id=group.group_id,
+                group_id=self.get_group_id(group),
                 error=str(e),
             )
             return {}

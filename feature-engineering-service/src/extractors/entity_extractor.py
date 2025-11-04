@@ -39,7 +39,7 @@ class EntityExtractor(FeatureExtractor):
             Dictionary of entity features
         """
         if not self.validate_inputs(group, articles, actors):
-            logger.warning("Invalid inputs for entity extraction", group_id=group.group_id)
+            logger.warning("Invalid inputs for entity extraction", group_id=self.get_group_id(group))
             return {}
 
         try:
@@ -57,7 +57,7 @@ class EntityExtractor(FeatureExtractor):
                             entity_types.add(entity["type"])
 
             if not all_entities:
-                logger.warning("No entities found", group_id=group.group_id)
+                logger.warning("No entities found", group_id=self.get_group_id(group))
                 return {
                     "entity_count": 0,
                     "entity_diversity": 0,
@@ -113,7 +113,7 @@ class EntityExtractor(FeatureExtractor):
 
             logger.info(
                 "Entity features extracted",
-                group_id=group.group_id,
+                group_id=self.get_group_id(group),
                 entity_count=features["entity_count"],
             )
             return features
@@ -121,7 +121,7 @@ class EntityExtractor(FeatureExtractor):
         except Exception as e:
             logger.error(
                 "Error extracting entity features",
-                group_id=group.group_id,
+                group_id=self.get_group_id(group),
                 error=str(e),
             )
             return {}

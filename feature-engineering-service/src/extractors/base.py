@@ -93,11 +93,30 @@ class FeatureExtractor(ABC):
         Returns:
             True if inputs are valid
         """
-        if not group or not group.group_id:
+        # Handle both dict and object types
+        if not group:
             return False
+
+        group_id = group.get("group_id") if isinstance(group, dict) else getattr(group, "group_id", None)
+        if not group_id:
+            return False
+
         if not articles or len(articles) == 0:
             return False
         return True
+
+    def get_group_id(self, group: Any) -> str:
+        """Safely get group_id from dict or object.
+
+        Args:
+            group: Semantic group (dict or object)
+
+        Returns:
+            Group ID string
+        """
+        if isinstance(group, dict):
+            return group.get("group_id", "")
+        return getattr(group, "group_id", "")
 
     def get_feature_names(self) -> List[str]:
         """Get list of feature names produced by this extractor.

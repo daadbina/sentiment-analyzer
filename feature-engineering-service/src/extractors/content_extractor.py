@@ -37,7 +37,7 @@ class ContentExtractor(FeatureExtractor):
             Dictionary of content features
         """
         if not self.validate_inputs(group, articles, actors):
-            logger.warning("Invalid inputs for content extraction", group_id=group.group_id)
+            logger.warning("Invalid inputs for content extraction", group_id=self.get_group_id(group))
             return {}
 
         try:
@@ -85,7 +85,7 @@ class ContentExtractor(FeatureExtractor):
 
             logger.info(
                 "Content features extracted",
-                group_id=group.group_id,
+                group_id=self.get_group_id(group),
                 avg_word_count=features["avg_word_count"],
             )
             return features
@@ -93,7 +93,7 @@ class ContentExtractor(FeatureExtractor):
         except Exception as e:
             logger.error(
                 "Error extracting content features",
-                group_id=group.group_id,
+                group_id=self.get_group_id(group),
                 error=str(e),
             )
             return {}

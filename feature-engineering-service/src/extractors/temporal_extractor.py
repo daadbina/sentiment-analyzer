@@ -39,7 +39,7 @@ class TemporalExtractor(FeatureExtractor):
             Dictionary of temporal features
         """
         if not self.validate_inputs(group, articles, actors):
-            logger.warning("Invalid inputs for temporal extraction", group_id=group.group_id)
+            logger.warning("Invalid inputs for temporal extraction", group_id=self.get_group_id(group))
             return {}
 
         try:
@@ -56,7 +56,7 @@ class TemporalExtractor(FeatureExtractor):
 
             if not timestamps:
                 logger.warning(
-                    "No valid timestamps found", group_id=group.group_id
+                    "No valid timestamps found", group_id=self.get_group_id(group)
                 )
                 return {
                     "time_span_hours": 0.0,
@@ -99,7 +99,7 @@ class TemporalExtractor(FeatureExtractor):
 
             logger.info(
                 "Temporal features extracted",
-                group_id=group.group_id,
+                group_id=self.get_group_id(group),
                 time_span_hours=features["time_span_hours"],
             )
             return features
@@ -107,7 +107,7 @@ class TemporalExtractor(FeatureExtractor):
         except Exception as e:
             logger.error(
                 "Error extracting temporal features",
-                group_id=group.group_id,
+                group_id=self.get_group_id(group),
                 error=str(e),
             )
             return {}

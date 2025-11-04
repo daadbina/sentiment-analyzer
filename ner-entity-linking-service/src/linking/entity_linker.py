@@ -41,18 +41,21 @@ class EntityLinker:
         start_time = time.time()
 
         try:
-            # Try Wikidata linking
+            logger.debug(f"Linking entity: text='{entity.text}', normalized='{entity.normalized_text}', type='{entity.entity_type}'")
+
+            # Try Wikidata linking using original entity text (not normalized)
+            # Normalized text (lowercase, no diacritics) won't match Wikidata labels
             wikidata_result = self.wikidata_client.search_entity(
-                entity.normalized_text, entity.entity_type
+                entity.text, entity.entity_type
             )
 
             if wikidata_result:
                 entity.wikidata_id = wikidata_result.get("wikidata_id")
                 entity.country = wikidata_result.get("country")
                 MetricsCollector.record_entities_linked(1)
-                logger.debug(f"Linked entity {entity.text} to Wikidata: {entity.wikidata_id}")
+                logger.info(f"✓ Linked entity '{entity.text}' → Wikidata: {entity.wikidata_id} (label: {wikidata_result.get('label')})")
             else:
-                logger.debug(f"Could not link entity {entity.text} to Wikidata")
+                logger.debug(f"✗ Could not link entity '{entity.text}' (normalized: '{entity.normalized_text}') to Wikidata")
 
             # Record linking duration
             duration_seconds = time.time() - start_time

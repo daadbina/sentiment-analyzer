@@ -70,14 +70,16 @@ class SemanticGroupConsumer:
 
             if msg.error():
                 if msg.error().code() == KafkaError._PARTITION_EOF:
+                    # End of partition, not an error
                     return None
                 else:
-                    raise KafkaErrorException(f"Consumer error: {msg.error()}")
+                    logger.warning("Consumer error", error=str(msg.error()))
+                    return None
 
             # Message is in Avro format, already deserialized
             message_data = msg.value()
 
-            logger.info(
+            logger.debug(
                 "Message consumed",
                 topic=msg.topic(),
                 partition=msg.partition(),
@@ -87,8 +89,8 @@ class SemanticGroupConsumer:
             return message_data
 
         except Exception as e:
-            logger.error("Error consuming message", error=str(e))
-            raise KafkaErrorException(f"Error consuming message: {str(e)}")
+            logger.warning("Error consuming message", error=str(e))
+            return None
 
     def commit_offset(self) -> bool:
         """Commit current offset.

@@ -84,19 +84,23 @@ class FeatureEngineeringService:
         """Main consumption loop."""
         try:
             while True:
-                # Consume message
-                message = self.consumer.consume_message(timeout_ms=1000)
+                try:
+                    # Consume message
+                    message = self.consumer.consume_message(timeout_ms=1000)
 
-                if message is None:
+                    if message is None:
+                        continue
+
+                    # Process message
+                    self._process_message(message)
+                except Exception as e:
+                    logger.warning("Error processing message, continuing", error=str(e))
                     continue
-
-                # Process message
-                self._process_message(message)
 
         except KeyboardInterrupt:
             logger.info("Service interrupted")
         except Exception as e:
-            logger.error("Error in consumption loop", error=str(e))
+            logger.error("Fatal error in consumption loop", error=str(e))
         finally:
             self.shutdown()
 

@@ -5,8 +5,12 @@ from src.metrics.nfr_metrics import (
     LatencyTracker,
 )
 
+# Alias for backward compatibility
+MetricsCollector = NFRMetricsCollector
+
 __all__ = [
     "NFRMetricsCollector",
+    "MetricsCollector",
     "LatencyTracker",
 ]
 

@@ -45,7 +45,7 @@ class TestConfiguration:
     def test_model_config(self):
         """Test model configuration."""
         assert config.model is not None
-        assert config.model.device in ["cpu", "cuda"]
+        assert config.model.device in ["cpu", "cuda", "auto"]
         assert config.model.batch_size_gpu > 0
         assert config.model.batch_size_cpu > 0
         assert config.model.max_sequence_length > 0

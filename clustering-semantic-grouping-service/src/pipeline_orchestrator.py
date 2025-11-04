@@ -19,6 +19,9 @@ from .delta_lake_writer import DeltaLakeWriter
 from .cluster_registry import ClusterRegistry
 from .cache_manager import CacheManager
 from .kafka_integration import KafkaProducer
+from .outlier_handler import OutlierHandler
+from .incremental_clusterer import IncrementalClusterer
+from .cluster_stability_scorer import ClusterStabilityScorer
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +80,20 @@ class PipelineOrchestrator:
             schema_registry_url=config.kafka.schema_registry_url,
             topic=config.kafka.output_topic,
         )
+        self.outlier_handler = OutlierHandler(
+            k_neighbors=5,
+            distance_threshold=0.5,
+            reassignment_threshold=config.clustering.similarity_threshold,
+        )
+        self.incremental_clusterer = IncrementalClusterer(
+            similarity_threshold=config.clustering.similarity_threshold,
+            max_cluster_age_hours=config.validation.max_time_span_hours,
+            merge_threshold=0.90,
+        )
+        self.stability_scorer = ClusterStabilityScorer(
+            min_stability_score=0.70,
+            history_window_size=10,
+        )
 
         logger.info("Initialized PipelineOrchestrator")
 
@@ -116,6 +133,12 @@ class PipelineOrchestrator:
             # Step 3: Perform clustering
             labels = self.clustering_engine.cluster(embeddings)
             logger.info(f"Clustering complete: {len(set(labels))} clusters")
+
+            # Step 3.5: Handle outliers
+            labels = self.outlier_handler.handle_mixed_clusters(
+                embeddings, labels, purity_threshold=config.validation.min_cluster_purity
+            )
+            logger.debug("Outlier handling complete")
 
             # Step 4: Process clusters
             valid_clusters = []
@@ -170,6 +193,15 @@ class PipelineOrchestrator:
                 }
 
                 valid_clusters.append(cluster_record)
+
+                # Update stability score
+                stability_score = self.stability_scorer.compute_stability_score(
+                    cluster_record["group_id"], cluster_record
+                )
+                cluster_record["stability_score"] = stability_score
+                self.stability_scorer.update_cluster_history(
+                    cluster_record["group_id"], cluster_record
+                )
 
                 # Track evolution
                 self.temporal_tracker.track_cluster_evolution(

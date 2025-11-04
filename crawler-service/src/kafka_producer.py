@@ -117,6 +117,9 @@ class KafkaProducerAdapter:
                 ),
             )
 
+            # Flush to ensure message is sent immediately
+            self.producer.flush(timeout=5)
+
             logger.debug(f"Published article {message.article_id} to {topic}")
 
         except Exception as e:

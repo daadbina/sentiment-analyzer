@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple
 import numpy as np
 import logging
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -22,15 +23,32 @@ class BaseEmbeddingModel(ABC):
 
         Args:
             model_name: Name/identifier of the model
-            device: Device to run model on ("cuda" or "cpu")
+            device: Device to run model on ("cuda", "cpu", or "auto")
             model_path: Optional path to local model
         """
         self.model_name = model_name
-        self.device = device
+        # Resolve "auto" device to actual device
+        self.device = self._resolve_device(device)
         self.model_path = model_path
         self.model = None
         self.tokenizer = None
         self._is_loaded = False
+
+    @staticmethod
+    def _resolve_device(device: str) -> str:
+        """
+        Resolve device string to actual PyTorch device.
+
+        Args:
+            device: Device string ("cuda", "cpu", or "auto")
+
+        Returns:
+            Resolved device string ("cuda" or "cpu")
+        """
+        if device == "auto":
+            # Auto-detect: use CUDA if available, otherwise CPU
+            return "cuda" if torch.cuda.is_available() else "cpu"
+        return device
 
     @abstractmethod
     def load(self) -> None:

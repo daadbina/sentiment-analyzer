@@ -76,10 +76,20 @@ class KafkaProducer:
             KafkaProducerError: If production fails
         """
         try:
+            # Try Avro serialization first
+            try:
+                serialized_value = self.serializer(message, None)
+                if serialized_value is None:
+                    raise ValueError("Avro serializer returned None")
+            except Exception as avro_error:
+                logger.warning(f"Avro serialization failed: {avro_error}, falling back to JSON")
+                # Fallback to JSON serialization
+                serialized_value = json.dumps(message).encode('utf-8')
+
             self.producer.produce(
                 topic=self.config.output_topic,
                 key=key.encode() if key else None,
-                value=self.serializer(message, None),
+                value=serialized_value,
                 on_delivery=callback or self._delivery_callback,
             )
 
@@ -106,10 +116,15 @@ class KafkaProducer:
 
     def close(self) -> None:
         """Close producer."""
-        if self.producer:
-            self.flush()
-            self.producer.close()
-            logger.info("Kafka producer closed")
+        try:
+            if self.producer:
+                self.flush()
+                # Try to close the producer
+                if hasattr(self.producer, 'close'):
+                    self.producer.close()
+                logger.info("Kafka producer closed")
+        except Exception as e:
+            logger.warning(f"Error closing Kafka producer: {e}")
 
     @staticmethod
     def _delivery_callback(err, msg):

@@ -80,11 +80,19 @@ class EmbeddingService:
             self.kafka_consumer.initialize()
             self.kafka_producer.initialize()
 
-            # Initialize PostgreSQL
-            await self.postgres_client.initialize()
+            # Initialize PostgreSQL (optional - log warning if fails)
+            try:
+                await self.postgres_client.initialize()
+            except Exception as e:
+                logger.warning(f"PostgreSQL initialization failed (optional): {e}")
+                logger.warning("Continuing without PostgreSQL audit logging")
 
-            # Initialize model registry
-            await self.model_registry.initialize()
+            # Initialize model registry (optional - log warning if fails)
+            try:
+                await self.model_registry.initialize()
+            except Exception as e:
+                logger.warning(f"Model registry initialization failed (optional): {e}")
+                logger.warning("Continuing without model registry")
 
             logger.info("Embedding service initialized successfully")
 

@@ -150,6 +150,29 @@ class EmbeddingService:
             article_ids = [msg.get("article_id", "") for msg in messages]
             languages = [msg.get("language", "en") for msg in messages]
 
+            # Extract metadata for Qdrant (required for clustering service filtering)
+            from datetime import datetime, timezone
+            metadata = []
+            # Use timezone-aware UTC time to ensure correct timestamp
+            current_time_timestamp = datetime.now(timezone.utc).timestamp()
+            logger.info(f"Current UTC time: {datetime.now(timezone.utc)}, timestamp: {current_time_timestamp}")
+
+            for msg in messages:
+                # embedded_at represents when the embedding was created (current time)
+                # This is used by clustering service for time window filtering
+                # NOT the article's publication time
+                meta = {
+                    "article_id": msg.get("article_id", ""),
+                    "embedded_at": current_time_timestamp,
+                    "publisher_credibility": msg.get("publisher_credibility", 0.5),
+                    "publisher_id": msg.get("publisher_id", "unknown"),
+                    "source": msg.get("source", "unknown"),
+                    "language": msg.get("language", "en"),
+                    "domain": msg.get("domain", ""),
+                    "content_type": msg.get("content_type", "article"),
+                }
+                metadata.append(meta)
+
             # Compute embeddings
             embeddings, _ = self.embedding_engine.compute_embeddings(
                 texts=texts,
@@ -182,6 +205,7 @@ class EmbeddingService:
                 collection_name=self.config.qdrant.collection_name,
                 embeddings=embeddings,
                 article_ids=article_ids,
+                metadata=metadata,
                 model_name=self.model_router.select_model(languages[0] if languages else "en"),
                 language=languages[0] if languages else "en",
             )
@@ -205,9 +229,13 @@ class EmbeddingService:
 
             logger.info("Embedding service started")
 
+            loop_count = 0
             while self._running:
                 try:
                     processed = await self.process_batch()
+                    loop_count += 1
+                    if loop_count % 10 == 0:
+                        logger.info(f"Processing loop iteration {loop_count}, last batch: {processed} messages")
                     if processed == 0:
                         await asyncio.sleep(1)
                 except Exception as e:

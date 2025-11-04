@@ -80,10 +80,15 @@ class ClusteringEngine:
 
     def _cluster_hdbscan(self, embeddings: np.ndarray) -> np.ndarray:
         """Perform HDBSCAN clustering."""
+        # HDBSCAN supports: euclidean, manhattan, chebyshev, minkowski
+        # For cosine distance, we need to precompute distance matrix or use euclidean on normalized vectors
+        # Using euclidean on normalized vectors approximates cosine distance
+        metric = "euclidean" if self.metric == "cosine" else self.metric
+
         clusterer = HDBSCAN(
             min_cluster_size=self.min_cluster_size,
             min_samples=self.min_samples,
-            metric=self.metric,
+            metric=metric,
             cluster_selection_epsilon=self.cluster_selection_epsilon,
             cluster_selection_method="eom",
             prediction_data=True,
@@ -96,10 +101,14 @@ class ClusteringEngine:
         """Perform DBSCAN clustering."""
         # Convert similarity threshold to distance
         eps = 1.0 - self.cluster_selection_epsilon
+        # DBSCAN supports: euclidean, manhattan, chebyshev, minkowski, cosine, etc.
+        # Use cosine directly for DBSCAN
+        metric = self.metric
+
         clusterer = DBSCAN(
             eps=eps,
             min_samples=self.min_samples,
-            metric=self.metric,
+            metric=metric,
             n_jobs=-1,
         )
         labels = clusterer.fit_predict(embeddings)

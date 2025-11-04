@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import List, Tuple, Optional
 import numpy as np
 from qdrant_client import QdrantClient
-from qdrant_client.models import Filter, FieldCondition, DatetimeRange, Range
+from qdrant_client.models import Filter, FieldCondition, Range
 
 logger = logging.getLogger(__name__)
 
@@ -64,13 +64,22 @@ class VectorRetriever:
         try:
             while True:
                 # Build filter for time window and credibility
+                # Note: embedded_at is stored as Unix timestamp (float), not datetime
+                # So we use Range with numeric comparison, not DatetimeRange
+                window_start_ts = window_start.timestamp()
+                window_end_ts = window_end.timestamp()
+
+                logger.info(f"Time window filter: {window_start_ts} to {window_end_ts}")
+                logger.info(f"Window start datetime: {window_start}")
+                logger.info(f"Window end datetime: {window_end}")
+
                 filter_conditions = Filter(
                     must=[
                         FieldCondition(
                             key="embedded_at",
-                            range=DatetimeRange(
-                                gte=window_start.timestamp(),
-                                lte=window_end.timestamp(),
+                            range=Range(
+                                gte=window_start_ts,
+                                lte=window_end_ts,
                             ),
                         ),
                         FieldCondition(

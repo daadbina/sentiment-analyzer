@@ -1,0 +1,39 @@
+# GPU-enabled Dockerfile for embedding service
+
+FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
+
+WORKDIR /app
+
+# Install Python and dependencies
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3-pip \
+    librdkafka-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip
+RUN pip install --upgrade pip
+
+# Copy requirements
+COPY requirements.txt requirements-gpu.txt ./
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-gpu.txt
+
+# Copy application code
+COPY embedding-service/ .
+
+# Create non-root user
+RUN useradd -m -u 1000 embedding && chown -R embedding:embedding /app
+USER embedding
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python3 -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+
+# Expose ports
+EXPOSE 8000 8001
+
+# Run service
+CMD ["python3", "-m", "uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
+

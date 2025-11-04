@@ -1,0 +1,19 @@
+# GPU-specific dependencies (in addition to requirements.txt)
+# Install with: pip install -r requirements.txt -r requirements-gpu.txt
+
+# CUDA-enabled PyTorch (for NVIDIA GPUs)
+# Note: This will be installed via torch[cuda] or specific CUDA version
+# torch-cuda is handled by torch installation with CUDA support
+
+# GPU monitoring and utilities
+nvidia-ml-py==12.535.108
+pynvml==11.535.108
+
+# Optional: For distributed GPU training
+torch-distributed-rpc==2.1.1
+
+# Optional: For model quantization and optimization
+torch-quantization==2.1.1
+onnx==1.15.0
+onnxruntime-gpu==1.17.0
+

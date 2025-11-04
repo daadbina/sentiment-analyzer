@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "embedding-service.fullname" . }}
+  labels:
+    {{- include "embedding-service.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "embedding-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "embedding-service.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "embedding-service.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: {{ .Chart.Name }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        - name: metrics
+          containerPort: {{ .Values.kafka.metricsPort }}
+          protocol: TCP
+        env:
+        - name: KAFKA_BROKERS
+          value: {{ .Values.kafka.brokers | quote }}
+        - name: KAFKA_SCHEMA_REGISTRY_URL
+          value: {{ .Values.kafka.schemaRegistryUrl | quote }}
+        - name: KAFKA_INPUT_TOPIC
+          value: {{ .Values.kafka.inputTopic | quote }}
+        - name: KAFKA_OUTPUT_TOPIC
+          value: {{ .Values.kafka.outputTopic | quote }}
+        - name: QDRANT_HOST
+          value: {{ .Values.qdrant.host | quote }}
+        - name: QDRANT_PORT
+          value: {{ .Values.qdrant.port | quote }}
+        - name: POSTGRES_HOST
+          value: {{ .Values.postgres.host | quote }}
+        - name: POSTGRES_PORT
+          value: {{ .Values.postgres.port | quote }}
+        - name: POSTGRES_USER
+          value: {{ .Values.postgres.user | quote }}
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "embedding-service.fullname" . }}
+              key: postgres-password
+        - name: MODEL_DEVICE
+          value: {{ .Values.model.device | quote }}
+        - name: MODEL_BATCH_SIZE_GPU
+          value: {{ .Values.model.batchSizeGpu | quote }}
+        - name: MODEL_BATCH_SIZE_CPU
+          value: {{ .Values.model.batchSizeCpu | quote }}
+        livenessProbe:
+          {{- toYaml .Values.livenessProbe | nindent 12 }}
+        readinessProbe:
+          {{- toYaml .Values.readinessProbe | nindent 12 }}
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/.cache
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+

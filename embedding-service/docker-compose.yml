@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  embedding-service:
+    build:
+      context: ..
+      dockerfile: embedding-service/Dockerfile
+    container_name: embedding-service
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_SCHEMA_REGISTRY_URL=http://schema-registry:8081
+      - KAFKA_INPUT_TOPIC=news_canonical
+      - KAFKA_OUTPUT_TOPIC=embeddings
+      - KAFKA_CONSUMER_GROUP=embedding-service
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_COLLECTION_NAME=embeddings
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=embedding
+      - POSTGRES_PASSWORD=embedding
+      - POSTGRES_DB=embedding
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MODEL_DEVICE=cpu
+      - MODEL_BATCH_SIZE_GPU=32
+      - MODEL_BATCH_SIZE_CPU=16
+      - VALIDATION_ENABLED=true
+      - DRIFT_DETECTION_ENABLED=true
+    depends_on:
+      - kafka
+      - schema-registry
+      - qdrant
+      - postgres
+      - redis
+    networks:
+      - embedding-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+    networks:
+      - embedding-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - embedding-network
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    container_name: schema-registry
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:9092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    depends_on:
+      - kafka
+    networks:
+      - embedding-network
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - embedding-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_USER: embedding
+      POSTGRES_PASSWORD: embedding
+      POSTGRES_DB: embedding
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_storage:/var/lib/postgresql/data
+    networks:
+      - embedding-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - embedding-network
+
+volumes:
+  qdrant_storage:
+  postgres_storage:
+
+networks:
+  embedding-network:
+    driver: bridge
+

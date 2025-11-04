@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: embedding-config
+  namespace: sentiment-analyzer
+data:
+  kafka.brokers: "kafka-broker-0.kafka-headless:9092,kafka-broker-1.kafka-headless:9092,kafka-broker-2.kafka-headless:9092"
+  kafka.schema_registry_url: "http://schema-registry:8081"
+  kafka.input_topic: "news_canonical"
+  kafka.output_topic: "embeddings"
+  kafka.consumer_group: "embedding-service"
+  qdrant.host: "qdrant"
+  qdrant.port: "6333"
+  qdrant.collection_name: "embeddings"
+  qdrant.vector_size: "768"
+  postgres.host: "postgres"
+  postgres.port: "5432"
+  postgres.database: "sentiment"
+  postgres.min_pool_size: "5"
+  postgres.max_pool_size: "20"
+  redis.host: "redis"
+  redis.port: "6379"
+  redis.db: "0"
+  redis.cache_ttl_seconds: "86400"
+  model.device: "cuda"
+  model.batch_size_gpu: "32"
+  model.batch_size_cpu: "16"
+  model.max_sequence_length: "512"
+  model.pool_size: "5"
+  validation.enabled: "true"
+  validation.drift_detection_enabled: "true"
+  validation.drift_sample_size: "1000"
+  validation.drift_threshold: "0.05"
+  metrics.prometheus_port: "8001"
+  metrics.enabled: "true"
+

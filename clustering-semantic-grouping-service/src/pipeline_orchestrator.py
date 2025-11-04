@@ -87,18 +87,18 @@ class PipelineOrchestrator:
             topic=config.kafka.output_topic,
         )
         self.outlier_handler = OutlierHandler(
-            k_neighbors=5,
-            distance_threshold=0.5,
+            k_neighbors=config.clustering.outlier_k_neighbors,
+            distance_threshold=config.clustering.outlier_distance_threshold,
             reassignment_threshold=config.clustering.similarity_threshold,
         )
         self.incremental_clusterer = IncrementalClusterer(
             similarity_threshold=config.clustering.similarity_threshold,
             max_cluster_age_hours=config.validation.max_time_span_hours,
-            merge_threshold=0.90,
+            merge_threshold=config.clustering.incremental_merge_threshold,
         )
         self.stability_scorer = ClusterStabilityScorer(
-            min_stability_score=0.70,
-            history_window_size=10,
+            min_stability_score=config.clustering.stability_min_score,
+            history_window_size=config.clustering.stability_history_window,
         )
 
         # Initialize Phase 5-8 components

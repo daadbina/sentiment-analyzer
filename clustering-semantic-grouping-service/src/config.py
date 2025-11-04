@@ -225,6 +225,11 @@ class ClusteringConfig(BaseSettings):
     time_window_hours: int = Field(default=0)
     overlap_hours: int = Field(default=0)
     execution_frequency_hours: int = Field(default=0)
+    outlier_k_neighbors: int = Field(default=0)
+    outlier_distance_threshold: float = Field(default=0.0)
+    incremental_merge_threshold: float = Field(default=0.0)
+    stability_min_score: float = Field(default=0.0)
+    stability_history_window: int = Field(default=0)
 
     class Config:
         env_prefix = ""
@@ -260,6 +265,21 @@ class ClusteringConfig(BaseSettings):
         if data.get("execution_frequency_hours") == 0:
             val = os.getenv("EXECUTION_FREQUENCY_HOURS")
             data["execution_frequency_hours"] = int(val) if val else 0
+        if data.get("outlier_k_neighbors") == 0:
+            val = os.getenv("OUTLIER_K_NEIGHBORS")
+            data["outlier_k_neighbors"] = int(val) if val else 0
+        if data.get("outlier_distance_threshold") == 0.0:
+            val = os.getenv("OUTLIER_DISTANCE_THRESHOLD")
+            data["outlier_distance_threshold"] = float(val) if val else 0.0
+        if data.get("incremental_merge_threshold") == 0.0:
+            val = os.getenv("INCREMENTAL_MERGE_THRESHOLD")
+            data["incremental_merge_threshold"] = float(val) if val else 0.0
+        if data.get("stability_min_score") == 0.0:
+            val = os.getenv("STABILITY_MIN_SCORE")
+            data["stability_min_score"] = float(val) if val else 0.0
+        if data.get("stability_history_window") == 0:
+            val = os.getenv("STABILITY_HISTORY_WINDOW")
+            data["stability_history_window"] = int(val) if val else 0
 
         super().__init__(**data)
 
@@ -283,6 +303,16 @@ class ClusteringConfig(BaseSettings):
             raise ValueError("OVERLAP_HOURS environment variable is required")
         if self.execution_frequency_hours == 0:
             raise ValueError("EXECUTION_FREQUENCY_HOURS environment variable is required")
+        if self.outlier_k_neighbors == 0:
+            raise ValueError("OUTLIER_K_NEIGHBORS environment variable is required")
+        if self.outlier_distance_threshold == 0.0:
+            raise ValueError("OUTLIER_DISTANCE_THRESHOLD environment variable is required")
+        if self.incremental_merge_threshold == 0.0:
+            raise ValueError("INCREMENTAL_MERGE_THRESHOLD environment variable is required")
+        if self.stability_min_score == 0.0:
+            raise ValueError("STABILITY_MIN_SCORE environment variable is required")
+        if self.stability_history_window == 0:
+            raise ValueError("STABILITY_HISTORY_WINDOW environment variable is required")
 
 
 class ValidationConfig(BaseSettings):

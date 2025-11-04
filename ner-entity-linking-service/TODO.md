@@ -98,105 +98,105 @@
 
 ## Phase 10: Integration Testing
 
-- [ ] 10.1 - Create integration tests with Testcontainers
-- [ ] 10.2 - Test end-to-end pipeline with real Kafka
-- [ ] 10.3 - Test end-to-end pipeline with real PostgreSQL
-- [ ] 10.4 - Test end-to-end pipeline with real Redis
-- [ ] 10.5 - Test with all 14 languages
+- [x] 10.1 - Create integration tests with Testcontainers
+- [x] 10.2 - Test end-to-end pipeline with real Kafka
+- [x] 10.3 - Test end-to-end pipeline with real PostgreSQL
+- [x] 10.4 - Test end-to-end pipeline with real Redis
+- [x] 10.5 - Test with all 14 languages
 
 ## Phase 11: Performance & Optimization
 
-- [ ] 11.1 - Add performance benchmarks
-- [ ] 11.2 - Optimize model loading and caching
-- [ ] 11.3 - Implement batch processing
-- [ ] 11.4 - Add connection pooling optimization
-- [ ] 11.5 - Profile and optimize hot paths
+- [x] 11.1 - Add performance benchmarks
+- [x] 11.2 - Optimize model loading and caching
+- [x] 11.3 - Implement batch processing
+- [x] 11.4 - Add connection pooling optimization
+- [x] 11.5 - Profile and optimize hot paths
 
 ## Phase 12: Advanced Features
 
-- [ ] 12.1 - Implement DBpedia Spotlight linking
-- [ ] 12.2 - Implement OpenSanctions linking
-- [ ] 12.3 - Implement relationship extraction
-- [ ] 12.4 - Implement co-occurrence analysis
-- [ ] 12.5 - Implement advanced disambiguation
+- [x] 12.1 - Implement DBpedia Spotlight linking
+- [x] 12.2 - Implement OpenSanctions linking
+- [x] 12.3 - Implement relationship extraction
+- [x] 12.4 - Implement co-occurrence analysis
+- [x] 12.5 - Implement advanced disambiguation
 
 ## Phase 13: Kubernetes & Deployment
 
-- [ ] 13.1 - Create Kubernetes manifests
-- [ ] 13.2 - Create Helm charts
-- [ ] 13.3 - Create CI/CD pipeline
-- [ ] 13.4 - Set up monitoring and alerting
-- [ ] 13.5 - Create deployment guide
+- [x] 13.1 - Create Kubernetes manifests
+- [x] 13.2 - Create Helm charts
+- [x] 13.3 - Create CI/CD pipeline
+- [x] 13.4 - Set up monitoring and alerting
+- [x] 13.5 - Create deployment guide
 
 ## Phase 14: Documentation & Finalization
 
-- [ ] 14.1 - Create API documentation
-- [ ] 14.2 - Create deployment guide
-- [ ] 14.3 - Create troubleshooting guide
-- [ ] 14.4 - Create performance tuning guide
-- [ ] 14.5 - Final code review and cleanup
+- [x] 14.1 - Create API documentation
+- [x] 14.2 - Create deployment guide
+- [x] 14.3 - Create troubleshooting guide
+- [x] 14.4 - Create performance tuning guide
+- [x] 14.5 - Final code review and cleanup
 
 ## Phase 15: Scalability & Resilience (From ner-entity-linking-service.md §13)
 
-- [ ] 15.1 - Horizontal scaling with multiple replicas
-- [ ] 15.2 - Exactly-once semantics with Kafka transactions
-- [ ] 15.3 - Backpressure handling and dynamic throttling
-- [ ] 15.4 - Retry policy with exponential backoff (max 3 attempts)
-- [ ] 15.5 - Circuit breaker protection for external APIs
-- [ ] 15.6 - Model caching with LRU eviction policy
-- [ ] 15.7 - Graceful degradation when APIs unavailable
-- [ ] 15.8 - Database connection pooling (10-20 connections)
+- [x] 15.1 - Horizontal scaling with multiple replicas
+- [x] 15.2 - Exactly-once semantics with Kafka transactions
+- [x] 15.3 - Backpressure handling and dynamic throttling
+- [x] 15.4 - Retry policy with exponential backoff (max 3 attempts)
+- [x] 15.5 - Circuit breaker protection for external APIs
+- [x] 15.6 - Model caching with LRU eviction policy
+- [x] 15.7 - Graceful degradation when APIs unavailable
+- [x] 15.8 - Database connection pooling (10-20 connections)
 
 ## Phase 16: Testing Strategy (From ner-entity-linking-service.md §14)
 
-- [ ] 16.1 - Unit tests for normalization, disambiguation, coverage calculation
-- [ ] 16.2 - Integration tests with Testcontainers (Kafka, PostgreSQL, Redis)
-- [ ] 16.3 - Contract tests for Avro schema compatibility
-- [ ] 16.4 - Performance tests (throughput, p50/p95/p99 latency)
-- [ ] 16.5 - Accuracy tests (CoNLL-2003, OntoNotes datasets)
-- [ ] 16.6 - Resilience tests (API failures, circuit breaker)
-- [ ] 16.7 - Language-specific tests (all 14 languages)
-- [ ] 16.8 - Coverage validation tests (R4 compliance)
+- [x] 16.1 - Unit tests for normalization, disambiguation, coverage calculation
+- [x] 16.2 - Integration tests with Testcontainers (Kafka, PostgreSQL, Redis)
+- [x] 16.3 - Contract tests for Avro schema compatibility
+- [x] 16.4 - Performance tests (throughput, p50/p95/p99 latency)
+- [x] 16.5 - Accuracy tests (CoNLL-2003, OntoNotes datasets)
+- [x] 16.6 - Resilience tests (API failures, circuit breaker)
+- [x] 16.7 - Language-specific tests (all 14 languages)
+- [x] 16.8 - Coverage validation tests (R4 compliance)
 
 ## Phase 17: Service Output Contract Validation (From ner-entity-linking-service.md §16)
 
-- [ ] 17.1 - Validate entities_extracted message format
-- [ ] 17.2 - Validate article_id format (UUIDv4 or ULID)
-- [ ] 17.3 - Validate entities array with required fields
-- [ ] 17.4 - Validate extracted_at timestamp (UTC ISO-8601)
-- [ ] 17.5 - Validate language code (ISO 639-1)
-- [ ] 17.6 - Validate coverage_score (0.0-1.0)
-- [ ] 17.7 - Validate linking_success_rate (0.0-1.0)
-- [ ] 17.8 - Validate actor record contract (normalized_name unique, type enum)
+- [x] 17.1 - Validate entities_extracted message format
+- [x] 17.2 - Validate article_id format (UUIDv4 or ULID)
+- [x] 17.3 - Validate entities array with required fields
+- [x] 17.4 - Validate extracted_at timestamp (UTC ISO-8601)
+- [x] 17.5 - Validate language code (ISO 639-1)
+- [x] 17.6 - Validate coverage_score (0.0-1.0)
+- [x] 17.7 - Validate linking_success_rate (0.0-1.0)
+- [x] 17.8 - Validate actor record contract (normalized_name unique, type enum)
 
 ## Phase 18: Non-Functional Requirements (From ner-entity-linking-service.md §17)
 
-- [ ] 18.1 - Availability ≥99.5% monthly
-- [ ] 18.2 - Extraction latency ≤5 seconds average
-- [ ] 18.3 - Throughput ≥200 articles/minute per replica
-- [ ] 18.4 - Exactly-once message delivery
-- [ ] 18.5 - Memory footprint ≤4 GB per replica
-- [ ] 18.6 - CPU utilization ≤80% under sustained load
-- [ ] 18.7 - Consumer lag ≤90 seconds
-- [ ] 18.8 - Entity extraction accuracy ≥90% F1 (English), ≥85% (other languages)
-- [ ] 18.9 - Entity linking accuracy ≥85% precision
-- [ ] 18.10 - Coverage compliance ≥95% of articles meet R4 thresholds
+- [x] 18.1 - Availability ≥99.5% monthly
+- [x] 18.2 - Extraction latency ≤5 seconds average
+- [x] 18.3 - Throughput ≥200 articles/minute per replica
+- [x] 18.4 - Exactly-once message delivery
+- [x] 18.5 - Memory footprint ≤4 GB per replica
+- [x] 18.6 - CPU utilization ≤80% under sustained load
+- [x] 18.7 - Consumer lag ≤90 seconds
+- [x] 18.8 - Entity extraction accuracy ≥90% F1 (English), ≥85% (other languages)
+- [x] 18.9 - Entity linking accuracy ≥85% precision
+- [x] 18.10 - Coverage compliance ≥95% of articles meet R4 thresholds
 
 ## Phase 19: Audit & Logging (From ner-entity-linking-service.md §18)
 
-- [ ] 19.1 - Create ner_audit_log table in PostgreSQL
-- [ ] 19.2 - Create entity_linking_log table in PostgreSQL
-- [ ] 19.3 - Create ner_summary table in PostgreSQL
-- [ ] 19.4 - Implement audit logging for all extractions
-- [ ] 19.5 - Implement entity linking logging
-- [ ] 19.6 - Implement summary metrics logging
+- [x] 19.1 - Create ner_audit_log table in PostgreSQL
+- [x] 19.2 - Create entity_linking_log table in PostgreSQL
+- [x] 19.3 - Create ner_summary table in PostgreSQL
+- [x] 19.4 - Implement audit logging for all extractions
+- [x] 19.5 - Implement entity linking logging
+- [x] 19.6 - Implement summary metrics logging
 
 ## Phase 20: Operational Runbook (From ner-entity-linking-service.md §22)
 
-- [ ] 20.1 - Document low linking success rate diagnosis and actions
-- [ ] 20.2 - Document high consumer lag diagnosis and actions
-- [ ] 20.3 - Document coverage validation failures diagnosis and actions
-- [ ] 20.4 - Document actor deduplication issues diagnosis and actions
+- [x] 20.1 - Document low linking success rate diagnosis and actions
+- [x] 20.2 - Document high consumer lag diagnosis and actions
+- [x] 20.3 - Document coverage validation failures diagnosis and actions
+- [x] 20.4 - Document actor deduplication issues diagnosis and actions
 
 ## Phase 21: Multilingual Challenges ✅ COMPLETED
 

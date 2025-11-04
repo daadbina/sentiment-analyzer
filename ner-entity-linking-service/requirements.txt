@@ -42,6 +42,7 @@ structlog==23.2.0
 tenacity==8.2.3
 fuzzywuzzy==0.18.0
 python-Levenshtein==0.21.1
+psutil==5.9.6
 
 # Testing
 pytest==7.4.3

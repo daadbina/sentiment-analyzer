@@ -7,7 +7,7 @@ from datetime import datetime
 from src.normalization.entity_normalizer import EntityNormalizer
 from src.linking.entity_linker import EntityLinker
 from src.ner.orchestrator import NEROrchestrator
-from src.models import Entity, ActorType
+from src.models import Entity, EntityType
 
 
 @pytest.mark.performance

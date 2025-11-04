@@ -9,7 +9,7 @@ from src.models import (
     EntitiesExtractedMessage,
     Entity,
     Actor,
-    ActorType,
+    EntityType,
 )
 from src.clients.kafka_consumer import KafkaConsumerClient
 from src.clients.kafka_producer import KafkaProducerClient
@@ -175,6 +175,7 @@ class TestE2EPipeline:
             Entity(
                 entity_id="e1",
                 text="John",
+                normalized_text="john",
                 entity_type="PERSON",
                 confidence=0.95,
                 start_char=0,
@@ -184,6 +185,7 @@ class TestE2EPipeline:
             Entity(
                 entity_id="e2",
                 text="Microsoft",
+                normalized_text="microsoft",
                 entity_type="ORGANIZATION",
                 confidence=0.98,
                 start_char=12,

@@ -4,7 +4,7 @@ Integration tests for PostgreSQL actor repository.
 import pytest
 from datetime import datetime
 from src.actors.repository import ActorRepository
-from src.models import Actor, ActorType
+from src.models import Actor, EntityType
 
 
 @pytest.mark.integration

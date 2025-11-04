@@ -45,9 +45,9 @@ htmlcov/
 .tox/
 .hypothesis/
 
-# Models and data
-models/
-data/
+# Models and data (downloaded artifacts only, not source code)
+/models/
+/data/
 *.bin
 *.pt
 *.pth

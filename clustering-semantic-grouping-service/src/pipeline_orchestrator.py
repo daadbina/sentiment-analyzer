@@ -256,7 +256,7 @@ class PipelineOrchestrator:
                     "topic_label": topic_label,
                     "topic_label_method": "extractive",
                     "centroid_vector": centroid.tolist(),
-                    "centroid_article_id": None,
+                    "centroid_article_id": "",  # Empty string instead of None for Delta Lake compatibility
                     "languages": cluster_metadata.get("languages", []),
                     "domains": cluster_metadata.get("domains", []),
                     "sources": cluster_metadata.get("sources", []),
@@ -274,9 +274,9 @@ class PipelineOrchestrator:
                     },
                     "embedding_model": "multilingual-e5-large",
                     "embedding_version": "v1.0",
-                    "parent_group_id": None,
+                    "parent_group_id": "",  # Empty string instead of None for Delta Lake compatibility
                     "child_group_ids": [],
-                    "evolution_type": None,
+                    "evolution_type": "",  # Empty string instead of None for Delta Lake compatibility
                     "cluster_stability_score": 0.5,
                     "job_id": str(uuid4()),
                     "trace_id": str(uuid4()),

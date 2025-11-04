@@ -89,8 +89,21 @@ class SemanticGroupConsumer:
 
             # Deserialize Avro message
             try:
+                raw_value = msg.value()
+                logger.debug(
+                    "Raw message value",
+                    length=len(raw_value) if raw_value else 0,
+                    first_bytes=raw_value[:20].hex() if raw_value else None,
+                )
+
                 ctx = SerializationContext(msg.topic(), MessageField.VALUE)
-                message_data = self.avro_deserializer(msg.value(), ctx)
+                message_data = self.avro_deserializer(raw_value, ctx)
+
+                logger.debug(
+                    "Deserialized message",
+                    message_type=type(message_data),
+                    message_keys=list(message_data.keys()) if isinstance(message_data, dict) else None,
+                )
             except Exception as e:
                 logger.error(
                     "Error deserializing Avro message",

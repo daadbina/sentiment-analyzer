@@ -142,7 +142,7 @@ class FeatureEngineeringService:
                 self.consumer.commit_offset()
 
                 # Update metrics
-                metrics.feature_computed_total.inc()
+                metrics.features_computed.labels(feature_type="all").inc()
 
                 logger.info(
                     "Message processed successfully",
@@ -151,14 +151,14 @@ class FeatureEngineeringService:
                 )
 
         except Exception as e:
-            logger.error("Error processing message", error=str(e))
-            metrics.feature_validation_failures_total.inc()
+            logger.error("Error processing message", error=str(e), exc_info=True)
+            metrics.validation_failures.labels(feature_type="extraction").inc()
 
     def _extract_features(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """Extract features from message.
 
         Args:
-            message: Semantic group message
+            message: Semantic group message from Kafka
 
         Returns:
             Dictionary of extracted features
@@ -166,23 +166,52 @@ class FeatureEngineeringService:
         features = {}
 
         try:
+            group_id = message.get("group_id")
+            article_ids = message.get("article_ids", [])
+
+            logger.debug(
+                "Extracting features",
+                group_id=group_id,
+                article_count=len(article_ids),
+            )
+
+            # Fetch full article data from database
+            articles = []
+            if article_ids:
+                articles = self.postgres_client.get_articles_by_ids(article_ids)
+                logger.debug(
+                    "Articles fetched",
+                    requested=len(article_ids),
+                    fetched=len(articles),
+                )
+
+            # Fetch actors from database
+            actors = []
+            try:
+                actors = self.postgres_client.get_all_actors()
+                logger.debug("Actors fetched", actor_count=len(actors))
+            except Exception as e:
+                logger.warning("Failed to fetch actors", error=str(e))
+                actors = []
+
             # Extract using all extractors
             for extractor in self.extractors:
                 extracted = extractor.extract(
-                    group=message.get("group"),
-                    articles=message.get("articles", []),
-                    actors=message.get("actors", []),
+                    group=message,
+                    articles=articles,
+                    actors=actors,
                 )
                 features.update(extracted)
 
             logger.info(
                 "Features extracted",
+                group_id=group_id,
                 feature_count=len(features),
             )
             return features
 
         except Exception as e:
-            logger.error("Error extracting features", error=str(e))
+            logger.error("Error extracting features", error=str(e), exc_info=True)
             raise FeatureError(f"Error extracting features: {str(e)}")
 
     def _transform_features(self, features: Dict[str, Any]) -> Dict[str, Any]:

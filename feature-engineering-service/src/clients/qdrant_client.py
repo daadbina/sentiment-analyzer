@@ -51,27 +51,18 @@ class QdrantVectorClient:
 
         try:
             articles = []
+            article_id_set = set(article_ids)
 
-            # Query Qdrant for each article ID
-            for article_id in article_ids:
-                try:
-                    # Search for points with matching article_id in payload
-                    search_result = self.client.search(
-                        collection_name=self.collection_name,
-                        query_filter={
-                            "must": [
-                                {
-                                    "key": "article_id",
-                                    "match": {"value": article_id},
-                                }
-                            ]
-                        },
-                        limit=1,
-                    )
+            # Scroll through all points and filter by article_id
+            try:
+                points, _ = self.client.scroll(
+                    collection_name=self.collection_name,
+                    limit=1000,
+                )
 
-                    if search_result:
-                        point = search_result[0]
-                        # Extract metadata from payload
+                for point in points:
+                    if point.payload.get("article_id") in article_id_set:
+                        article_id = point.payload.get("article_id")
                         article_data = {
                             "article_id": article_id,
                             "title": point.payload.get("title", ""),
@@ -86,13 +77,43 @@ class QdrantVectorClient:
                             "entities": point.payload.get("entities", []),
                         }
                         articles.append(article_data)
-                except Exception as e:
-                    logger.warning(
-                        "Error retrieving article from Qdrant",
-                        article_id=article_id,
-                        error=str(e),
-                    )
-                    continue
+
+            except Exception as e:
+                logger.warning(
+                    "Error scrolling Qdrant collection",
+                    error=str(e),
+                )
+                # Fallback: try to get articles by ID using scroll with offset
+                for article_id in article_ids:
+                    try:
+                        points, _ = self.client.scroll(
+                            collection_name=self.collection_name,
+                            limit=1000,
+                        )
+                        for point in points:
+                            if point.payload.get("article_id") == article_id:
+                                article_data = {
+                                    "article_id": article_id,
+                                    "title": point.payload.get("title", ""),
+                                    "body": point.payload.get("body", ""),
+                                    "language": point.payload.get("language", ""),
+                                    "domain": point.payload.get("domain", ""),
+                                    "source": point.payload.get("source", ""),
+                                    "published_at": point.payload.get("published_at", ""),
+                                    "sentiment_score": float(
+                                        point.payload.get("sentiment_score", 0.0)
+                                    ),
+                                    "entities": point.payload.get("entities", []),
+                                }
+                                articles.append(article_data)
+                                break
+                    except Exception as inner_e:
+                        logger.warning(
+                            "Error retrieving article from Qdrant",
+                            article_id=article_id,
+                            error=str(inner_e),
+                        )
+                        continue
 
             logger.debug(
                 "Articles retrieved from Qdrant",

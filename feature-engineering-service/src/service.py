@@ -133,7 +133,7 @@ class FeatureEngineeringService:
                         group_id=group_id,
                         errors=errors,
                     )
-                    metrics.feature_validation_failures_total.inc()
+                    metrics.validation_failures.labels(feature_type="validation").inc()
                     return
 
                 # Write to storage

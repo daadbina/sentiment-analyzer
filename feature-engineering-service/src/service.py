@@ -2,6 +2,7 @@
 
 from typing import Dict, Any, Optional
 import asyncio
+import time
 from .clients import (
     SemanticGroupConsumer,
     FeaturesProducer,
@@ -141,8 +142,17 @@ class FeatureEngineeringService:
                 # Write to storage
                 self._write_features(group_id, features)
 
-                # Produce to Kafka
-                self.producer.produce_message(group_id, features)
+                # Produce to Kafka with metadata
+                start_time = time.time()
+                self.producer.produce_message(
+                    group_id=group_id,
+                    features=features,
+                    feature_version="v1.0",
+                    validation_status="VALID",
+                    validation_failures=[],
+                    computation_duration_ms=int((time.time() - start_time) * 1000),
+                    trace_id=getattr(self, '_trace_id', ''),
+                )
 
                 # Commit offset
                 self.consumer.commit_offset()

@@ -22,6 +22,7 @@ class FeaturesProducer:
         self.config = config
         self.producer: Optional[AvroProducer] = None
         self.topic = "features_computed"
+        self.schema_str: Optional[str] = None
 
     def connect(self) -> bool:
         """Connect to Kafka.
@@ -41,10 +42,10 @@ class FeaturesProducer:
                 "../../schemas/features_computed.avsc"
             )
             with open(schema_path, "r") as f:
-                schema_str = f.read()
+                self.schema_str = f.read()
 
             # Register schema
-            schema = Schema(schema_str, schema_type="AVRO")
+            schema = Schema(self.schema_str, schema_type="AVRO")
             schema_id = schema_registry_client.register_schema(
                 subject_name=f"{self.topic}-value",
                 schema=schema
@@ -79,6 +80,11 @@ class FeaturesProducer:
         self,
         group_id: str,
         features: Dict[str, Any],
+        feature_version: str = "v1.0",
+        validation_status: str = "VALID",
+        validation_failures: list = None,
+        computation_duration_ms: int = 0,
+        trace_id: str = "",
         callback: Optional[Callable] = None,
     ) -> bool:
         """Produce a message.
@@ -86,6 +92,11 @@ class FeaturesProducer:
         Args:
             group_id: Semantic group ID
             features: Computed features
+            feature_version: Feature engineering version
+            validation_status: Feature validation status
+            validation_failures: List of validation failures
+            computation_duration_ms: Time taken to compute features
+            trace_id: Distributed trace identifier
             callback: Optional callback function
 
         Returns:
@@ -95,10 +106,20 @@ class FeaturesProducer:
             raise KafkaErrorException("Producer not connected")
 
         try:
+            if validation_failures is None:
+                validation_failures = []
+
             message_value = {
                 "group_id": group_id,
                 "features": features,
                 "timestamp": int(__import__("time").time() * 1000),
+                "feature_version": feature_version,
+                "feature_count": len(features),
+                "validation_status": validation_status,
+                "validation_failures": validation_failures,
+                "computation_duration_ms": computation_duration_ms,
+                "trace_id": trace_id,
+                "schema_version": "1.0",
             }
 
             def delivery_callback(err, msg):
@@ -122,6 +143,7 @@ class FeaturesProducer:
                 topic=self.topic,
                 value=message_value,
                 key=group_id,
+                value_schema=self.schema_str,
                 on_delivery=delivery_callback,
             )
 

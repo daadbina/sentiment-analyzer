@@ -8,14 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### In Progress
-- Model strategy implementations (HuggingFace, ONNX)
-- Batch optimizer for dynamic batch sizing
-- Pooling strategies for embeddings
-- GPU memory manager
-- Anomaly detector for quality checks
-- Statistical tests for drift detection
-- Baseline tracker for drift detection
-- Outbox worker for async processing
 - Integration tests with Testcontainers
 - Contract tests for Avro schemas
 - Performance benchmarks
@@ -39,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Distributed tracing support with context variables
 - Model management system (loader, registry, pool, router)
 - SentenceTransformer model strategy implementation
+- HuggingFace Transformer model strategy with mean pooling
+- ONNX model strategy for optimized inference
 - Language-specific model routing for 14+ languages
 - Text preprocessing pipeline with Unicode normalization
 - HTML/URL removal and whitespace handling
@@ -46,18 +40,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Smart text truncation (by sentences, words, characters)
 - Batch manager for efficient batch creation
 - Dynamic batcher with resource-aware sizing
+- Batch optimizer with balanced and token-aware batching
+- Memory usage estimation and batch size suggestions
 - Embedding computation engine with full orchestration
 - L2/L1 normalization utilities
 - Cosine similarity computation
+- Pooling strategies (Mean, Max, CLS, Weighted Mean)
+- PoolingFactory for strategy creation
+- GPUMemoryManager for GPU memory optimization
+- CPUMemoryManager for CPU memory monitoring
 - Embedding validation with dimension and quality checks
 - Quality checker for diversity, statistics, and sparsity
+- Anomaly detector with Z-score, magnitude, cosine distance methods
+- Isolation Forest and Local Outlier Factor anomaly detection
+- Ensemble anomaly detection with voting
 - Qdrant vector database client wrapper
 - Collection manager for point operations
+- Point builder for creating Qdrant points from embeddings
+- Version manager for collection version tracking
+- QdrantClientWrapper with connection management
 - Drift detection using Kolmogorov-Smirnov test
+- Statistical tests (KS, Anderson-Darling, Wasserstein, Energy, Mann-Whitney U)
+- Hellinger and Jensen-Shannon divergence
+- BaselineTracker for drift baseline management
+- Sliding window baseline with statistics tracking
 - Kafka consumer with Avro deserialization
 - Kafka producer with Avro serialization
 - PostgreSQL client for audit logging
 - Outbox coordinator for atomic dual-writes
+- OutboxWorker for async outbox processing
+- OutboxWorkerPool for parallel processing with retry logic
 - Main service orchestrator with lifecycle management
 - FastAPI application with health/readiness/metrics endpoints
 - Comprehensive unit tests (preprocessing, validation, normalization, drift, config)

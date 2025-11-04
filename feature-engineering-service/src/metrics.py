@@ -138,3 +138,24 @@ def record_reconciliation_mismatch():
     """Record reconciliation mismatch."""
     feature_reconciliation_mismatches_total.inc()
 
+
+class Metrics:
+    """Metrics container for feature engineering service."""
+
+    def __init__(self):
+        """Initialize metrics."""
+        self.groups_consumed = feature_groups_consumed_total
+        self.features_computed = feature_computed_total
+        self.validation_failures = feature_validation_failures_total
+        self.feast_writes = feature_feast_writes_total
+        self.feast_write_failures = feature_feast_write_failures_total
+        self.redis_writes = feature_redis_writes_total
+        self.redis_write_failures = feature_redis_write_failures_total
+        self.computation_duration = feature_computation_duration_seconds
+        self.drift_score = feature_drift_score
+        self.reconciliation_mismatches = feature_reconciliation_mismatches_total
+        self.consumer_lag = feature_consumer_lag
+
+
+# Global metrics instance
+metrics = Metrics()

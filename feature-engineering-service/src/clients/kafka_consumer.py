@@ -28,7 +28,7 @@ class SemanticGroupConsumer:
         """
         try:
             consumer_config = {
-                "bootstrap.servers": self.config.kafka.bootstrap_servers,
+                "bootstrap.servers": self.config.kafka.brokers,
                 "group.id": self.config.kafka.consumer_group,
                 "auto.offset.reset": "earliest",
                 "enable.auto.commit": False,
@@ -41,7 +41,7 @@ class SemanticGroupConsumer:
 
             logger.info(
                 "Kafka consumer connected",
-                bootstrap_servers=self.config.kafka.bootstrap_servers,
+                bootstrap_servers=self.config.kafka.brokers,
                 topic=self.topic,
             )
             return True

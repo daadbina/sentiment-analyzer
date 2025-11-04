@@ -27,7 +27,7 @@ class FeaturesProducer:
         """
         try:
             producer_config = {
-                "bootstrap.servers": self.config.kafka.bootstrap_servers,
+                "bootstrap.servers": self.config.kafka.brokers,
                 "acks": "all",  # Wait for all replicas
                 "retries": 3,
                 "schema.registry.url": self.config.kafka.schema_registry_url,
@@ -37,7 +37,7 @@ class FeaturesProducer:
 
             logger.info(
                 "Kafka producer connected",
-                bootstrap_servers=self.config.kafka.bootstrap_servers,
+                bootstrap_servers=self.config.kafka.brokers,
                 topic=self.topic,
             )
             return True

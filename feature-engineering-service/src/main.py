@@ -28,7 +28,7 @@ def main():
         logger.info(f"Configuration: {config}")
 
         # Start Prometheus metrics server
-        metrics_port = config.monitoring.metrics_port
+        metrics_port = config.monitoring.prometheus_port
         start_http_server(metrics_port)
         logger.info(f"Prometheus metrics server started on port {metrics_port}")
 

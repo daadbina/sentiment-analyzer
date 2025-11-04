@@ -80,7 +80,8 @@ class QdrantConfig(BaseSettings):
 class FeastConfig(BaseSettings):
     """Feast configuration."""
 
-    registry_path: str = Field(default="/feast/registry.db", alias="FEAST_REGISTRY_PATH")
+    repo_path: str = Field(default=".", alias="FEAST_REPO_PATH")
+    registry_path: str = Field(default="registry.db", alias="FEAST_REGISTRY_PATH")
     offline_store: str = Field(default="delta", alias="FEAST_OFFLINE_STORE")
     online_store: str = Field(default="redis", alias="FEAST_ONLINE_STORE")
     feature_version: str = Field(default="v1.0", alias="FEATURE_VERSION")

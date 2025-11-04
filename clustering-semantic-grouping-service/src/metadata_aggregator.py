@@ -65,8 +65,8 @@ class MetadataAggregator:
             "sources": sources,
             "countries": countries,
             "publisher_credibility_avg": float(credibility_avg),
-            "earliest_published_at": earliest.isoformat() if earliest else None,
-            "latest_published_at": latest.isoformat() if latest else None,
+            "earliest_published_at": earliest.isoformat() if earliest else "",
+            "latest_published_at": latest.isoformat() if latest else "",
             "time_span_hours": float(time_span_hours),
         }
 

@@ -74,7 +74,7 @@ class SourceExtractor(FeatureExtractor):
                 features["source_credibility_std"] = 0.0
 
             # source_diversity_score: Entropy of source distribution
-            if unique_sources:
+            if unique_sources and len(unique_sources) > 1:
                 source_counts = Counter(sources)
                 total = len(sources)
                 entropy = 0.0
@@ -90,7 +90,7 @@ class SourceExtractor(FeatureExtractor):
 
             logger.info(
                 "Source features extracted",
-                group_id=group.group_id,
+                group_id=self.get_group_id(group),
                 num_sources=features["num_sources"],
             )
             return features
@@ -98,7 +98,7 @@ class SourceExtractor(FeatureExtractor):
         except Exception as e:
             logger.error(
                 "Error extracting source features",
-                group_id=group.group_id,
+                group_id=self.get_group_id(group),
                 error=str(e),
             )
             return {}

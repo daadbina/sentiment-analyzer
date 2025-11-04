@@ -24,6 +24,7 @@ from .drift import DriftDetector
 from .utils import StructuredLogger, TraceContext, FeatureLineage
 from .metrics import metrics
 from .exceptions import FeatureError
+from .config import QdrantConfig
 
 logger = StructuredLogger(__name__)
 
@@ -36,7 +37,8 @@ class FeatureEngineeringService:
         self.consumer = SemanticGroupConsumer()
         self.producer = FeaturesProducer()
         self.postgres_client = PostgresClient()
-        self.qdrant_client = QdrantVectorClient()
+        qdrant_config = QdrantConfig()
+        self.qdrant_client = QdrantVectorClient(config=qdrant_config)
 
         # Initialize extractors
         self.extractors = [

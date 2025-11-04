@@ -69,7 +69,7 @@ class QdrantConfig(BaseSettings):
 
     host: str = Field(default="localhost", alias="QDRANT_HOST")
     port: int = Field(default=6333, alias="QDRANT_PORT")
-    collection_name: str = Field(default="embeddings", alias="QDRANT_COLLECTION_NAME")
+    collection_name: str = Field(default="news_embeddings_v1", alias="QDRANT_COLLECTION_NAME")
     vector_size: int = Field(default=768, alias="QDRANT_VECTOR_SIZE")
 
     class Config:

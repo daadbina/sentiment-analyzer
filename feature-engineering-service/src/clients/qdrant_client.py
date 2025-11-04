@@ -6,6 +6,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct
 from ..utils import StructuredLogger
 from ..exceptions import QdrantError
+from ..config import QdrantConfig
 
 logger = StructuredLogger(__name__)
 
@@ -13,11 +14,17 @@ logger = StructuredLogger(__name__)
 class QdrantVectorClient:
     """Client for Qdrant vector database."""
 
-    def __init__(self):
-        """Initialize Qdrant client."""
-        self.host = os.getenv("QDRANT_HOST", "localhost")
-        self.port = int(os.getenv("QDRANT_PORT", 6333))
-        self.collection_name = os.getenv("QDRANT_COLLECTION", "embeddings")
+    def __init__(self, config: QdrantConfig = None):
+        """Initialize Qdrant client.
+
+        Args:
+            config: Qdrant configuration (uses default if not provided)
+        """
+        if config is None:
+            config = QdrantConfig()
+        self.host = config.host
+        self.port = config.port
+        self.collection_name = config.collection_name
         self.client = None
 
     def connect(self):

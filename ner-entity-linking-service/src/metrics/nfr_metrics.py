@@ -60,6 +60,38 @@ try:
 except ValueError:
     entities_linked = REGISTRY._names_to_collectors.get("ner_entities_linked_total")
 
+try:
+    messages_consumed = Counter(
+        "ner_messages_consumed_total",
+        "Total messages consumed from Kafka",
+    )
+except ValueError:
+    messages_consumed = REGISTRY._names_to_collectors.get("ner_messages_consumed_total")
+
+try:
+    actors_created = Counter(
+        "ner_actors_created_total",
+        "Total actors created",
+    )
+except ValueError:
+    actors_created = REGISTRY._names_to_collectors.get("ner_actors_created_total")
+
+try:
+    actors_updated = Counter(
+        "ner_actors_updated_total",
+        "Total actors updated",
+    )
+except ValueError:
+    actors_updated = REGISTRY._names_to_collectors.get("ner_actors_updated_total")
+
+try:
+    repository_errors = Counter(
+        "ner_repository_errors_total",
+        "Total repository errors",
+    )
+except ValueError:
+    repository_errors = REGISTRY._names_to_collectors.get("ner_repository_errors_total")
+
 # Reliability Metrics
 try:
     extraction_errors = Counter(
@@ -195,6 +227,26 @@ class NFRMetricsCollector:
             count: Number of entities linked
         """
         entities_linked.inc(count)
+
+    @staticmethod
+    def record_message_consumed() -> None:
+        """Record message consumed from Kafka."""
+        messages_consumed.inc()
+
+    @staticmethod
+    def record_actor_created() -> None:
+        """Record actor created."""
+        actors_created.inc()
+
+    @staticmethod
+    def record_actor_updated() -> None:
+        """Record actor updated."""
+        actors_updated.inc()
+
+    @staticmethod
+    def record_repository_error() -> None:
+        """Record repository error."""
+        repository_errors.inc()
 
     @staticmethod
     def record_extraction_error(error_type: str) -> None:

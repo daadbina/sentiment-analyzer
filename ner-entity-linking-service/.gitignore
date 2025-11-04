@@ -100,6 +100,7 @@ celerybeat.pid
 .venv
 env/
 venv/
+venv311/
 ENV/
 env.bak/
 venv.bak/
@@ -153,3 +154,21 @@ dump.rdb
 # PostgreSQL
 postgres_data/
 
+# Documentation (only README.md and CHANGELOG.md are tracked)
+*.md
+!README.md
+!CHANGELOG.md
+
+# Temporary files and documentation
+TODO.md
+INTEGRATION.md
+COMPLETION_SUMMARY.md
+DEPLOYMENT.md
+FINAL_VERIFICATION.md
+NON_FUNCTIONAL_REQUIREMENTS.md
+OPERATIONAL_RUNBOOK.md
+PERFORMANCE_TUNING.md
+TESTING_STRATEGY.md
+PHASES_COMPLETION_REPORT.md
+TROUBLESHOOTING.md
+*.tmp

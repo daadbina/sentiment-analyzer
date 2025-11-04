@@ -102,6 +102,9 @@ class KafkaNewsProducer:
                 on_delivery=self._delivery_report,
             )
 
+            # Flush to ensure message is sent immediately
+            self.producer.flush(timeout=5)
+
             logger.debug(f"Published validated message: {message.article_id}")
 
         except Exception as e:
@@ -134,6 +137,9 @@ class KafkaNewsProducer:
                 value=self.rejected_serializer(message_dict, ctx),
                 on_delivery=self._delivery_report,
             )
+
+            # Flush to ensure message is sent immediately
+            self.producer.flush(timeout=5)
 
             logger.debug(f"Published rejected message: {message.article_id}")
 

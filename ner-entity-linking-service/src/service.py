@@ -96,7 +96,10 @@ class NEREntityLinkingService:
             message, error = self.kafka_consumer.consume_message(timeout_ms=1000)
 
             if error:
-                logger.error(f"Kafka error: {error}")
+                logger.warning(f"Kafka deserialization error (skipping message): {error}")
+                # Commit offset to skip past the bad message
+                self.kafka_consumer.commit_offset()
+                logger.debug("Offset committed after deserialization error")
                 return
 
             if message is None:

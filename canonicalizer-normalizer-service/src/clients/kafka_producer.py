@@ -95,6 +95,9 @@ class KafkaCanonicalProducer:
                 on_delivery=self._delivery_report,
             )
 
+            # Flush to ensure message is sent immediately
+            self.producer.flush(timeout=5)
+
             logger.debug(f"Published canonical message: {message.article_id}")
 
         except Exception as e:
@@ -126,6 +129,9 @@ class KafkaCanonicalProducer:
                 value=json.dumps(dlq_message).encode("utf-8"),
                 on_delivery=self._delivery_report,
             )
+
+            # Flush to ensure message is sent immediately
+            self.producer.flush(timeout=5)
 
             logger.warning(f"Published message to DLQ: {error}")
 

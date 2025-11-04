@@ -33,28 +33,34 @@ class TestEntityLinker:
             text="United States",
             normalized_text="united states",
             entity_type=EntityType.GPE,
+            start_char=0,
+            end_char=13,
             confidence=0.95,
+            context_snippet="The United States is a country",
         )
-        
+
         linked = linker.link_entity(entity)
-        
+
         assert linked.wikidata_id == "Q30"
         assert linked.country == "USA"
 
     def test_link_entity_not_found(self, linker, mock_wikidata_client):
         """Test entity linking when not found."""
         mock_wikidata_client.search_entity.return_value = None
-        
+
         entity = Entity(
             entity_id="ent-1",
             text="Unknown Entity",
             normalized_text="unknown entity",
             entity_type=EntityType.PERSON,
+            start_char=0,
+            end_char=14,
             confidence=0.85,
+            context_snippet="Unknown Entity was mentioned",
         )
-        
+
         linked = linker.link_entity(entity)
-        
+
         assert linked.wikidata_id is None
 
     def test_link_multiple_entities(self, linker):
@@ -65,19 +71,25 @@ class TestEntityLinker:
                 text="USA",
                 normalized_text="usa",
                 entity_type=EntityType.GPE,
+                start_char=0,
+                end_char=3,
                 confidence=0.95,
+                context_snippet="USA is a country",
             ),
             Entity(
                 entity_id="ent-2",
                 text="John Smith",
                 normalized_text="john smith",
                 entity_type=EntityType.PERSON,
+                start_char=10,
+                end_char=20,
                 confidence=0.90,
+                context_snippet="John Smith is a person",
             ),
         ]
-        
+
         linked_entities, success_rate = linker.link_entities(entities)
-        
+
         assert len(linked_entities) == 2
         assert success_rate > 0
 

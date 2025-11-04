@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ner-entity-linking-service
+  namespace: sentiment-analyzer
+  labels:
+    app: ner-entity-linking-service
+spec:
+  type: ClusterIP
+  selector:
+    app: ner-entity-linking-service
+  ports:
+  - name: metrics
+    port: 9104
+    targetPort: 9104
+    protocol: TCP
+  sessionAffinity: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ner-entity-linking-service-headless
+  namespace: sentiment-analyzer
+  labels:
+    app: ner-entity-linking-service
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: ner-entity-linking-service
+  ports:
+  - name: metrics
+    port: 9104
+    targetPort: 9104
+    protocol: TCP
+

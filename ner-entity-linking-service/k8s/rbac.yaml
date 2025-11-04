@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ner-entity-linking-service
+  namespace: sentiment-analyzer
+  labels:
+    app: ner-entity-linking-service
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ner-entity-linking-service
+  namespace: sentiment-analyzer
+  labels:
+    app: ner-entity-linking-service
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ner-entity-linking-service
+  namespace: sentiment-analyzer
+  labels:
+    app: ner-entity-linking-service
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ner-entity-linking-service
+subjects:
+- kind: ServiceAccount
+  name: ner-entity-linking-service
+  namespace: sentiment-analyzer
+

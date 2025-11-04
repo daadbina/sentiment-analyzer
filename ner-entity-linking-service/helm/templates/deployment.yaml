@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ner-entity-linking-service.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ner-entity-linking-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ner-entity-linking-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- toYaml .Values.podAnnotations | nindent 8 }}
+      labels:
+        {{- include "ner-entity-linking-service.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "ner-entity-linking-service.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: {{ .Chart.Name }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: metrics
+          containerPort: 9104
+          protocol: TCP
+        env:
+        {{- range $key, $value := .Values.config }}
+        - name: {{ $key | upper }}
+          value: {{ $value | quote }}
+        {{- end }}
+        {{- range $key, $value := .Values.secrets }}
+        - name: {{ $key | upper }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ner-entity-linking-service.fullname" . }}-secrets
+              key: {{ $key }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        livenessProbe:
+          {{- toYaml .Values.livenessProbe | nindent 12 }}
+        readinessProbe:
+          {{- toYaml .Values.readinessProbe | nindent 12 }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+

@@ -3,7 +3,7 @@
 import logging
 import json
 from confluent_kafka import Producer, KafkaError
-from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry import SchemaRegistryClient, SerializationContext, MessageField
 from confluent_kafka.schema_registry.avro import AvroSerializer
 from src.models import EntitiesExtractedMessage
 from src.exceptions import KafkaError as KafkaServiceError
@@ -75,11 +75,14 @@ class KafkaProducerClient:
             # Convert message to dict
             message_dict = message.model_dump()
 
+            # Create serialization context
+            ctx = SerializationContext(self.output_topic, MessageField.VALUE)
+
             # Serialize and produce
             self.producer.produce(
                 topic=self.output_topic,
                 key=message.article_id.encode("utf-8"),
-                value=self.avro_serializer(message_dict, None),
+                value=self.avro_serializer(message_dict, ctx),
                 on_delivery=self._delivery_report,
             )
 

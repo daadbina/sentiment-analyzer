@@ -26,7 +26,7 @@ class WikidataClient:
         self, entity_text: str, entity_type: str, language: str = "en"
     ) -> Optional[Dict]:
         """
-        Search for entity in Wikidata.
+        Search for entity in Wikidata using exact label matching.
 
         Args:
             entity_text: Entity text to search
@@ -37,15 +37,21 @@ class WikidataClient:
             Entity data with wikidata_id if found, None otherwise
         """
         try:
+            logger.debug(f"Searching Wikidata for entity: {entity_text} (type: {entity_type}, language: {language})")
+
             sparql = SPARQLWrapper(self.api_url)
 
             # Build SPARQL query based on entity type
             query = self._build_search_query(entity_text, entity_type, language)
+            logger.debug(f"SPARQL query: {query}")
+
             sparql.setQuery(query)
             sparql.setReturnFormat(JSON)
 
             results = sparql.query().convert()
             bindings = results.get("results", {}).get("bindings", [])
+
+            logger.debug(f"Wikidata returned {len(bindings)} results for: {entity_text}")
 
             if not bindings:
                 logger.debug(f"No Wikidata results for: {entity_text}")
@@ -53,9 +59,13 @@ class WikidataClient:
 
             # Return first result (highest ranked)
             result = bindings[0]
+            wikidata_id = result.get("item", {}).get("value", "").split("/")[-1]
+            label = result.get("itemLabel", {}).get("value", entity_text)
+            logger.debug(f"Found Wikidata match: {label} ({wikidata_id})")
+
             return {
-                "wikidata_id": result.get("item", {}).get("value", "").split("/")[-1],
-                "label": result.get("itemLabel", {}).get("value", entity_text),
+                "wikidata_id": wikidata_id,
+                "label": label,
                 "description": result.get("itemDescription", {}).get("value", ""),
                 "country": result.get("country", {}).get("value", ""),
             }
@@ -66,7 +76,7 @@ class WikidataClient:
 
     def _build_search_query(self, entity_text: str, entity_type: str, language: str) -> str:
         """
-        Build SPARQL query for entity search.
+        Build SPARQL query for entity search using exact label matching.
 
         Args:
             entity_text: Entity text
@@ -87,24 +97,28 @@ class WikidataClient:
 
         wikidata_type = type_mapping.get(entity_type, "")
 
+        # Escape quotes in entity text for SPARQL
+        escaped_text = entity_text.replace('"', '\\"')
+
         if wikidata_type:
+            # Use exact label matching with rdfs:label
             query = f"""
             SELECT ?item ?itemLabel ?itemDescription ?country WHERE {{
-              ?item rdfs:label "{entity_text}"@{language} .
+              ?item rdfs:label "{escaped_text}"@{language} .
               ?item wdt:P31 {wikidata_type} .
               OPTIONAL {{ ?item wdt:P17 ?countryEntity . ?countryEntity rdfs:label ?country . }}
               SERVICE wikibase:label {{ bd:serviceParam wikibase:language "{language},en" . }}
             }}
-            LIMIT 1
+            LIMIT 5
             """
         else:
             query = f"""
             SELECT ?item ?itemLabel ?itemDescription ?country WHERE {{
-              ?item rdfs:label "{entity_text}"@{language} .
+              ?item rdfs:label "{escaped_text}"@{language} .
               OPTIONAL {{ ?item wdt:P17 ?countryEntity . ?countryEntity rdfs:label ?country . }}
               SERVICE wikibase:label {{ bd:serviceParam wikibase:language "{language},en" . }}
             }}
-            LIMIT 1
+            LIMIT 5
             """
 
         return query

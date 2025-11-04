@@ -1,0 +1,19 @@
+apiVersion: v2
+name: ner-entity-linking-service
+description: NER Entity Linking Service for Sentiment Analyzer
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - ner
+  - entity-linking
+  - sentiment-analyzer
+  - nlp
+home: https://github.com/daadbina/sentiment-analyzer
+sources:
+  - https://github.com/daadbina/sentiment-analyzer
+maintainers:
+  - name: Development Team
+    email: dev@sentiment-analyzer.local
+dependencies: []
+

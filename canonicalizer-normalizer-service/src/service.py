@@ -209,6 +209,7 @@ class CanonicalizeNormalizerService:
             metrics.normalization_score.observe(normalization_score)
 
             # Step 8: Create output message
+            canonicalized_at = datetime.utcnow().isoformat() + "Z"
             canonical_msg = NewsCanonicalMessage(
                 article_id=article_id,
                 canonical_url=validated_msg.canonical_url,
@@ -227,7 +228,10 @@ class CanonicalizeNormalizerService:
                 language=validated_msg.language,
                 source_published_at_utc=validated_msg.source_published_at_utc,
                 validated_at=validated_msg.validated_at,
-                canonicalized_at=datetime.utcnow().isoformat() + "Z",
+                canonicalized_at=canonicalized_at,
+                domain=url_result.domain,  # Domain from URL normalization (required by NER)
+                published_at=validated_msg.source_published_at_utc,  # Alias for NER service
+                normalized_at=canonicalized_at,  # Alias for NER service
                 country=metadata_result.country,
                 region=metadata_result.region,
                 domain_category=domain_result.domain_category,

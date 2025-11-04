@@ -83,14 +83,15 @@ class KafkaConsumerClient:
             Tuple of (message, error)
         """
         try:
-            msg_record = self.consumer.poll(timeout_secs=timeout_ms / 1000.0)
+            msg_record = self.consumer.poll(timeout_ms / 1000.0)
 
             if msg_record is None:
                 return None, None
 
-            # Deserialize message
+            # Deserialize message using Avro deserializer
             try:
-                message_data = msg_record.value
+                # Manually deserialize the Avro message
+                message_data = self.avro_deserializer(msg_record.value(), None)
                 message = NewsCanonicalMessage(**message_data)
                 MetricsCollector.record_message_consumed()
                 logger.debug(f"Consumed message: {message.article_id}")

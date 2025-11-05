@@ -6,6 +6,7 @@ Provides distributed tracing with Jaeger exporter and trace context propagation.
 
 import logging
 from typing import Optional
+import warnings
 from opentelemetry import trace, metrics
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -13,6 +14,9 @@ from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+# Suppress Jaeger deprecation warning - it's still functional
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="opentelemetry.exporter.jaeger")
 
 logger = logging.getLogger(__name__)
 

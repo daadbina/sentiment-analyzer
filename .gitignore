@@ -97,3 +97,7 @@ yarn-error.log
 # Development scripts
 development
 development/
+
+# MLflow
+mlruns/
+.mlflow/

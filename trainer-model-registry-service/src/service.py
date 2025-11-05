@@ -94,12 +94,10 @@ class TrainerService:
                 # Initialize components
                 self.feature_retriever = FeatureRetriever(self.feast_client)
                 self.label_retriever = LabelRetriever(self.postgres_client)
-                self.preprocessor = DataPreprocessor(
-                    scaling_method=config.training.scaling_method
-                )
+                self.preprocessor = DataPreprocessor()
                 self.splitter = DataSplitter(
-                    test_size=config.training.test_size,
-                    validation_size=config.training.validation_size,
+                    test_size=config.training.test_set_size,
+                    validation_size=config.training.validation_set_size,
                     random_state=config.training.random_seed,
                 )
                 self.trainer = Trainer()

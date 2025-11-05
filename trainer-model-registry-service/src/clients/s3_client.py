@@ -41,8 +41,9 @@ class S3Client:
             self.client = boto3.client(
                 "s3",
                 region_name=self.config.region,
-                aws_access_key_id=self.config.access_key,
-                aws_secret_access_key=self.config.secret_key,
+                aws_access_key_id=self.config.access_key_id,
+                aws_secret_access_key=self.config.secret_access_key,
+                endpoint_url=self.config.endpoint_url,
             )
             logger.info("S3 client connected")
         except Exception as e:

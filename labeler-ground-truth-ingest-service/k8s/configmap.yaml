@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: labeler-config
+  namespace: sentiment-analyzer
+data:
+  kafka_brokers: "154.53.166.231:9092"
+  schema_registry_url: "http://154.53.166.231:8081"
+  postgres_host: "154.53.166.231"
+  postgres_port: "5432"
+  postgres_database: "sentiment"
+  log_level: "INFO"
+  acled_fetch_interval_hours: "24"
+  gdelt_fetch_interval_hours: "1"
+  coingecko_fetch_interval_minutes: "5"
+  label_reconciliation_threshold: "48"
+  label_confidence_threshold: "0.7"
+  prometheus_port: "9107"
+  delta_lake_path: "/data/delta_lake/ground_truth"
+  environment: "production"
+

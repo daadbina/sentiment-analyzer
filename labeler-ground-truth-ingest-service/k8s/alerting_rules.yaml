@@ -1,0 +1,223 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: labeler-ground-truth-ingest-service
+  namespace: sentiment-analyzer
+  labels:
+    app: labeler-ground-truth-ingest-service
+    prometheus: kube-prometheus
+spec:
+  groups:
+    - name: labeler-ground-truth-ingest-service.rules
+      interval: 30s
+      rules:
+        # Label Freshness Alerts
+        - alert: LabelFreshnessACLED
+          expr: label_freshness_hours{source="acled"} > 24
+          for: 1h
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "ACLED labels are stale (> 24 hours)"
+            description: "ACLED labels have not been updated for {{ $value | humanize }} hours. Expected freshness: ≤24h (R10)"
+            runbook_url: "https://wiki.example.com/labeler-service/acled-freshness"
+
+        - alert: LabelFreshnessGDELT
+          expr: label_freshness_hours{source="gdelt"} > 1
+          for: 30m
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "GDELT labels are stale (> 1 hour)"
+            description: "GDELT labels have not been updated for {{ $value | humanize }} hours. Expected freshness: ≤1h (R10)"
+            runbook_url: "https://wiki.example.com/labeler-service/gdelt-freshness"
+
+        - alert: LabelFreshnessCoinGecko
+          expr: label_freshness_hours{source="coingecko"} > 0.083
+          for: 10m
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "CoinGecko labels are stale (> 5 minutes)"
+            description: "CoinGecko labels have not been updated for {{ $value | humanize }} hours. Expected freshness: ≤5min (R10)"
+            runbook_url: "https://wiki.example.com/labeler-service/coingecko-freshness"
+
+        # Reconciliation Alerts
+        - alert: LabelReconciliationFailures
+          expr: increase(label_reconciliation_failures_total[5m]) > 100
+          for: 10m
+          labels:
+            severity: critical
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "High label reconciliation failure rate"
+            description: "{{ $value | humanize }} reconciliation failures in last 5 minutes. Expected accuracy: ≥95%"
+            runbook_url: "https://wiki.example.com/labeler-service/reconciliation-failures"
+
+        - alert: LabelReconciliationAccuracyLow
+          expr: (label_reconciliation_failures_total / (label_reconciliation_failures_total + label_reconciled_total)) > 0.05
+          for: 30m
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "Label reconciliation accuracy below threshold"
+            description: "Reconciliation accuracy is {{ $value | humanizePercentage }}. Expected: ≥95%"
+            runbook_url: "https://wiki.example.com/labeler-service/reconciliation-accuracy"
+
+        # Validation Alerts
+        - alert: LabelValidationFailures
+          expr: (increase(label_validation_failures_total[5m]) / increase(label_fetched_total[5m])) > 0.10
+          for: 10m
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "High label validation failure rate"
+            description: "{{ $value | humanizePercentage }} of labels failed validation. Expected: <10%"
+            runbook_url: "https://wiki.example.com/labeler-service/validation-failures"
+
+        # License Compliance Alerts
+        - alert: LabelLicenseViolations
+          expr: increase(label_license_violations_total[1h]) > 0
+          for: 5m
+          labels:
+            severity: critical
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "License compliance violations detected"
+            description: "{{ $value | humanize }} license violations detected in last hour"
+            runbook_url: "https://wiki.example.com/labeler-service/license-violations"
+
+        # Confidence Score Alerts
+        - alert: LabelConfidenceScoreLow
+          expr: label_confidence_avg < 0.70
+          for: 30m
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "Average label confidence score is low"
+            description: "Average confidence score is {{ $value | humanize }}. Expected: ≥0.70"
+            runbook_url: "https://wiki.example.com/labeler-service/confidence-score"
+
+        # API Fetch Alerts
+        - alert: LabelFetchLatencyHigh
+          expr: histogram_quantile(0.95, label_fetch_duration_seconds) > 30
+          for: 10m
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "Label fetch latency is high"
+            description: "P95 fetch latency is {{ $value | humanize }}s. Expected: <30s"
+            runbook_url: "https://wiki.example.com/labeler-service/fetch-latency"
+
+        - alert: LabelFetchErrors
+          expr: increase(label_fetch_errors_total[5m]) > 10
+          for: 10m
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "High label fetch error rate"
+            description: "{{ $value | humanize }} fetch errors in last 5 minutes"
+            runbook_url: "https://wiki.example.com/labeler-service/fetch-errors"
+
+        # Reconciliation Latency Alerts
+        - alert: LabelReconciliationLatencyHigh
+          expr: histogram_quantile(0.95, label_reconciliation_duration_seconds) > 60
+          for: 10m
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "Label reconciliation latency is high"
+            description: "P95 reconciliation latency is {{ $value | humanize }}s. Expected: <60s"
+            runbook_url: "https://wiki.example.com/labeler-service/reconciliation-latency"
+
+        # Storage Alerts
+        - alert: LabelStorageWriteFailures
+          expr: increase(label_storage_write_failures_total[5m]) > 10
+          for: 10m
+          labels:
+            severity: critical
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "High label storage write failure rate"
+            description: "{{ $value | humanize }} storage write failures in last 5 minutes"
+            runbook_url: "https://wiki.example.com/labeler-service/storage-failures"
+
+        # Service Health Alerts
+        - alert: LabelerServiceDown
+          expr: up{job="labeler-ground-truth-ingest-service"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "Labeler service is down"
+            description: "Labeler service has been down for 5 minutes"
+            runbook_url: "https://wiki.example.com/labeler-service/service-down"
+
+        - alert: LabelerServiceHighMemory
+          expr: container_memory_usage_bytes{pod=~"labeler-ground-truth-ingest-service.*"} / 1024 / 1024 / 1024 > 1
+          for: 10m
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "Labeler service memory usage is high"
+            description: "Memory usage is {{ $value | humanize }}GB. Expected: <1GB"
+            runbook_url: "https://wiki.example.com/labeler-service/high-memory"
+
+        - alert: LabelerServiceHighCPU
+          expr: rate(container_cpu_usage_seconds_total{pod=~"labeler-ground-truth-ingest-service.*"}[5m]) > 0.8
+          for: 10m
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "Labeler service CPU usage is high"
+            description: "CPU usage is {{ $value | humanizePercentage }}. Expected: <80%"
+            runbook_url: "https://wiki.example.com/labeler-service/high-cpu"
+
+        # Kafka Producer Alerts
+        - alert: LabelerKafkaProducerErrors
+          expr: increase(kafka_producer_errors_total{client_id="labeler-ground-truth-ingest-service"}[5m]) > 10
+          for: 10m
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "High Kafka producer error rate"
+            description: "{{ $value | humanize }} Kafka producer errors in last 5 minutes"
+            runbook_url: "https://wiki.example.com/labeler-service/kafka-errors"
+
+        # Database Connection Alerts
+        - alert: LabelerDatabaseConnectionPoolExhausted
+          expr: pg_stat_activity_count{datname="sentiment"} > 25
+          for: 5m
+          labels:
+            severity: critical
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "Database connection pool is exhausted"
+            description: "{{ $value | humanize }} active connections. Expected: <25"
+            runbook_url: "https://wiki.example.com/labeler-service/db-connections"
+
+        # Drift Detection Alerts
+        - alert: LabelDistributionDrift
+          expr: label_drift_score > 0.5
+          for: 30m
+          labels:
+            severity: warning
+            service: labeler-ground-truth-ingest-service
+          annotations:
+            summary: "Label distribution drift detected"
+            description: "Drift score is {{ $value | humanize }}. Possible data quality issue"
+            runbook_url: "https://wiki.example.com/labeler-service/drift-detection"
+

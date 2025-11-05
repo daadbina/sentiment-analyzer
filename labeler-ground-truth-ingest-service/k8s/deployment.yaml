@@ -1,0 +1,124 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: labeler-ground-truth-ingest-service
+  namespace: sentiment-analyzer
+  labels:
+    app: labeler-ground-truth-ingest-service
+    version: v1.0.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: labeler-ground-truth-ingest-service
+  template:
+    metadata:
+      labels:
+        app: labeler-ground-truth-ingest-service
+        version: v1.0.0
+    spec:
+      serviceAccountName: labeler-ground-truth-ingest-service
+      containers:
+      - name: labeler-ground-truth-ingest-service
+        image: sentiment-analyzer/labeler-ground-truth-ingest-service:v1.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: metrics
+          containerPort: 9107
+          protocol: TCP
+        env:
+        - name: KAFKA_BROKERS
+          valueFrom:
+            configMapKeyRef:
+              name: labeler-config
+              key: kafka_brokers
+        - name: SCHEMA_REGISTRY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: labeler-config
+              key: schema_registry_url
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: labeler-config
+              key: postgres_host
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: labeler-config
+              key: postgres_port
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: labeler-secrets
+              key: postgres_user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: labeler-secrets
+              key: postgres_password
+        - name: ACLED_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: labeler-secrets
+              key: acled_api_key
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: labeler-config
+              key: log_level
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: metrics
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - labeler-ground-truth-ingest-service
+              topologyKey: kubernetes.io/hostname
+

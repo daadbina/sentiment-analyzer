@@ -1,0 +1,74 @@
+{
+  "type": "record",
+  "name": "CoinGeckoLabel",
+  "namespace": "com.sentiment.labeler",
+  "doc": "CoinGecko financial label",
+  "fields": [
+    {
+      "name": "timestamp",
+      "type": "string",
+      "doc": "Price timestamp (ISO 8601)"
+    },
+    {
+      "name": "open",
+      "type": "double",
+      "doc": "Opening price"
+    },
+    {
+      "name": "close",
+      "type": "double",
+      "doc": "Closing price"
+    },
+    {
+      "name": "high",
+      "type": "double",
+      "doc": "High price"
+    },
+    {
+      "name": "low",
+      "type": "double",
+      "doc": "Low price"
+    },
+    {
+      "name": "volume",
+      "type": "double",
+      "doc": "Trading volume"
+    },
+    {
+      "name": "change_pct_10h",
+      "type": "double",
+      "doc": "10-hour price change percentage"
+    },
+    {
+      "name": "label_spike",
+      "type": "int",
+      "doc": "Binary label (0/1) for significant spike"
+    },
+    {
+      "name": "volatility_score",
+      "type": "double",
+      "doc": "Volatility metric (0.0-1.0)"
+    },
+    {
+      "name": "confidence",
+      "type": "double",
+      "doc": "Confidence score (0.0-1.0)"
+    },
+    {
+      "name": "source_url",
+      "type": "string",
+      "doc": "Source URL from CoinGecko"
+    },
+    {
+      "name": "fetched_at",
+      "type": "string",
+      "doc": "Fetch timestamp (ISO 8601)"
+    },
+    {
+      "name": "trace_id",
+      "type": "string",
+      "doc": "Distributed trace ID"
+    }
+  ]
+}
+

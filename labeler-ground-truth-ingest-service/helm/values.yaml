@@ -1,0 +1,113 @@
+replicaCount: 2
+
+image:
+  repository: sentiment-analyzer/labeler-ground-truth-ingest-service
+  pullPolicy: IfNotPresent
+  tag: "v1.0.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+    - ALL
+
+service:
+  type: ClusterIP
+  port: 9107
+  targetPort: 9107
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - labeler-ground-truth-ingest-service
+        topologyKey: kubernetes.io/hostname
+
+config:
+  kafka:
+    brokers: "154.53.166.231:9092"
+    schemaRegistryUrl: "http://154.53.166.231:8081"
+  postgresql:
+    host: "154.53.166.231"
+    port: 5432
+    database: "sentiment"
+  acled:
+    fetchIntervalHours: 24
+  gdelt:
+    fetchIntervalHours: 1
+  coingecko:
+    fetchIntervalMinutes: 5
+  label:
+    reconciliationThreshold: 48
+    confidenceThreshold: 0.7
+  prometheus:
+    port: 9107
+  logging:
+    logLevel: "INFO"
+  environment: "production"
+
+secrets:
+  postgresUser: "adminsentiment"
+  postgresPassword: "wp2400!!!!"
+  acledApiKey: "YOUR_ACLED_API_KEY_HERE"
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: metrics
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: metrics
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+

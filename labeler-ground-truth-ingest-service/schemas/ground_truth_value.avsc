@@ -1,0 +1,103 @@
+{
+  "type": "record",
+  "name": "GroundTruthValue",
+  "namespace": "com.sentiment.labeler",
+  "doc": "Ground truth label for semantic groups",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "doc": "Unique event identifier"
+    },
+    {
+      "name": "group_id",
+      "type": "string",
+      "doc": "Semantic group identifier"
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "doc": "Event description"
+    },
+    {
+      "name": "domain",
+      "type": {
+        "type": "enum",
+        "name": "Domain",
+        "symbols": ["conflict", "financial", "event", "other"]
+      },
+      "doc": "Event domain"
+    },
+    {
+      "name": "time_window",
+      "type": "string",
+      "doc": "Time window for label (ISO 8601 format)"
+    },
+    {
+      "name": "realization_metric",
+      "type": "string",
+      "doc": "Metric used to measure realization"
+    },
+    {
+      "name": "threshold",
+      "type": "double",
+      "doc": "Threshold for realization"
+    },
+    {
+      "name": "verified_at",
+      "type": "string",
+      "doc": "Verification timestamp (ISO 8601)"
+    },
+    {
+      "name": "label_realized",
+      "type": "boolean",
+      "doc": "Whether event was realized"
+    },
+    {
+      "name": "label_confidence",
+      "type": "double",
+      "doc": "Confidence score for label (0.0-1.0)"
+    },
+    {
+      "name": "source_confidence",
+      "type": "double",
+      "doc": "Confidence score from source (0.0-1.0)"
+    },
+    {
+      "name": "label_source",
+      "type": "string",
+      "doc": "Source of label (ACLED, GDELT, CoinGecko)"
+    },
+    {
+      "name": "label_source_license",
+      "type": "string",
+      "doc": "License of label source"
+    },
+    {
+      "name": "label_source_url",
+      "type": "string",
+      "doc": "URL of label source"
+    },
+    {
+      "name": "last_license_check",
+      "type": "string",
+      "doc": "Last license check timestamp (ISO 8601)"
+    },
+    {
+      "name": "last_updated",
+      "type": "string",
+      "doc": "Last update timestamp (ISO 8601)"
+    },
+    {
+      "name": "trace_id",
+      "type": "string",
+      "doc": "Distributed trace ID"
+    },
+    {
+      "name": "schema_version",
+      "type": "string",
+      "doc": "Schema version"
+    }
+  ]
+}
+

@@ -1,0 +1,15 @@
+apiVersion: v2
+name: labeler-ground-truth-ingest-service
+description: Helm chart for labeler-ground-truth-ingest-service
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - sentiment-analyzer
+  - labeler
+  - ground-truth
+  - ingest
+maintainers:
+  - name: Sentiment Analyzer Team
+    email: team@sentiment-analyzer.com
+

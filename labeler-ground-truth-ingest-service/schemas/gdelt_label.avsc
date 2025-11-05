@@ -1,0 +1,64 @@
+{
+  "type": "record",
+  "name": "GDELTLabel",
+  "namespace": "com.sentiment.labeler",
+  "doc": "GDELT event label",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "doc": "GDELT event identifier"
+    },
+    {
+      "name": "event_date",
+      "type": "string",
+      "doc": "Date of event (ISO 8601)"
+    },
+    {
+      "name": "event_type",
+      "type": "string",
+      "doc": "GDELT event code"
+    },
+    {
+      "name": "actor_a",
+      "type": "string",
+      "doc": "First actor involved"
+    },
+    {
+      "name": "actor_b",
+      "type": "string",
+      "doc": "Second actor involved"
+    },
+    {
+      "name": "goldstein_scale",
+      "type": "double",
+      "doc": "Sentiment score (-10 to +10)"
+    },
+    {
+      "name": "label_event_type",
+      "type": "string",
+      "doc": "Categorical event label"
+    },
+    {
+      "name": "confidence",
+      "type": "double",
+      "doc": "Confidence score (0.0-1.0)"
+    },
+    {
+      "name": "source_url",
+      "type": "string",
+      "doc": "Source URL from GDELT"
+    },
+    {
+      "name": "fetched_at",
+      "type": "string",
+      "doc": "Fetch timestamp (ISO 8601)"
+    },
+    {
+      "name": "trace_id",
+      "type": "string",
+      "doc": "Distributed trace ID"
+    }
+  ]
+}
+

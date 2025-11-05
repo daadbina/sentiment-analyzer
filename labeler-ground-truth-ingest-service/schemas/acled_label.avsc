@@ -1,0 +1,59 @@
+{
+  "type": "record",
+  "name": "ACLEDLabel",
+  "namespace": "com.sentiment.labeler",
+  "doc": "ACLED conflict event label",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "doc": "ACLED event identifier"
+    },
+    {
+      "name": "event_date",
+      "type": "string",
+      "doc": "Date of conflict event (ISO 8601)"
+    },
+    {
+      "name": "country",
+      "type": "string",
+      "doc": "Country where conflict occurred"
+    },
+    {
+      "name": "event_type",
+      "type": "string",
+      "doc": "Type of conflict (protests, violence, etc.)"
+    },
+    {
+      "name": "fatalities",
+      "type": "int",
+      "doc": "Number of fatalities"
+    },
+    {
+      "name": "label_conflict",
+      "type": "int",
+      "doc": "Binary label (0/1) for conflict"
+    },
+    {
+      "name": "confidence",
+      "type": "double",
+      "doc": "Confidence score (0.0-1.0)"
+    },
+    {
+      "name": "source_url",
+      "type": "string",
+      "doc": "Source URL from ACLED"
+    },
+    {
+      "name": "fetched_at",
+      "type": "string",
+      "doc": "Fetch timestamp (ISO 8601)"
+    },
+    {
+      "name": "trace_id",
+      "type": "string",
+      "doc": "Distributed trace ID"
+    }
+  ]
+}
+

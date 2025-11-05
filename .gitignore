@@ -68,7 +68,7 @@ k8s/secrets/
 
 # Augment rules (but allow GIT.md)
 .augment/rules/
-
+.augment/rules/GIT.md
 
 # Ignore ALL markdown files EXCEPT CHANGELOG, README, TODO, and INTEGRATION
 *.md
@@ -94,3 +94,6 @@ yarn-error.log
 *.swo
 *~
 
+# Development scripts
+development
+development/

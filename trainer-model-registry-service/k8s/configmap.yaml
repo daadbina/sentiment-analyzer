@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trainer-model-registry-config
+  namespace: sentiment-analyzer
+  labels:
+    app: trainer-model-registry
+data:
+  # Service Configuration
+  SERVICE_NAME: "trainer-model-registry"
+  SERVICE_PORT: "8000"
+  PROMETHEUS_PORT: "9108"
+  LOG_LEVEL: "INFO"
+  ENVIRONMENT: "production"
+
+  # Kafka Configuration
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_CONSUMER_GROUP: "trainer-model-registry-group"
+  KAFKA_CONSUMER_TOPICS: "labeled_groups"
+  KAFKA_PRODUCER_TOPIC: "model_trained"
+  KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+  KAFKA_SECURITY_PROTOCOL: "PLAINTEXT"
+  KAFKA_SASL_MECHANISM: "PLAIN"
+
+  # Feast Configuration
+  FEAST_REGISTRY_PATH: "/feast/registry.db"
+  FEAST_REPO_PATH: "/feast"
+  FEAST_OFFLINE_STORE_TYPE: "deltalake"
+  FEAST_ONLINE_STORE_TYPE: "redis"
+
+  # MLflow Configuration
+  MLFLOW_TRACKING_URI: "http://mlflow:5000"
+  MLFLOW_ARTIFACT_STORE: "s3://sentiment-analyzer/mlflow"
+  MLFLOW_BACKEND_STORE_URI: "postgresql://mlflow:mlflow@postgres:5432/mlflow"
+
+  # PostgreSQL Configuration
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DATABASE: "sentiment"
+  POSTGRES_POOL_SIZE: "10"
+  POSTGRES_MAX_OVERFLOW: "20"
+  POSTGRES_POOL_TIMEOUT: "30"
+
+  # S3 Configuration
+  S3_BUCKET: "sentiment-analyzer-models"
+  S3_REGION: "us-east-1"
+  S3_ENDPOINT_URL: ""
+  S3_USE_SSL: "true"
+
+  # Redis Configuration
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_POOL_SIZE: "10"
+
+  # Training Configuration
+  TRAINING_WINDOW_MONTHS: "18"
+  TEST_SET_SIZE: "0.2"
+  VALIDATION_SET_SIZE: "0.1"
+  RANDOM_STATE: "42"
+
+  # XGBoost Configuration
+  XGBOOST_MAX_DEPTH: "6"
+  XGBOOST_LEARNING_RATE: "0.1"
+  XGBOOST_N_ESTIMATORS: "100"
+  XGBOOST_SUBSAMPLE: "0.8"
+  XGBOOST_COLSAMPLE_BYTREE: "0.8"
+  XGBOOST_MIN_CHILD_WEIGHT: "1"
+  XGBOOST_GAMMA: "0"
+  XGBOOST_REG_ALPHA: "0"
+  XGBOOST_REG_LAMBDA: "1"
+
+  # Logistic Regression Configuration
+  LOGISTIC_REGRESSION_C: "1.0"
+  LOGISTIC_REGRESSION_MAX_ITER: "1000"
+  LOGISTIC_REGRESSION_SOLVER: "lbfgs"
+  LOGISTIC_REGRESSION_PENALTY: "l2"
+
+  # Hyperparameter Tuning Configuration
+  HYPERPARAMETER_TUNING_TRIALS: "50"
+  HYPERPARAMETER_TUNING_TIMEOUT: "3600"
+  HYPERPARAMETER_TUNING_N_JOBS: "4"
+
+  # Drift Detection Configuration
+  DRIFT_DETECTION_THRESHOLD: "0.1"
+  DRIFT_DETECTION_WINDOW_SIZE: "1000"
+
+  # Model Promotion Configuration
+  MODEL_PROMOTION_THRESHOLD_AUC: "0.75"
+  MODEL_PROMOTION_THRESHOLD_PRECISION: "0.70"
+  MODEL_PROMOTION_THRESHOLD_RECALL: "0.70"
+  MODEL_PROMOTION_THRESHOLD_F1: "0.70"
+
+  # LLM Configuration
+  LLM_MODEL: "gpt-4"
+  LLM_TEMPERATURE: "0.7"
+  LLM_MAX_TOKENS: "100"
+  LLM_TIMEOUT: "30"
+
+  # Monitoring Configuration
+  PROMETHEUS_ENABLED: "true"
+  JAEGER_ENABLED: "true"
+  JAEGER_AGENT_HOST: "jaeger"
+  JAEGER_AGENT_PORT: "6831"
+  JAEGER_SAMPLER_TYPE: "const"
+  JAEGER_SAMPLER_PARAM: "1"
+

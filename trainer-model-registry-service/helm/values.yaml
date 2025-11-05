@@ -1,0 +1,148 @@
+replicaCount: 2
+
+image:
+  repository: sentiment-analyzer/trainer-model-registry
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9108"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 8000
+  metricsPort: 9108
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: trainer-model-registry.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - trainer-model-registry
+          topologyKey: kubernetes.io/hostname
+
+livenessProbe:
+  httpGet:
+    path: /live
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+
+startupProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 0
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 30
+
+config:
+  SERVICE_NAME: "trainer-model-registry"
+  SERVICE_PORT: "8000"
+  PROMETHEUS_PORT: "9108"
+  LOG_LEVEL: "INFO"
+  ENVIRONMENT: "production"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  KAFKA_CONSUMER_GROUP: "trainer-model-registry-group"
+  KAFKA_CONSUMER_TOPICS: "labeled_groups"
+  KAFKA_PRODUCER_TOPIC: "model_trained"
+  KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+  FEAST_REGISTRY_PATH: "/feast/registry.db"
+  MLFLOW_TRACKING_URI: "http://mlflow:5000"
+  POSTGRES_HOST: "postgres"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DATABASE: "sentiment"
+  S3_BUCKET: "sentiment-analyzer-models"
+  S3_REGION: "us-east-1"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  TRAINING_WINDOW_MONTHS: "18"
+  TEST_SET_SIZE: "0.2"
+  VALIDATION_SET_SIZE: "0.1"
+  XGBOOST_MAX_DEPTH: "6"
+  XGBOOST_LEARNING_RATE: "0.1"
+  XGBOOST_N_ESTIMATORS: "100"
+  HYPERPARAMETER_TUNING_TRIALS: "50"
+  MODEL_PROMOTION_THRESHOLD_AUC: "0.75"
+  PROMETHEUS_ENABLED: "true"
+  JAEGER_ENABLED: "true"
+  JAEGER_AGENT_HOST: "jaeger"
+  JAEGER_AGENT_PORT: "6831"
+
+secrets:
+  POSTGRES_USER: "adminsentiment"
+  POSTGRES_PASSWORD: "wp2400!!!!"
+  AWS_ACCESS_KEY_ID: "CHANGE_ME"
+  AWS_SECRET_ACCESS_KEY: "CHANGE_ME"
+  OPENAI_API_KEY: "CHANGE_ME"
+

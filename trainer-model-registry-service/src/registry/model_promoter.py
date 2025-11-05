@@ -8,7 +8,7 @@ import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
 
-from src.clients.mlflow_client import MLflowClient
+from src.clients.mlflow_client import MLflowClientWrapper
 from src.config import config
 from src.exceptions import PromotionError
 from src.utils.trace import get_tracer
@@ -21,7 +21,7 @@ tracer = get_tracer(__name__)
 class ModelPromoter:
     """Manages model promotion to production."""
 
-    def __init__(self, mlflow_client: MLflowClient):
+    def __init__(self, mlflow_client: MLflowClientWrapper):
         """
         Initialize model promoter.
 

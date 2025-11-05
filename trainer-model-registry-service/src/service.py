@@ -12,7 +12,7 @@ from datetime import datetime
 from src.config import config
 from src.clients.postgres_client import PostgreSQLClient
 from src.clients.feast_client import FeastClient
-from src.clients.mlflow_client import MLflowClient
+from src.clients.mlflow_client import MLflowClientWrapper
 from src.clients.s3_client import S3Client
 from src.clients.kafka_producer import KafkaProducerClient
 from src.data.feature_retriever import FeatureRetriever
@@ -26,7 +26,7 @@ from src.evaluation.drift_detector import DriftDetector
 from src.registry.model_promoter import ModelPromoter
 from src.registry.artifact_manager import ArtifactManager
 from src.exceptions import TrainerError
-from src.utils.trace import initialize_tracing, shutdown_tracing, get_tracer
+from src.utils.trace import initialize_tracing, shutdown_tracing, get_tracer, TracingConfig
 from src.metrics import metrics
 
 logger = logging.getLogger(__name__)
@@ -67,11 +67,13 @@ class TrainerService:
                 logger.info("Starting trainer service")
 
                 # Initialize tracing
-                initialize_tracing(
+                tracing_config = TracingConfig(
                     service_name="trainer-service",
-                    jaeger_host=config.jaeger.host,
-                    jaeger_port=config.jaeger.port,
+                    jaeger_host=config.jaeger.agent_host,
+                    jaeger_port=config.jaeger.agent_port,
+                    enabled=config.jaeger.enabled,
                 )
+                initialize_tracing(tracing_config)
 
                 # Initialize clients
                 self.postgres_client = PostgreSQLClient(config.postgres)
@@ -80,7 +82,7 @@ class TrainerService:
                 self.feast_client = FeastClient(config.feast)
                 self.feast_client.connect()
 
-                self.mlflow_client = MLflowClient(config.mlflow)
+                self.mlflow_client = MLflowClientWrapper(config.mlflow)
                 self.mlflow_client.connect()
 
                 self.s3_client = S3Client(config.s3)

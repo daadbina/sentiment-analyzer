@@ -8,8 +8,8 @@ import logging
 from typing import Dict, Any, Optional, Tuple
 import pandas as pd
 import numpy as np
-from evidently.report import Report
-from evidently.metric_preset import DataDriftPreset, TargetDriftPreset
+from evidently import Report
+from evidently.legacy.metric_preset import DataDriftPreset, TargetDriftPreset
 
 from src.config import config
 from src.exceptions import DriftDetectionError

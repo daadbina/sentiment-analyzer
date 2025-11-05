@@ -11,7 +11,7 @@ from datetime import datetime
 import pickle
 
 from src.clients.s3_client import S3Client
-from src.clients.mlflow_client import MLflowClient
+from src.clients.mlflow_client import MLflowClientWrapper
 from src.models.base_model import BaseModel
 from src.config import config
 from src.exceptions import RegistrationError
@@ -25,7 +25,7 @@ tracer = get_tracer(__name__)
 class ArtifactManager:
     """Manages model artifacts."""
 
-    def __init__(self, s3_client: S3Client, mlflow_client: MLflowClient):
+    def __init__(self, s3_client: S3Client, mlflow_client: MLflowClientWrapper):
         """
         Initialize artifact manager.
 

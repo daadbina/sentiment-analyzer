@@ -6,12 +6,14 @@ using Pydantic BaseSettings. No hardcoded values are allowed.
 """
 
 from typing import Optional
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, ConfigDict
 from pydantic_settings import BaseSettings
 
 
 class FeastConfig(BaseSettings):
     """Feast feature store configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     registry_path: str = Field(
         default="/feast/registry.db",
@@ -24,13 +26,11 @@ class FeastConfig(BaseSettings):
         description="Type of feature store (local, remote, etc.)",
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class MLflowConfig(BaseSettings):
     """MLflow model registry configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     tracking_uri: str = Field(
         default="http://localhost:5000",
@@ -48,13 +48,11 @@ class MLflowConfig(BaseSettings):
         description="MLflow model registry URI",
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class S3Config(BaseSettings):
     """AWS S3 configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     bucket: str = Field(
         default="sentiment-analyzer-models",
@@ -78,13 +76,11 @@ class S3Config(BaseSettings):
         description="S3 endpoint URL (for LocalStack)",
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class PostgreSQLConfig(BaseSettings):
     """PostgreSQL database configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     host: str = Field(
         default="154.53.166.231", alias="POSTGRES_HOST", description="PostgreSQL host"
@@ -129,13 +125,11 @@ class PostgreSQLConfig(BaseSettings):
         """Generate PostgreSQL DSN."""
         return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class KafkaConfig(BaseSettings):
     """Kafka configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     bootstrap_servers: str = Field(
         default="154.53.166.231:9092",
@@ -158,13 +152,11 @@ class KafkaConfig(BaseSettings):
         description="Kafka security protocol",
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class TrainingConfig(BaseSettings):
     """Training pipeline configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     window_months: int = Field(
         default=18,
@@ -189,13 +181,11 @@ class TrainingConfig(BaseSettings):
             raise ValueError("Split size must be between 0 and 1")
         return v
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class XGBoostConfig(BaseSettings):
     """XGBoost model configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     max_depth: int = Field(
         default=6, alias="XGBOOST_MAX_DEPTH", description="Maximum tree depth"
@@ -225,13 +215,11 @@ class XGBoostConfig(BaseSettings):
         default="auc", alias="XGBOOST_EVAL_METRIC", description="Evaluation metric"
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class LogisticRegressionConfig(BaseSettings):
     """Logistic Regression model configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     C: float = Field(
         default=1.0,
@@ -254,13 +242,11 @@ class LogisticRegressionConfig(BaseSettings):
         description="Maximum iterations",
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class HyperparameterTuningConfig(BaseSettings):
     """Hyperparameter tuning configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     enabled: bool = Field(
         default=True,
@@ -283,13 +269,11 @@ class HyperparameterTuningConfig(BaseSettings):
         description="Number of parallel jobs",
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class DriftDetectionConfig(BaseSettings):
     """Drift detection configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     enabled: bool = Field(
         default=True,
@@ -307,13 +291,11 @@ class DriftDetectionConfig(BaseSettings):
         description="Reference window in days",
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class ModelPromotionConfig(BaseSettings):
     """Model promotion configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     threshold_auc: float = Field(
         default=0.75,
@@ -331,13 +313,11 @@ class ModelPromotionConfig(BaseSettings):
         description="F1 threshold for promotion",
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class PrometheusConfig(BaseSettings):
     """Prometheus monitoring configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     port: int = Field(
         default=9108, alias="PROMETHEUS_PORT", description="Prometheus metrics port"
@@ -348,13 +328,11 @@ class PrometheusConfig(BaseSettings):
         description="Enable Prometheus metrics",
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class JaegerConfig(BaseSettings):
     """Jaeger tracing configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     enabled: bool = Field(
         default=True, alias="JAEGER_ENABLED", description="Enable Jaeger tracing"
@@ -374,13 +352,11 @@ class JaegerConfig(BaseSettings):
         description="Jaeger sampler parameter",
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class ServiceConfig(BaseSettings):
     """Service configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     name: str = Field(
         default="trainer-model-registry-service",
@@ -399,13 +375,11 @@ class ServiceConfig(BaseSettings):
     )
     debug: bool = Field(default=False, alias="DEBUG", description="Debug mode")
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class LLMConfig(BaseSettings):
     """LLM configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     api_key: str = Field(
         default="sk-your-api-key-here",
@@ -424,13 +398,11 @@ class LLMConfig(BaseSettings):
         description="Maximum tokens for LLM response",
     )
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
 
 class Config(BaseSettings):
     """Main configuration class aggregating all sub-configs."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
     feast: FeastConfig = FeastConfig()
     mlflow: MLflowConfig = MLflowConfig()
@@ -447,10 +419,6 @@ class Config(BaseSettings):
     jaeger: JaegerConfig = JaegerConfig()
     service: ServiceConfig = ServiceConfig()
     llm: LLMConfig = LLMConfig()
-
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 # Global config instance

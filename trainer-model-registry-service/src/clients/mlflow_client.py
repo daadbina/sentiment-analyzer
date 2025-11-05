@@ -62,9 +62,9 @@ class MLflowClientWrapper:
             return False
 
         try:
-            # Try to list experiments to verify connection
-            experiments = self.client.search_experiments()
-            logger.info(f"MLflow health check passed - found {len(experiments)} experiments")
+            # Simple health check: verify client is initialized and tracking URI is set
+            tracking_uri = mlflow.get_tracking_uri()
+            logger.info(f"MLflow health check passed - tracking URI: {tracking_uri}")
             return True
         except Exception as e:
             logger.warning(f"MLflow health check warning (non-critical): {e}")

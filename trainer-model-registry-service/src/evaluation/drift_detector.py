@@ -245,4 +245,3 @@ class DriftDetector:
             Dictionary with drift history
         """
         return self.drift_history
-

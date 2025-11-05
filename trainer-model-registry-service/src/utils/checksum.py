@@ -114,9 +114,7 @@ def compute_array_checksum(array_bytes: bytes, algorithm: str = "sha256") -> str
 
 
 def validate_file_checksum(
-    file_path: str,
-    expected_checksum: str,
-    algorithm: str = "sha256"
+    file_path: str, expected_checksum: str, algorithm: str = "sha256"
 ) -> bool:
     """
     Validate file checksum.
@@ -145,9 +143,7 @@ def validate_file_checksum(
 
 
 def validate_model_checksum(
-    model_path: str,
-    expected_checksum: str,
-    algorithm: str = "sha256"
+    model_path: str, expected_checksum: str, algorithm: str = "sha256"
 ) -> bool:
     """
     Validate model checksum.
@@ -167,9 +163,7 @@ def validate_model_checksum(
 
 
 def validate_data_checksum(
-    data: dict,
-    expected_checksum: str,
-    algorithm: str = "sha256"
+    data: dict, expected_checksum: str, algorithm: str = "sha256"
 ) -> bool:
     """
     Validate data checksum.
@@ -195,10 +189,7 @@ def validate_data_checksum(
 
 
 def generate_model_metadata(
-    model_path: str,
-    model_name: str,
-    model_version: str,
-    algorithm: str = "sha256"
+    model_path: str, model_name: str, model_version: str, algorithm: str = "sha256"
 ) -> dict:
     """
     Generate metadata for a model including checksum.
@@ -230,4 +221,3 @@ def generate_model_metadata(
         "file_size": file_size,
         "file_path": str(model_path),
     }
-

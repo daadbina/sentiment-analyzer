@@ -242,4 +242,3 @@ class ExternalServiceError(TrainerError):
             self.details["service_name"] = service_name
         if status_code:
             self.details["status_code"] = status_code
-

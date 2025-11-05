@@ -123,7 +123,9 @@ class MLflowClientWrapper:
         try:
             experiment = self.client.get_experiment_by_name(name)
             if experiment:
-                logger.debug(f"Found experiment: {name} (ID: {experiment.experiment_id})")
+                logger.debug(
+                    f"Found experiment: {name} (ID: {experiment.experiment_id})"
+                )
                 return experiment.experiment_id
             return None
         except Exception as e:
@@ -227,7 +229,9 @@ class MLflowClientWrapper:
 
         try:
             model_version = mlflow.register_model(model_uri, model_name)
-            logger.info(f"Registered model: {model_name} (version: {model_version.version})")
+            logger.info(
+                f"Registered model: {model_name} (version: {model_version.version})"
+            )
 
             if tags:
                 self.client.set_model_version_tag(
@@ -267,9 +271,7 @@ class MLflowClientWrapper:
             )
 
         try:
-            self.client.transition_model_version_stage(
-                model_name, version, stage
-            )
+            self.client.transition_model_version_stage(model_name, version, stage)
             logger.info(f"Transitioned {model_name} v{version} to {stage}")
         except Exception as e:
             logger.error(f"Failed to transition model stage: {e}")
@@ -356,4 +358,3 @@ class MLflowClientWrapper:
                 service_name="MLflow",
                 details={"model_name": model_name},
             )
-

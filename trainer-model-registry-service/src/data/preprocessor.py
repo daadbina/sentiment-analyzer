@@ -61,7 +61,9 @@ class DataPreprocessor:
             span.set_attribute("num_features", X.shape[1])
 
             try:
-                logger.info(f"Preprocessing {X.shape[0]} rows with {X.shape[1]} features")
+                logger.info(
+                    f"Preprocessing {X.shape[0]} rows with {X.shape[1]} features"
+                )
 
                 # Handle missing values
                 X = self._handle_missing_values(X, fit=fit)
@@ -103,7 +105,9 @@ class DataPreprocessor:
                 null_counts = X.isnull().sum()
                 if null_counts.sum() > 0:
                     logger.info(f"Found {null_counts.sum()} missing values")
-                    logger.debug(f"Missing values per column: {null_counts[null_counts > 0]}")
+                    logger.debug(
+                        f"Missing values per column: {null_counts[null_counts > 0]}"
+                    )
 
                     if fit:
                         self.imputer = SimpleImputer(strategy="mean")
@@ -199,7 +203,9 @@ class DataPreprocessor:
                 constant_features = variances[variances == 0].index.tolist()
 
                 if constant_features:
-                    logger.warning(f"Removing {len(constant_features)} constant features")
+                    logger.warning(
+                        f"Removing {len(constant_features)} constant features"
+                    )
                     X = X.drop(columns=constant_features)
 
                 logger.debug(f"Remaining features: {X.shape[1]}")
@@ -241,7 +247,9 @@ class DataPreprocessor:
                 if fit:
                     self.feature_selector = SelectKBest(f_classif, k=min(k, X.shape[1]))
                     X_selected = self.feature_selector.fit_transform(X, y)
-                    selected_features = X.columns[self.feature_selector.get_support()].tolist()
+                    selected_features = X.columns[
+                        self.feature_selector.get_support()
+                    ].tolist()
                 else:
                     if self.feature_selector is None:
                         raise DataPreparationError(
@@ -249,7 +257,9 @@ class DataPreprocessor:
                             stage="feature_selection",
                         )
                     X_selected = self.feature_selector.transform(X)
-                    selected_features = X.columns[self.feature_selector.get_support()].tolist()
+                    selected_features = X.columns[
+                        self.feature_selector.get_support()
+                    ].tolist()
 
                 X = pd.DataFrame(X_selected, columns=selected_features)
                 logger.info(f"Selected {len(selected_features)} features")
@@ -264,4 +274,3 @@ class DataPreprocessor:
                     stage="feature_selection",
                     details={"k": k},
                 )
-

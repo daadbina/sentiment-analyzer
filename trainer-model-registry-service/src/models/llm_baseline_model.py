@@ -69,9 +69,7 @@ class LLMBaselineModel(BaseModel):
             try:
                 self.validate_input(X_train, y_train)
 
-                logger.info(
-                    f"Setting up LLM baseline with {len(X_train)} samples"
-                )
+                logger.info(f"Setting up LLM baseline with {len(X_train)} samples")
 
                 # LLM doesn't need training, just validation
                 self.is_trained = True
@@ -266,7 +264,7 @@ Answer:"""
             )
 
             content = response.choices[0].message.content.strip()
-            
+
             # Parse response
             sentiment = "positive" if "positive" in content.lower() else "negative"
             confidence = 0.8  # Default confidence
@@ -287,4 +285,3 @@ Answer:"""
                 f"LLM classification failed: {e}",
                 service_name="OpenAI",
             )
-

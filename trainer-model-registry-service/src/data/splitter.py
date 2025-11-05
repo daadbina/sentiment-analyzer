@@ -224,7 +224,11 @@ class DataSplitter:
                     )
 
                 # Check label alignment
-                if len(y_train) != len(X_train) or len(y_val) != len(X_val) or len(y_test) != len(X_test):
+                if (
+                    len(y_train) != len(X_train)
+                    or len(y_val) != len(X_val)
+                    or len(y_test) != len(X_test)
+                ):
                     raise DataPreparationError(
                         "Label-feature mismatch",
                         stage="split_validation",
@@ -239,4 +243,3 @@ class DataSplitter:
                     f"Split validation failed: {e}",
                     stage="split_validation",
                 )
-

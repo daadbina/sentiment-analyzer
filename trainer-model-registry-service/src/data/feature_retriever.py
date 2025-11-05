@@ -65,10 +65,12 @@ class FeatureRetriever:
                 )
 
                 # Create entity dataframe with timestamps
-                entity_df = pd.DataFrame({
-                    "article_id": entity_ids,
-                    "timestamp": [end_date] * len(entity_ids),
-                })
+                entity_df = pd.DataFrame(
+                    {
+                        "article_id": entity_ids,
+                        "timestamp": [end_date] * len(entity_ids),
+                    }
+                )
 
                 # Get features from Feast
                 feature_df = self.feast_client.get_features(
@@ -149,9 +151,7 @@ class FeatureRetriever:
                     logger.warning(f"Found null values: {null_counts[null_counts > 0]}")
 
                 # Check data types
-                numeric_cols = feature_df.select_dtypes(
-                    include=["number"]
-                ).columns
+                numeric_cols = feature_df.select_dtypes(include=["number"]).columns
                 logger.debug(f"Numeric columns: {list(numeric_cols)}")
 
                 logger.info("Feature validation passed")
@@ -198,4 +198,3 @@ class FeatureRetriever:
                     f"Failed to compute feature statistics: {e}",
                     stage="feature_statistics",
                 )
-

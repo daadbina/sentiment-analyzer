@@ -75,9 +75,7 @@ class XGBoostModel(BaseModel):
             try:
                 self.validate_input(X_train, y_train)
 
-                logger.info(
-                    f"Training XGBoost model with {len(X_train)} samples"
-                )
+                logger.info(f"Training XGBoost model with {len(X_train)} samples")
 
                 # Prepare evaluation set
                 eval_set = None
@@ -245,4 +243,3 @@ class XGBoostModel(BaseModel):
         """
         self.model.set_params(**params)
         logger.info(f"Updated model parameters: {params}")
-

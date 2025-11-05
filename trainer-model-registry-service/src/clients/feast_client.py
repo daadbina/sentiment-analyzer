@@ -95,7 +95,9 @@ class FeastClient:
             )
 
         try:
-            logger.info(f"Retrieving {len(features)} features for {len(entity_df)} entities")
+            logger.info(
+                f"Retrieving {len(features)} features for {len(entity_df)} entities"
+            )
 
             # Get historical features
             feature_df = self.store.get_historical_features(
@@ -255,4 +257,3 @@ class FeastClient:
                 service_name="Feast",
                 details={"feature_view": feature_view_name},
             )
-

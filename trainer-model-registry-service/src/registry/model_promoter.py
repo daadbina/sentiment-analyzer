@@ -60,9 +60,7 @@ class ModelPromoter:
             span.set_attribute("target_stage", stage)
 
             try:
-                logger.info(
-                    f"Promoting {model_name} v{model_version} to {stage}"
-                )
+                logger.info(f"Promoting {model_name} v{model_version} to {stage}")
 
                 # Validate metrics
                 if not self._validate_metrics(metrics_dict, stage):
@@ -185,9 +183,7 @@ class ModelPromoter:
                 recall = metrics_dict.get("recall", 0)
 
                 if auc < auc_threshold:
-                    logger.warning(
-                        f"AUC {auc} below threshold {auc_threshold}"
-                    )
+                    logger.warning(f"AUC {auc} below threshold {auc_threshold}")
                     return False
 
                 if precision < precision_threshold:
@@ -253,4 +249,3 @@ class ModelPromoter:
                     f"Failed to get production model: {e}",
                     model_name=model_name,
                 )
-

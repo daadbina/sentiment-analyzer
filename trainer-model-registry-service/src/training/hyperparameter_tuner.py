@@ -74,12 +74,14 @@ class HyperparameterTuner:
 
                     # Create and train model
                     model = XGBoostModel()
-                    model.set_model_params({
-                        "max_depth": max_depth,
-                        "learning_rate": learning_rate,
-                        "subsample": subsample,
-                        "colsample_bytree": colsample_bytree,
-                    })
+                    model.set_model_params(
+                        {
+                            "max_depth": max_depth,
+                            "learning_rate": learning_rate,
+                            "subsample": subsample,
+                            "colsample_bytree": colsample_bytree,
+                        }
+                    )
 
                     model.train(X_train, y_train, X_val, y_val)
 
@@ -234,4 +236,3 @@ class HyperparameterTuner:
             Best score or None
         """
         return self.best_scores.get(model_type)
-

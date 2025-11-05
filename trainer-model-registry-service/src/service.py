@@ -210,9 +210,7 @@ class TrainerService:
                 feature_drift = self.drift_detector.detect_feature_drift(
                     X_train, X_test
                 )
-                target_drift = self.drift_detector.detect_target_drift(
-                    y_train, y_test
-                )
+                target_drift = self.drift_detector.detect_target_drift(y_train, y_test)
 
                 result = {
                     "timestamp": datetime.now().isoformat(),
@@ -287,4 +285,3 @@ class TrainerService:
             except Exception as e:
                 logger.error(f"Health check failed: {e}")
                 raise TrainerError(f"Health check failed: {e}")
-

@@ -40,7 +40,9 @@ class LogisticRegressionModel(BaseModel):
         )
 
         self.model = LogisticRegression(**model_config)
-        logger.info("Logistic Regression model initialized with config: %s", model_config)
+        logger.info(
+            "Logistic Regression model initialized with config: %s", model_config
+        )
 
     def train(
         self,
@@ -229,4 +231,3 @@ class LogisticRegressionModel(BaseModel):
         """
         self.model.set_params(**params)
         logger.info(f"Updated model parameters: {params}")
-

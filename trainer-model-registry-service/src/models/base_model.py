@@ -184,6 +184,7 @@ class BaseModel(ABC):
                     )
 
                 import pickle
+
                 with open(path, "wb") as f:
                     pickle.dump(self.model, f)
 
@@ -209,6 +210,7 @@ class BaseModel(ABC):
         with tracer.start_as_current_span("load_model"):
             try:
                 import pickle
+
                 with open(path, "rb") as f:
                     self.model = pickle.load(f)
 
@@ -221,4 +223,3 @@ class BaseModel(ABC):
                     f"Failed to load model: {e}",
                     model_name=self.model_name,
                 )
-

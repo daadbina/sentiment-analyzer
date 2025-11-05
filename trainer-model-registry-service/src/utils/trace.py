@@ -64,15 +64,15 @@ def initialize_tracing(config: TracingConfig) -> Optional[trace.Tracer]:
         )
 
         # Create resource
-        resource = Resource(attributes={
-            SERVICE_NAME: config.service_name,
-        })
+        resource = Resource(
+            attributes={
+                SERVICE_NAME: config.service_name,
+            }
+        )
 
         # Create tracer provider
         tracer_provider = TracerProvider(resource=resource)
-        tracer_provider.add_span_processor(
-            BatchSpanProcessor(jaeger_exporter)
-        )
+        tracer_provider.add_span_processor(BatchSpanProcessor(jaeger_exporter))
 
         # Set global tracer provider
         trace.set_tracer_provider(tracer_provider)
@@ -150,4 +150,3 @@ def shutdown_tracing() -> None:
         logger.info("Tracing shutdown complete")
     except Exception as e:
         logger.error(f"Error during tracing shutdown: {e}")
-

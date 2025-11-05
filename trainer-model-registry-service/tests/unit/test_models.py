@@ -24,13 +24,17 @@ class TestBaseModel:
 
     def test_base_model_requires_train(self):
         """Test that BaseModel requires train method."""
+
         class IncompleteModel(BaseModel):
             def predict(self, X):
                 pass
+
             def predict_proba(self, X):
                 pass
+
             def get_feature_importance(self):
                 pass
+
             def serialize(self):
                 pass
 
@@ -61,9 +65,9 @@ class TestXGBoostModel:
         """Test XGBoost model training."""
         X_train, y_train, X_val, y_val = sample_data
         model = XGBoostModel()
-        
+
         model.train(X_train, y_train, X_val, y_val)
-        
+
         assert model.is_trained is True
 
     def test_xgboost_model_predict(self, sample_data):
@@ -71,9 +75,9 @@ class TestXGBoostModel:
         X_train, y_train, X_val, y_val = sample_data
         model = XGBoostModel()
         model.train(X_train, y_train, X_val, y_val)
-        
+
         predictions = model.predict(X_val)
-        
+
         assert predictions is not None
         assert len(predictions) == len(X_val)
         assert all(p in [0, 1] for p in predictions)
@@ -83,9 +87,9 @@ class TestXGBoostModel:
         X_train, y_train, X_val, y_val = sample_data
         model = XGBoostModel()
         model.train(X_train, y_train, X_val, y_val)
-        
+
         probas = model.predict_proba(X_val)
-        
+
         assert probas is not None
         assert probas.shape == (len(X_val), 2)
         assert np.all((probas >= 0) & (probas <= 1))
@@ -96,9 +100,9 @@ class TestXGBoostModel:
         X_train, y_train, X_val, y_val = sample_data
         model = XGBoostModel()
         model.train(X_train, y_train, X_val, y_val)
-        
+
         importance = model.get_feature_importance()
-        
+
         assert importance is not None
         assert len(importance) == X_train.shape[1]
         assert all(imp >= 0 for imp in importance)
@@ -108,9 +112,9 @@ class TestXGBoostModel:
         X_train, y_train, X_val, y_val = sample_data
         model = XGBoostModel()
         model.train(X_train, y_train, X_val, y_val)
-        
+
         serialized = model.serialize()
-        
+
         assert serialized is not None
         assert isinstance(serialized, bytes)
 
@@ -138,9 +142,9 @@ class TestLogisticRegressionModel:
         """Test Logistic Regression model training."""
         X_train, y_train, X_val, y_val = sample_data
         model = LogisticRegressionModel()
-        
+
         model.train(X_train, y_train, X_val, y_val)
-        
+
         assert model.is_trained is True
 
     def test_logistic_regression_model_predict(self, sample_data):
@@ -148,9 +152,9 @@ class TestLogisticRegressionModel:
         X_train, y_train, X_val, y_val = sample_data
         model = LogisticRegressionModel()
         model.train(X_train, y_train, X_val, y_val)
-        
+
         predictions = model.predict(X_val)
-        
+
         assert predictions is not None
         assert len(predictions) == len(X_val)
         assert all(p in [0, 1] for p in predictions)
@@ -160,9 +164,9 @@ class TestLogisticRegressionModel:
         X_train, y_train, X_val, y_val = sample_data
         model = LogisticRegressionModel()
         model.train(X_train, y_train, X_val, y_val)
-        
+
         probas = model.predict_proba(X_val)
-        
+
         assert probas is not None
         assert probas.shape == (len(X_val), 2)
         assert np.all((probas >= 0) & (probas <= 1))
@@ -173,9 +177,9 @@ class TestLogisticRegressionModel:
         X_train, y_train, X_val, y_val = sample_data
         model = LogisticRegressionModel()
         model.train(X_train, y_train, X_val, y_val)
-        
+
         coefficients = model.get_feature_importance()
-        
+
         assert coefficients is not None
         assert len(coefficients) == X_train.shape[1]
 
@@ -184,9 +188,9 @@ class TestLogisticRegressionModel:
         X_train, y_train, X_val, y_val = sample_data
         model = LogisticRegressionModel()
         model.train(X_train, y_train, X_val, y_val)
-        
+
         serialized = model.serialize()
-        
+
         assert serialized is not None
         assert isinstance(serialized, bytes)
 
@@ -209,45 +213,45 @@ class TestLLMBaselineModel:
         assert model is not None
         assert model.is_trained is False
 
-    @patch('src.models.llm_baseline_model.openai.ChatCompletion.create')
+    @patch("src.models.llm_baseline_model.openai.ChatCompletion.create")
     def test_llm_baseline_model_train(self, mock_openai, sample_data):
         """Test LLM baseline model training."""
         X_train, y_train, X_val, y_val = sample_data
         model = LLMBaselineModel()
-        
+
         model.train(X_train, y_train, X_val, y_val)
-        
+
         assert model.is_trained is True
 
-    @patch('src.models.llm_baseline_model.openai.ChatCompletion.create')
+    @patch("src.models.llm_baseline_model.openai.ChatCompletion.create")
     def test_llm_baseline_model_predict(self, mock_openai, sample_data):
         """Test LLM baseline model prediction."""
         mock_openai.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content='{"sentiment": 1}'))]
         )
-        
+
         X_train, y_train, X_val, y_val = sample_data
         model = LLMBaselineModel()
         model.train(X_train, y_train, X_val, y_val)
-        
+
         predictions = model.predict(X_val)
-        
+
         assert predictions is not None
         assert len(predictions) == len(X_val)
 
-    @patch('src.models.llm_baseline_model.openai.ChatCompletion.create')
+    @patch("src.models.llm_baseline_model.openai.ChatCompletion.create")
     def test_llm_baseline_model_predict_proba(self, mock_openai, sample_data):
         """Test LLM baseline model probability prediction."""
         mock_openai.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content='{"confidence": 0.8}'))]
         )
-        
+
         X_train, y_train, X_val, y_val = sample_data
         model = LLMBaselineModel()
         model.train(X_train, y_train, X_val, y_val)
-        
+
         probas = model.predict_proba(X_val)
-        
+
         assert probas is not None
         assert probas.shape[0] == len(X_val)
 
@@ -256,9 +260,8 @@ class TestLLMBaselineModel:
         X_train, y_train, X_val, y_val = sample_data
         model = LLMBaselineModel()
         model.train(X_train, y_train, X_val, y_val)
-        
+
         serialized = model.serialize()
-        
+
         assert serialized is not None
         assert isinstance(serialized, bytes)
-

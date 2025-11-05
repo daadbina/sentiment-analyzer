@@ -26,11 +26,7 @@ class TestDataSplitter:
 
     def test_splitter_initialization(self):
         """Test splitter initialization."""
-        splitter = DataSplitter(
-            test_size=0.2,
-            validation_size=0.1,
-            random_seed=42
-        )
+        splitter = DataSplitter(test_size=0.2, validation_size=0.1, random_seed=42)
         assert splitter is not None
         assert splitter.test_size == 0.2
         assert splitter.validation_size == 0.1
@@ -39,11 +35,11 @@ class TestDataSplitter:
         """Test temporal splitting."""
         X, y, timestamps = sample_data
         splitter = DataSplitter(test_size=0.2, validation_size=0.1)
-        
-        (X_train, y_train), (X_val, y_val), (X_test, y_test) = (
-            splitter.split_temporal(X, y, timestamps)
+
+        (X_train, y_train), (X_val, y_val), (X_test, y_test) = splitter.split_temporal(
+            X, y, timestamps
         )
-        
+
         assert len(X_train) + len(X_val) + len(X_test) == len(X)
         assert len(X_train) > len(X_val)
         assert len(X_train) > len(X_test)
@@ -52,11 +48,11 @@ class TestDataSplitter:
         """Test stratified splitting."""
         X, y, _ = sample_data
         splitter = DataSplitter(test_size=0.2, validation_size=0.1)
-        
+
         (X_train, y_train), (X_val, y_val), (X_test, y_test) = (
             splitter.split_stratified(X, y)
         )
-        
+
         assert len(X_train) + len(X_val) + len(X_test) == len(X)
         # Check stratification
         train_ratio = y_train.sum() / len(y_train)
@@ -67,16 +63,16 @@ class TestDataSplitter:
         """Test that splitting prevents data leakage."""
         X, y, timestamps = sample_data
         splitter = DataSplitter(test_size=0.2, validation_size=0.1)
-        
-        (X_train, y_train), (X_val, y_val), (X_test, y_test) = (
-            splitter.split_temporal(X, y, timestamps)
+
+        (X_train, y_train), (X_val, y_val), (X_test, y_test) = splitter.split_temporal(
+            X, y, timestamps
         )
-        
+
         # Ensure no overlap
         train_indices = set(range(len(X_train)))
         val_indices = set(range(len(X_train), len(X_train) + len(X_val)))
         test_indices = set(range(len(X_train) + len(X_val), len(X)))
-        
+
         assert len(train_indices & val_indices) == 0
         assert len(train_indices & test_indices) == 0
         assert len(val_indices & test_indices) == 0
@@ -104,9 +100,9 @@ class TestTrainer:
         """Test training XGBoost model."""
         X_train, y_train, X_val, y_val = sample_data
         trainer = Trainer()
-        
+
         model = trainer.train_xgboost(X_train, y_train, X_val, y_val)
-        
+
         assert model is not None
         assert model.is_trained is True
 
@@ -114,33 +110,33 @@ class TestTrainer:
         """Test training Logistic Regression model."""
         X_train, y_train, X_val, y_val = sample_data
         trainer = Trainer()
-        
+
         model = trainer.train_logistic_regression(X_train, y_train, X_val, y_val)
-        
+
         assert model is not None
         assert model.is_trained is True
 
-    @patch('src.training.trainer.LLMBaselineModel')
+    @patch("src.training.trainer.LLMBaselineModel")
     def test_trainer_train_llm_baseline(self, mock_llm, sample_data):
         """Test training LLM baseline model."""
         X_train, y_train, X_val, y_val = sample_data
         trainer = Trainer()
-        
+
         mock_model = MagicMock()
         mock_model.is_trained = True
         mock_llm.return_value = mock_model
-        
+
         model = trainer.train_llm_baseline(X_train, y_train, X_val, y_val)
-        
+
         assert model is not None
 
     def test_trainer_train_all_models(self, sample_data):
         """Test training all models."""
         X_train, y_train, X_val, y_val = sample_data
         trainer = Trainer()
-        
+
         models = trainer.train_all_models(X_train, y_train, X_val, y_val)
-        
+
         assert models is not None
         assert len(models) >= 2  # At least XGBoost and LogReg
 
@@ -148,10 +144,10 @@ class TestTrainer:
         """Test getting best model."""
         X_train, y_train, X_val, y_val = sample_data
         trainer = Trainer()
-        
+
         models = trainer.train_all_models(X_train, y_train, X_val, y_val)
         best_model = trainer.get_best_model()
-        
+
         assert best_model is not None
 
 
@@ -177,43 +173,42 @@ class TestHyperparameterTuner:
         """Test tuning XGBoost hyperparameters."""
         X_train, y_train, X_val, y_val = sample_data
         tuner = HyperparameterTuner(n_trials=5)
-        
+
         best_params = tuner.tune_xgboost(X_train, y_train, X_val, y_val)
-        
+
         assert best_params is not None
         assert isinstance(best_params, dict)
-        assert 'max_depth' in best_params
-        assert 'learning_rate' in best_params
+        assert "max_depth" in best_params
+        assert "learning_rate" in best_params
 
     def test_tuner_tune_logistic_regression(self, sample_data):
         """Test tuning Logistic Regression hyperparameters."""
         X_train, y_train, X_val, y_val = sample_data
         tuner = HyperparameterTuner(n_trials=5)
-        
+
         best_params = tuner.tune_logistic_regression(X_train, y_train, X_val, y_val)
-        
+
         assert best_params is not None
         assert isinstance(best_params, dict)
-        assert 'C' in best_params
+        assert "C" in best_params
 
     def test_tuner_best_trial(self, sample_data):
         """Test getting best trial."""
         X_train, y_train, X_val, y_val = sample_data
         tuner = HyperparameterTuner(n_trials=5)
-        
+
         best_params = tuner.tune_xgboost(X_train, y_train, X_val, y_val)
         best_trial = tuner.get_best_trial()
-        
+
         assert best_trial is not None
 
     def test_tuner_study_history(self, sample_data):
         """Test getting study history."""
         X_train, y_train, X_val, y_val = sample_data
         tuner = HyperparameterTuner(n_trials=5)
-        
+
         best_params = tuner.tune_xgboost(X_train, y_train, X_val, y_val)
         history = tuner.get_study_history()
-        
+
         assert history is not None
         assert len(history) > 0
-

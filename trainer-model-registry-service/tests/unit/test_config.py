@@ -375,4 +375,3 @@ class TestMainConfig:
         assert config.jaeger is not None
         assert config.service is not None
         assert config.llm is not None
-

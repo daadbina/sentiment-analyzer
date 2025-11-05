@@ -58,9 +58,7 @@ class LabelRetriever:
             span.set_attribute("label_column", label_column)
 
             try:
-                logger.info(
-                    f"Retrieving labels from {start_date} to {end_date}"
-                )
+                logger.info(f"Retrieving labels from {start_date} to {end_date}")
 
                 # Query labels from PostgreSQL
                 query = """
@@ -81,7 +79,9 @@ class LabelRetriever:
                 )
 
                 if not rows:
-                    logger.warning(f"No labels found for period {start_date} to {end_date}")
+                    logger.warning(
+                        f"No labels found for period {start_date} to {end_date}"
+                    )
                     return pd.DataFrame()
 
                 # Convert to DataFrame
@@ -194,9 +194,13 @@ class LabelRetriever:
 
                 # Check sentiment values are valid
                 valid_sentiments = {"positive", "negative", "neutral"}
-                invalid_sentiments = set(label_df["sentiment"].unique()) - valid_sentiments
+                invalid_sentiments = (
+                    set(label_df["sentiment"].unique()) - valid_sentiments
+                )
                 if invalid_sentiments:
-                    logger.warning(f"Found invalid sentiment values: {invalid_sentiments}")
+                    logger.warning(
+                        f"Found invalid sentiment values: {invalid_sentiments}"
+                    )
 
                 logger.info("Label validation passed")
                 return True
@@ -225,7 +229,9 @@ class LabelRetriever:
 
                 stats = {
                     "num_labels": len(label_df),
-                    "sentiment_distribution": label_df["sentiment"].value_counts().to_dict(),
+                    "sentiment_distribution": label_df["sentiment"]
+                    .value_counts()
+                    .to_dict(),
                     "avg_confidence": label_df["confidence"].mean(),
                     "min_confidence": label_df["confidence"].min(),
                     "max_confidence": label_df["confidence"].max(),
@@ -240,4 +246,3 @@ class LabelRetriever:
                     f"Failed to compute label statistics: {e}",
                     stage="label_statistics",
                 )
-

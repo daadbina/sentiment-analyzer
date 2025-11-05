@@ -225,4 +225,3 @@ class Trainer:
                     f"Model comparison failed: {e}",
                     model_name="all",
                 )
-

@@ -284,4 +284,3 @@ class S3Client:
                 service_name="S3",
                 details={"s3_key": s3_key},
             )
-

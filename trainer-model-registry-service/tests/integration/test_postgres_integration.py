@@ -18,7 +18,7 @@ class TestPostgreSQLIntegration:
     @pytest.fixture
     def mock_asyncpg(self):
         """Create mock asyncpg."""
-        with patch('src.clients.postgres_client.asyncpg.create_pool') as mock:
+        with patch("src.clients.postgres_client.asyncpg.create_pool") as mock:
             yield mock
 
     @pytest.mark.asyncio
@@ -26,10 +26,10 @@ class TestPostgreSQLIntegration:
         """Test PostgreSQL connection."""
         mock_pool = AsyncMock()
         mock_asyncpg.return_value = mock_pool
-        
+
         client = PostgreSQLClient()
         await client.connect()
-        
+
         assert client.pool is not None
 
     @pytest.mark.asyncio
@@ -39,16 +39,16 @@ class TestPostgreSQLIntegration:
         mock_conn = AsyncMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetch.return_value = [
-            {'id': 1, 'value': 'test1'},
-            {'id': 2, 'value': 'test2'},
+            {"id": 1, "value": "test1"},
+            {"id": 2, "value": "test2"},
         ]
         mock_asyncpg.return_value = mock_pool
-        
+
         client = PostgreSQLClient()
         await client.connect()
-        
+
         result = await client.query("SELECT * FROM test")
-        
+
         assert result is not None
         assert len(result) == 2
 
@@ -60,12 +60,12 @@ class TestPostgreSQLIntegration:
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
         mock_conn.execute.return_value = None
         mock_asyncpg.return_value = mock_pool
-        
+
         client = PostgreSQLClient()
         await client.connect()
-        
+
         await client.execute("INSERT INTO test VALUES (1, 'test')")
-        
+
         mock_conn.execute.assert_called_once()
 
     @pytest.mark.asyncio
@@ -76,12 +76,12 @@ class TestPostgreSQLIntegration:
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetchval.return_value = 1
         mock_asyncpg.return_value = mock_pool
-        
+
         client = PostgreSQLClient()
         await client.connect()
-        
+
         is_healthy = await client.health_check()
-        
+
         assert is_healthy is True
 
     @pytest.mark.asyncio
@@ -89,11 +89,11 @@ class TestPostgreSQLIntegration:
         """Test PostgreSQL disconnection."""
         mock_pool = AsyncMock()
         mock_asyncpg.return_value = mock_pool
-        
+
         client = PostgreSQLClient()
         await client.connect()
         await client.disconnect()
-        
+
         mock_pool.close.assert_called_once()
 
     @pytest.mark.asyncio
@@ -103,19 +103,18 @@ class TestPostgreSQLIntegration:
         mock_conn = AsyncMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetch.return_value = [
-            {'entity_id': 1, 'label': 1, 'timestamp': '2024-01-01'},
-            {'entity_id': 2, 'label': 0, 'timestamp': '2024-01-02'},
-            {'entity_id': 3, 'label': 1, 'timestamp': '2024-01-03'},
+            {"entity_id": 1, "label": 1, "timestamp": "2024-01-01"},
+            {"entity_id": 2, "label": 0, "timestamp": "2024-01-02"},
+            {"entity_id": 3, "label": 1, "timestamp": "2024-01-03"},
         ]
         mock_asyncpg.return_value = mock_pool
-        
+
         retriever = LabelRetriever()
-        
+
         labels = await retriever.retrieve_labels(
-            start_date='2024-01-01',
-            end_date='2024-12-31'
+            start_date="2024-01-01", end_date="2024-12-31"
         )
-        
+
         assert labels is not None
 
     @pytest.mark.asyncio
@@ -125,18 +124,17 @@ class TestPostgreSQLIntegration:
         mock_conn = AsyncMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetch.return_value = [
-            {'entity_id': 1, 'label': 1, 'timestamp': '2024-06-01'},
-            {'entity_id': 2, 'label': 0, 'timestamp': '2024-06-02'},
+            {"entity_id": 1, "label": 1, "timestamp": "2024-06-01"},
+            {"entity_id": 2, "label": 0, "timestamp": "2024-06-02"},
         ]
         mock_asyncpg.return_value = mock_pool
-        
+
         retriever = LabelRetriever()
-        
+
         labels = await retriever.retrieve_labels(
-            start_date='2024-01-01',
-            end_date='2024-12-31'
+            start_date="2024-01-01", end_date="2024-12-31"
         )
-        
+
         assert labels is not None
 
     @pytest.mark.asyncio
@@ -146,16 +144,16 @@ class TestPostgreSQLIntegration:
         mock_conn = AsyncMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetch.return_value = [
-            {'entity_id': 1, 'label': 1},
-            {'entity_id': 2, 'label': 0},
-            {'entity_id': 3, 'label': 1},
+            {"entity_id": 1, "label": 1},
+            {"entity_id": 2, "label": 0},
+            {"entity_id": 3, "label": 1},
         ]
         mock_asyncpg.return_value = mock_pool
-        
+
         retriever = LabelRetriever()
-        
+
         labels = await retriever.retrieve_labels()
-        
+
         # Validate labels are binary
         assert all(label in [0, 1] for label in labels)
 
@@ -164,10 +162,10 @@ class TestPostgreSQLIntegration:
         """Test connection pooling."""
         mock_pool = AsyncMock()
         mock_asyncpg.return_value = mock_pool
-        
+
         client = PostgreSQLClient()
         await client.connect()
-        
+
         # Pool should be created
         assert client.pool is not None
 
@@ -178,15 +176,15 @@ class TestPostgreSQLIntegration:
         mock_conn = AsyncMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
         mock_asyncpg.return_value = mock_pool
-        
+
         client = PostgreSQLClient()
         await client.connect()
-        
+
         # Execute should work
         await client.execute("BEGIN")
         await client.execute("INSERT INTO test VALUES (1, 'test')")
         await client.execute("COMMIT")
-        
+
         assert mock_conn.execute.call_count >= 3
 
     @pytest.mark.asyncio
@@ -197,10 +195,10 @@ class TestPostgreSQLIntegration:
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetch.side_effect = Exception("Connection error")
         mock_asyncpg.return_value = mock_pool
-        
+
         client = PostgreSQLClient()
         await client.connect()
-        
+
         with pytest.raises(Exception):
             await client.query("SELECT * FROM test")
 
@@ -211,17 +209,17 @@ class TestPostgreSQLIntegration:
         mock_conn = AsyncMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetch.return_value = [
-            {'entity_id': i, 'label': i % 2} for i in range(100)
+            {"entity_id": i, "label": i % 2} for i in range(100)
         ]
         mock_asyncpg.return_value = mock_pool
-        
+
         retriever = LabelRetriever()
-        
+
         labels = await retriever.retrieve_labels()
         stats = retriever.get_statistics(labels)
-        
+
         assert stats is not None
-        assert 'class_distribution' in stats
+        assert "class_distribution" in stats
 
     @pytest.mark.asyncio
     async def test_postgres_batch_operations(self, mock_asyncpg):
@@ -230,15 +228,14 @@ class TestPostgreSQLIntegration:
         mock_conn = AsyncMock()
         mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
         mock_conn.fetch.return_value = [
-            {'id': i, 'value': f'test_{i}'} for i in range(1000)
+            {"id": i, "value": f"test_{i}"} for i in range(1000)
         ]
         mock_asyncpg.return_value = mock_pool
-        
+
         client = PostgreSQLClient()
         await client.connect()
-        
+
         result = await client.query("SELECT * FROM test LIMIT 1000")
-        
+
         assert result is not None
         assert len(result) == 1000
-

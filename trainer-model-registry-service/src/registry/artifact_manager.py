@@ -241,4 +241,3 @@ class ArtifactManager:
             Dictionary with all artifacts
         """
         return self.artifact_registry
-

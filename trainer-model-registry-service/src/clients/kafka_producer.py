@@ -170,6 +170,7 @@ class KafkaProducerClient:
             # For now, return JSON-serialized bytes
             # In production, use proper Avro serialization with schema
             import json
+
             return json.dumps(value).encode("utf-8")
         except Exception as e:
             logger.error(f"Avro serialization failed: {e}")
@@ -225,4 +226,3 @@ class KafkaProducerClient:
         if self.producer:
             self.producer.flush()
             logger.info("Kafka producer closed")
-

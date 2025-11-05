@@ -227,7 +227,9 @@ class MetricsRegistry:
         self.model_promoted_total.labels(
             model_name=model_name, from_stage=from_stage, to_stage=to_stage
         ).inc()
-        logger.info(f"Recorded promotion of {model_name} from {from_stage} to {to_stage}")
+        logger.info(
+            f"Recorded promotion of {model_name} from {from_stage} to {to_stage}"
+        )
 
     def record_promotion_failure(self, model_name: str, reason: str) -> None:
         """
@@ -310,4 +312,3 @@ class MetricsRegistry:
 
 # Global metrics instance
 metrics = MetricsRegistry()
-

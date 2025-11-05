@@ -114,9 +114,7 @@ class PostgreSQLClient:
                 details={"query": query[:100]},
             )
 
-    async def fetch_one(
-        self, query: str, *args
-    ) -> Optional[Dict[str, Any]]:
+    async def fetch_one(self, query: str, *args) -> Optional[Dict[str, Any]]:
         """
         Fetch a single row.
 
@@ -151,9 +149,7 @@ class PostgreSQLClient:
                 details={"query": query[:100]},
             )
 
-    async def fetch_all(
-        self, query: str, *args
-    ) -> List[Dict[str, Any]]:
+    async def fetch_all(self, query: str, *args) -> List[Dict[str, Any]]:
         """
         Fetch all rows.
 
@@ -176,9 +172,7 @@ class PostgreSQLClient:
         try:
             async with self.pool.acquire() as conn:
                 rows = await conn.fetch(query, *args)
-            logger.debug(
-                f"Fetched {len(rows)} rows from query: {query[:100]}..."
-            )
+            logger.debug(f"Fetched {len(rows)} rows from query: {query[:100]}...")
             return [dict(row) for row in rows]
         except Exception as e:
             logger.error(f"Fetch all failed: {e}")
@@ -285,9 +279,7 @@ class PostgreSQLClient:
             )
 
         try:
-            set_clause = ", ".join(
-                f"{k} = ${i+1}" for i, k in enumerate(data.keys())
-            )
+            set_clause = ", ".join(f"{k} = ${i+1}" for i, k in enumerate(data.keys()))
             query = f"UPDATE {table} SET {set_clause} WHERE {where}"
             values = list(data.values()) + list(where_args)
 
@@ -303,4 +295,3 @@ class PostgreSQLClient:
                 service_name="PostgreSQL",
                 details={"table": table},
             )
-

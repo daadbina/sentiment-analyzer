@@ -188,7 +188,9 @@ class Evaluator:
                     except Exception as e:
                         logger.error(f"Failed to evaluate {model_type}: {e}")
 
-                logger.info(f"Model comparison complete: {len(results)} models evaluated")
+                logger.info(
+                    f"Model comparison complete: {len(results)} models evaluated"
+                )
                 return results
 
             except Exception as e:
@@ -223,7 +225,9 @@ class Evaluator:
                 )
 
                 best_metrics = self.evaluation_results[best_model_type]
-                logger.info(f"Best model: {best_model_type} with AUC {best_metrics['auc']}")
+                logger.info(
+                    f"Best model: {best_model_type} with AUC {best_metrics['auc']}"
+                )
 
                 return best_model_type, best_metrics
 
@@ -242,4 +246,3 @@ class Evaluator:
             Dictionary with evaluation results
         """
         return self.evaluation_results
-

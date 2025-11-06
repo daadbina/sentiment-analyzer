@@ -31,9 +31,10 @@ class WikidataClient:
         self.cache_ttl = cache_ttl
 
         # Initialize retry policy with exponential backoff
+        # Reduced to 1 attempt to fail fast on Wikidata timeouts
         self.retry_policy = get_retry_policy(
             name="wikidata_search",
-            max_attempts=3,
+            max_attempts=1,
             initial_delay=1.0,
             max_delay=30.0,
             backoff_strategy=BackoffStrategy.EXPONENTIAL,

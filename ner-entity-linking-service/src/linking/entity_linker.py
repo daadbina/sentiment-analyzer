@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Common words that are unlikely to be real entities
 COMMON_WORDS = {
+    # Articles and prepositions
     "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by",
     "from", "up", "about", "into", "through", "during", "before", "after", "above", "below",
     "between", "under", "again", "further", "then", "once", "here", "there", "when", "where",
@@ -19,6 +20,28 @@ COMMON_WORDS = {
     "just", "should", "now", "is", "are", "was", "were", "be", "been", "being", "have", "has",
     "had", "do", "does", "did", "will", "would", "could", "ought", "i", "you", "he", "she",
     "it", "we", "they", "what", "which", "who", "whom", "this", "that", "these", "those",
+    # Common adjectives and adverbs
+    "new", "old", "good", "bad", "big", "small", "high", "low", "first", "last", "next",
+    "other", "same", "different", "many", "much", "little", "few", "several", "any", "all",
+    "most", "some", "no", "none", "one", "two", "three", "four", "five", "six", "seven",
+    "eight", "nine", "ten", "hundred", "thousand", "million", "billion", "trillion",
+    # Common verbs
+    "make", "take", "get", "go", "come", "see", "know", "think", "say", "tell", "give",
+    "find", "tell", "ask", "work", "call", "try", "feel", "become", "leave", "put", "mean",
+    "keep", "let", "begin", "seem", "help", "talk", "turn", "start", "show", "hear", "play",
+    "run", "move", "like", "live", "believe", "hold", "bring", "happen", "write", "provide",
+    "sit", "stand", "lose", "pay", "meet", "include", "continue", "set", "learn", "change",
+    # Common nouns
+    "time", "year", "day", "week", "month", "hour", "minute", "second", "people", "person",
+    "man", "woman", "child", "boy", "girl", "thing", "way", "place", "part", "case", "fact",
+    "hand", "head", "eye", "face", "body", "life", "world", "country", "city", "town",
+    "house", "home", "room", "door", "window", "street", "road", "water", "air", "fire",
+    "money", "price", "cost", "value", "number", "amount", "level", "rate", "point", "line",
+    "group", "team", "member", "family", "friend", "enemy", "side", "end", "start", "middle",
+    # Days and months
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "january", "february", "march", "april", "may", "june", "july", "august",
+    "september", "october", "november", "december",
 }
 
 

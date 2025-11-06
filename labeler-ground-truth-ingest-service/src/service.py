@@ -11,9 +11,11 @@ from src.config import config
 from src.clients.api_clients import ACLEDFetcher, GDELTFetcher, BinanceFetcher, CCXTFetcher
 from src.clients.kafka_producer import KafkaProducerClient
 from src.clients.kafka_consumer import SemanticGroupConsumer
+from src.clients.postgres_client import PostgreSQLClient
 from src.storage.delta_lake_writer import DeltaLakeWriter
 from src.storage.postgres_writer import PostgreSQLWriter
 from src.storage.audit_logger import AuditLogger
+from src.storage.outbox import OutboxManager
 from src.reconciliation.reconciler import LabelReconciler
 from src.validation.label_validator import LabelValidator, LicenseChecker, FreshnessValidator
 from src.validation.deduplication import DeduplicationEngine
@@ -45,6 +47,10 @@ class LabelerService:
         self.semantic_group_consumer = SemanticGroupConsumer()
         self.delta_lake_writer = DeltaLakeWriter()
         self.postgres_writer = PostgreSQLWriter()
+
+        # Initialize PostgreSQL client for outbox
+        self.postgres_client = PostgreSQLClient()
+        self.outbox_manager = OutboxManager(self.postgres_client)
 
         self.reconciler = LabelReconciler()
         self.validator = LabelValidator()
@@ -81,6 +87,12 @@ class LabelerService:
             # Connect to PostgreSQL
             await self.postgres_writer.connect()
             await self.postgres_writer._ensure_tables()
+
+            # Connect to PostgreSQL client for outbox
+            await self.postgres_client.connect()
+
+            # Initialize outbox table
+            await self.outbox_manager.initialize()
 
             # Initialize audit logger with database pool
             self.audit_logger.db_pool = self.postgres_writer.pool
@@ -120,9 +132,19 @@ class LabelerService:
         self.running = False
 
         try:
+            # Clean up outbox (published events older than 7 days)
+            try:
+                await self.outbox_manager.cleanup_published_events(days_old=7)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to cleanup outbox: {str(e)}",
+                    operation="shutdown"
+                )
+
             await self.kafka_producer.disconnect()
             await self.semantic_group_consumer.disconnect()
             await self.postgres_writer.disconnect()
+            await self.postgres_client.disconnect()
 
             logger.info(
                 "Labeler service shut down successfully",
@@ -397,7 +419,7 @@ class LabelerService:
                 label["group_id"] = reconciliation_map.get(event_id)  # None if not reconciled
                 enriched_labels.append(label)
 
-            # Write to storage (all valid labels, not just reconciled ones)
+            # Write to storage using outbox pattern (all valid labels, not just reconciled ones)
             if enriched_labels:
                 # Write to Delta Lake
                 await self.delta_lake_writer.write_labels(enriched_labels)
@@ -405,8 +427,36 @@ class LabelerService:
                 # Write to PostgreSQL
                 await self.postgres_writer.write_labels(enriched_labels)
 
+                # Write to outbox for atomic Kafka production
+                outbox_events = []
+                for label in enriched_labels:
+                    event_id = label.get("event_id")
+                    group_id = label.get("group_id")
+                    trace_id = label.get("trace_id")
+
+                    # Write to outbox
+                    await self.outbox_manager.write_event(
+                        aggregate_id=group_id or event_id,
+                        aggregate_type="semantic_group" if group_id else "event",
+                        event_type="label_created",
+                        payload=label,
+                        trace_id=trace_id
+                    )
+                    outbox_events.append(event_id)
+
                 # Produce to Kafka (use enriched_labels which have the flat structure)
                 await self.kafka_producer.produce_batch(enriched_labels)
+
+                # Mark outbox events as published
+                for event_id in outbox_events:
+                    try:
+                        await self.outbox_manager.mark_published(event_id)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to mark outbox event as published: {str(e)}",
+                            operation="process_labels",
+                            event_id=event_id
+                        )
 
             logger.info(
                 "Label processing pipeline completed",

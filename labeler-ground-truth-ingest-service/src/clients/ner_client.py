@@ -5,7 +5,9 @@ import sys
 from typing import List, Optional
 from pathlib import Path
 
+# Use standard logger for NER client (not structured logger)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 class NERClient:
@@ -32,24 +34,13 @@ class NERClient:
             self.model_registry = NERModelRegistry(cache_size=100)
             self.orchestrator = NEROrchestrator(self.model_registry)
 
-            logger.info(
-                "NER client initialized successfully",
-                operation="ner_client_init"
-            )
+            logger.info("NER client initialized successfully")
 
         except ImportError as e:
-            logger.error(
-                f"Failed to import NER components: {str(e)}",
-                operation="ner_client_init",
-                error_type="ImportError"
-            )
+            logger.error(f"Failed to import NER components: {str(e)}")
             raise
         except Exception as e:
-            logger.error(
-                f"Failed to initialize NER client: {str(e)}",
-                operation="ner_client_init",
-                error_type=type(e).__name__
-            )
+            logger.error(f"Failed to initialize NER client: {str(e)}")
             raise
 
     async def extract_countries(
@@ -73,20 +64,12 @@ class NERClient:
             Exception: If NER extraction fails
         """
         if not text or not text.strip():
-            logger.warning(
-                "Empty text provided for country extraction",
-                operation="extract_countries",
-                article_id=article_id
-            )
+            logger.warning(f"Empty text provided for country extraction (article_id={article_id})")
             return []
 
         try:
             logger.info(
-                f"Extracting countries from text (length={len(text)}, language={language})",
-                operation="extract_countries",
-                article_id=article_id,
-                text_length=len(text),
-                language=language
+                f"Extracting countries from text (length={len(text)}, language={language}, article_id={article_id})"
             )
 
             # Extract entities using NER orchestrator
@@ -110,33 +93,19 @@ class NERClient:
                 if entity_type_str in ["LOCATION", "GPE"]:
                     countries.append(entity.text)
                     logger.debug(
-                        f"Extracted country: {entity.text} (confidence={entity.confidence})",
-                        operation="extract_countries",
-                        article_id=article_id,
-                        entity_text=entity.text,
-                        entity_type=entity_type_str,
-                        confidence=entity.confidence
+                        f"Extracted country: {entity.text} (confidence={entity.confidence}, article_id={article_id})"
                     )
 
             logger.info(
-                f"Successfully extracted {len(countries)} countries from text",
-                operation="extract_countries",
-                article_id=article_id,
-                country_count=len(countries),
-                countries=countries,
-                coverage_score=ner_result.coverage_score,
-                extraction_duration_ms=ner_result.extraction_duration_ms
+                f"Successfully extracted {len(countries)} countries from text "
+                f"(article_id={article_id}, countries={countries}, coverage={ner_result.coverage_score:.2f})"
             )
 
             return countries
 
         except Exception as e:
             logger.error(
-                f"Failed to extract countries from text: {str(e)}",
-                operation="extract_countries",
-                article_id=article_id,
-                error_type=type(e).__name__,
-                error_message=str(e)
+                f"Failed to extract countries from text: {str(e)} (article_id={article_id})"
             )
             # Return empty list instead of raising - allow processing to continue
             return []
@@ -159,11 +128,7 @@ class NERClient:
             List of country names extracted from title
         """
         if not title or not title.strip():
-            logger.debug(
-                "Empty title provided for country extraction",
-                operation="extract_countries_from_title",
-                article_id=article_id
-            )
+            logger.debug(f"Empty title provided for country extraction (article_id={article_id})")
             return []
 
         return await self.extract_countries(
@@ -190,11 +155,7 @@ class NERClient:
             List of country names extracted from content
         """
         if not content or not content.strip():
-            logger.debug(
-                "Empty content provided for country extraction",
-                operation="extract_countries_from_content",
-                article_id=article_id
-            )
+            logger.debug(f"Empty content provided for country extraction (article_id={article_id})")
             return []
 
         return await self.extract_countries(
@@ -246,23 +207,15 @@ class NERClient:
                     combined.append(country)
 
             logger.info(
-                f"Extracted {len(combined)} unique countries from title and content",
-                operation="extract_countries_combined",
-                article_id=article_id,
-                title_countries=len(title_countries),
-                content_countries=len(content_countries),
-                unique_countries=len(combined),
-                countries=combined
+                f"Extracted {len(combined)} unique countries from title and content "
+                f"(article_id={article_id}, title={len(title_countries)}, content={len(content_countries)}, countries={combined})"
             )
 
             return combined
 
         except Exception as e:
             logger.error(
-                f"Failed to extract countries from combined text: {str(e)}",
-                operation="extract_countries_combined",
-                article_id=article_id,
-                error_type=type(e).__name__
+                f"Failed to extract countries from combined text: {str(e)} (article_id={article_id})"
             )
             return []
 

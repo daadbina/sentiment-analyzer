@@ -9,6 +9,7 @@ from confluent_kafka.schema_registry.error import SchemaRegistryError
 
 from src.config import config
 from src.utils.trace import get_logger
+from src.clients.circuit_breaker import CircuitBreaker, ExponentialBackoff
 
 logger = get_logger(__name__, config.logging.log_level)
 
@@ -24,6 +25,21 @@ class SemanticGroupConsumer:
         self.schema_registry_client: Optional[SchemaRegistryClient] = None
         self.avro_deserializer: Optional[AvroDeserializer] = None
         self.semantic_groups: List[Dict[str, Any]] = []
+
+        # Initialize circuit breaker for resilience
+        self.circuit_breaker = CircuitBreaker(
+            name="semantic_group_consumer",
+            failure_threshold=5,
+            recovery_timeout_seconds=60
+        )
+
+        # Initialize exponential backoff for retries
+        self.backoff = ExponentialBackoff(
+            initial_delay_ms=100,
+            max_delay_ms=30000,
+            multiplier=2.0,
+            jitter=True
+        )
 
     async def connect(self) -> bool:
         """Connect to Kafka.
@@ -77,6 +93,7 @@ class SemanticGroupConsumer:
                 operation="connect",
                 error_type=type(e).__name__
             )
+            self.circuit_breaker._on_failure()
             return False
         except Exception as e:
             logger.error(
@@ -286,4 +303,16 @@ class SemanticGroupConsumer:
         if self.consumer:
             self.consumer.close()
             logger.info("Kafka consumer disconnected", operation="disconnect")
+
+    def get_health_status(self) -> dict:
+        """Get consumer health status including circuit breaker state.
+
+        Returns:
+            Health status dictionary
+        """
+        return {
+            "connected": self.consumer is not None,
+            "topic": self.topic,
+            "circuit_breaker": self.circuit_breaker.get_state()
+        }
 

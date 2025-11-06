@@ -14,6 +14,7 @@ from src.config import config
 from src.exceptions import KafkaError, SchemaRegistryError
 from src.utils.trace import get_logger
 from src.metrics import get_metrics
+from src.clients.circuit_breaker import CircuitBreaker, ExponentialBackoff
 
 
 logger = get_logger(__name__, config.logging.log_level)
@@ -34,6 +35,21 @@ class KafkaProducerClient:
         self.schema_registry_client: Optional[SchemaRegistryClient] = None
         self.avro_serializer: Optional[AvroSerializer] = None
         self.key_serializer: Optional[StringSerializer] = None
+
+        # Initialize circuit breaker for resilience
+        self.circuit_breaker = CircuitBreaker(
+            name="ground_truth_producer",
+            failure_threshold=5,
+            recovery_timeout_seconds=60
+        )
+
+        # Initialize exponential backoff for retries
+        self.backoff = ExponentialBackoff(
+            initial_delay_ms=100,
+            max_delay_ms=30000,
+            multiplier=2.0,
+            jitter=True
+        )
 
         logger.info(
             "Initializing Kafka producer",
@@ -301,4 +317,16 @@ class KafkaProducerClient:
                 error_type=type(e).__name__
             )
             raise KafkaError("produce_batch", self.topic, str(e))
+
+    def get_health_status(self) -> dict:
+        """Get producer health status including circuit breaker state.
+
+        Returns:
+            Health status dictionary
+        """
+        return {
+            "connected": self.producer is not None,
+            "topic": self.topic,
+            "circuit_breaker": self.circuit_breaker.get_state()
+        }
 

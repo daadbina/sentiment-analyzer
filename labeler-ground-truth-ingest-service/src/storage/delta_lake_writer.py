@@ -1,10 +1,12 @@
 """Delta Lake writer for ground truth labels."""
 
 import time
+import shutil
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from pathlib import Path
 import pandas as pd
-from deltalake import write_deltalake
+from deltalake import write_deltalake, DeltaTable
 
 from src.config import config
 from src.exceptions import StorageError
@@ -86,13 +88,45 @@ class DeltaLakeWriter:
             df["written_at"] = datetime.utcnow().isoformat()
             df["batch_size"] = str(len(labels))
 
-            # Write to Delta Lake
-            write_deltalake(
-                self.path,
-                df,
-                mode="append",
-                engine="rust"
-            )
+            # Try to write to Delta Lake
+            try:
+                write_deltalake(
+                    self.path,
+                    df,
+                    mode="append",
+                    engine="rust"
+                )
+            except Exception as schema_error:
+                error_str = str(schema_error)
+                logger.info(
+                    f"Delta Lake write error caught",
+                    operation="write_labels",
+                    error_message=error_str,
+                    error_type=type(schema_error).__name__
+                )
+                # If schema mismatch, drop and recreate the table
+                if "Schema" in error_str or "schema" in error_str:
+                    logger.warning(
+                        f"Schema mismatch detected, recreating table",
+                        operation="write_labels",
+                        error=error_str
+                    )
+                    # Remove existing table
+                    if Path(self.path).exists():
+                        logger.info(f"Removing existing table at {self.path}")
+                        shutil.rmtree(self.path)
+                    # Write with new schema
+                    logger.info(f"Writing with new schema to {self.path}")
+                    write_deltalake(
+                        self.path,
+                        df,
+                        mode="overwrite",
+                        engine="rust"
+                    )
+                    logger.info(f"Successfully recreated table with new schema")
+                else:
+                    logger.error(f"Non-schema error, re-raising: {error_str}")
+                    raise
 
             duration_seconds = time.time() - start_time
             metrics.record_storage("delta_lake", duration_seconds)
@@ -137,12 +171,31 @@ class DeltaLakeWriter:
 
             # Write to Delta Lake
             reconciliation_path = f"{self.path}/reconciliation"
-            write_deltalake(
-                reconciliation_path,
-                df,
-                mode="append",
-                engine="rust"
-            )
+            try:
+                write_deltalake(
+                    reconciliation_path,
+                    df,
+                    mode="append",
+                    engine="rust"
+                )
+            except Exception as schema_error:
+                # If schema mismatch, drop and recreate the table
+                if "Schema" in str(schema_error) or "schema" in str(schema_error):
+                    logger.warning(
+                        f"Schema mismatch in reconciliation table, recreating",
+                        operation="write_reconciliation_results",
+                        error=str(schema_error)
+                    )
+                    if Path(reconciliation_path).exists():
+                        shutil.rmtree(reconciliation_path)
+                    write_deltalake(
+                        reconciliation_path,
+                        df,
+                        mode="overwrite",
+                        engine="rust"
+                    )
+                else:
+                    raise
 
             duration_seconds = time.time() - start_time
             metrics.record_storage("delta_lake_reconciliation", duration_seconds)
@@ -173,6 +226,8 @@ class DeltaLakeWriter:
         start_time = time.time()
 
         try:
+            validation_path = f"{self.path}/validation"
+
             # Write valid labels to separate validation table
             if valid_labels:
                 sanitized_valid = self._sanitize_labels(valid_labels)
@@ -180,13 +235,30 @@ class DeltaLakeWriter:
                 df_valid["validation_status"] = "valid"
                 df_valid["validated_at"] = datetime.utcnow().isoformat()
 
-                validation_path = f"{self.path}/validation"
-                write_deltalake(
-                    validation_path,
-                    df_valid,
-                    mode="append",
-                    engine="rust"
-                )
+                try:
+                    write_deltalake(
+                        validation_path,
+                        df_valid,
+                        mode="append",
+                        engine="rust"
+                    )
+                except Exception as schema_error:
+                    if "Schema" in str(schema_error) or "schema" in str(schema_error):
+                        logger.warning(
+                            f"Schema mismatch in validation table, recreating",
+                            operation="write_validation_results",
+                            error=str(schema_error)
+                        )
+                        if Path(validation_path).exists():
+                            shutil.rmtree(validation_path)
+                        write_deltalake(
+                            validation_path,
+                            df_valid,
+                            mode="overwrite",
+                            engine="rust"
+                        )
+                    else:
+                        raise
 
             # Write invalid labels
             if invalid_labels:
@@ -195,13 +267,30 @@ class DeltaLakeWriter:
                 df_invalid["validation_status"] = "invalid"
                 df_invalid["validated_at"] = datetime.utcnow().isoformat()
 
-                validation_path = f"{self.path}/validation"
-                write_deltalake(
-                    validation_path,
-                    df_invalid,
-                    mode="append",
-                    engine="rust"
-                )
+                try:
+                    write_deltalake(
+                        validation_path,
+                        df_invalid,
+                        mode="append",
+                        engine="rust"
+                    )
+                except Exception as schema_error:
+                    if "Schema" in str(schema_error) or "schema" in str(schema_error):
+                        logger.warning(
+                            f"Schema mismatch in validation table, recreating",
+                            operation="write_validation_results",
+                            error=str(schema_error)
+                        )
+                        if Path(validation_path).exists():
+                            shutil.rmtree(validation_path)
+                        write_deltalake(
+                            validation_path,
+                            df_invalid,
+                            mode="overwrite",
+                            engine="rust"
+                        )
+                    else:
+                        raise
 
             duration_seconds = time.time() - start_time
             metrics.record_storage("delta_lake_validation", duration_seconds)

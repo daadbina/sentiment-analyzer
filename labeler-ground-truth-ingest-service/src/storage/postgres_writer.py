@@ -127,7 +127,7 @@ class PostgreSQLWriter:
             )
 
     async def write_labels(self, labels: List[Dict[str, Any]]) -> bool:
-        """Write labels to PostgreSQL."""
+        """Write labels to PostgreSQL using batch inserts."""
         if not labels:
             return True
 
@@ -135,25 +135,18 @@ class PostgreSQLWriter:
             raise StorageError("postgresql", "write_labels", "Connection pool not initialized")
 
         start_time = time.time()
+        batch_size = 1000  # Insert in batches of 1000
+        total_inserted = 0
 
         try:
             async with self.pool.acquire() as conn:
-                async with conn.transaction():
-                    for label in labels:
-                        await conn.execute("""
-                            INSERT INTO ground_truth (
-                                event_id, group_id, description, domain, time_window,
-                                realization_metric, threshold, verified_at, label_realized,
-                                label_confidence, source_confidence, label_source,
-                                label_source_license, label_source_url, last_license_check,
-                                last_updated, trace_id, schema_version
-                            ) VALUES (
-                                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
-                            )
-                            ON CONFLICT (event_id, label_source) DO UPDATE SET
-                                label_confidence = EXCLUDED.label_confidence,
-                                last_updated = CURRENT_TIMESTAMP
-                        """,
+                # Process labels in batches
+                for i in range(0, len(labels), batch_size):
+                    batch = labels[i:i + batch_size]
+
+                    # Prepare batch data
+                    batch_data = [
+                        (
                             label.get("event_id"),
                             label.get("group_id"),
                             label.get("description"),
@@ -173,14 +166,43 @@ class PostgreSQLWriter:
                             label.get("trace_id"),
                             label.get("schema_version")
                         )
+                        for label in batch
+                    ]
+
+                    # Use executemany for batch insert
+                    async with conn.transaction():
+                        await conn.executemany("""
+                            INSERT INTO ground_truth (
+                                event_id, group_id, description, domain, time_window,
+                                realization_metric, threshold, verified_at, label_realized,
+                                label_confidence, source_confidence, label_source,
+                                label_source_license, label_source_url, last_license_check,
+                                last_updated, trace_id, schema_version
+                            ) VALUES (
+                                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+                            )
+                            ON CONFLICT (event_id, label_source) DO UPDATE SET
+                                label_confidence = EXCLUDED.label_confidence,
+                                last_updated = CURRENT_TIMESTAMP
+                        """, batch_data)
+
+                    total_inserted += len(batch)
+
+                    logger.info(
+                        f"Batch inserted {len(batch)} labels to PostgreSQL",
+                        operation="write_labels_batch",
+                        batch_index=i // batch_size,
+                        batch_size=len(batch),
+                        total_inserted=total_inserted
+                    )
 
             duration_seconds = time.time() - start_time
             metrics.record_storage("postgresql", duration_seconds)
 
             logger.info(
-                f"Successfully wrote {len(labels)} labels to PostgreSQL",
+                f"Successfully wrote {total_inserted} labels to PostgreSQL",
                 operation="write_labels",
-                label_count=len(labels),
+                label_count=total_inserted,
                 duration_seconds=duration_seconds
             )
 
@@ -190,7 +212,8 @@ class PostgreSQLWriter:
             logger.error(
                 f"Failed to write labels to PostgreSQL: {str(e)}",
                 operation="write_labels",
-                error_type=type(e).__name__
+                error_type=type(e).__name__,
+                total_inserted=total_inserted
             )
             raise StorageError("postgresql", "write_labels", str(e))
 

@@ -411,16 +411,29 @@ class ACLEDFetcher(BaseAPIClient):
         data = response.get("data", [])
 
         for event in data:
+            # Parse event_date from ACLED (format: YYYY-MM-DD)
+            event_date_str = event.get("event_date", "")
+            try:
+                if event_date_str:
+                    # Convert YYYY-MM-DD to ISO format with time
+                    event_dt = datetime.strptime(event_date_str, "%Y-%m-%d")
+                    event_timestamp = event_dt.isoformat() + "Z"
+                else:
+                    event_timestamp = datetime.utcnow().isoformat() + "Z"
+            except Exception:
+                event_timestamp = datetime.utcnow().isoformat() + "Z"
+
             label = {
                 "event_id": str(event.get("event_id_cnty", "")),
-                "event_date": event.get("event_date", ""),
+                "event_date": event_date_str,
+                "event_timestamp": event_timestamp,  # Actual event time (ISO format)
                 "country": event.get("country", ""),
                 "event_type": event.get("event_type", ""),
                 "fatalities": int(event.get("fatalities", 0)),
                 "label_conflict": 1 if event.get("event_type") in ["Violence against civilians", "Protests"] else 0,
                 "confidence": 0.85,  # ACLED data is high confidence
                 "source_url": event.get("source_url", ""),
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.utcnow().isoformat() + "Z",  # When fetched from API
                 "trace_id": logger.trace_id
             }
             labels.append(label)
@@ -547,9 +560,20 @@ class GDELTFetcher(BaseAPIClient):
                     language = str(row.get("language", "")) if "language" in row else "en"
 
                     # Create label from article
+                    # Parse seendate from GDELT (format: YYYYMMDD)
+                    try:
+                        if seendate and len(seendate) == 8:
+                            event_dt = datetime.strptime(seendate, "%Y%m%d")
+                            event_timestamp = event_dt.isoformat() + "Z"
+                        else:
+                            event_timestamp = datetime.utcnow().isoformat() + "Z"
+                    except Exception:
+                        event_timestamp = datetime.utcnow().isoformat() + "Z"
+
                     label = {
                         "event_id": url or f"gdelt_{idx}",
                         "event_date": seendate,
+                        "event_timestamp": event_timestamp,  # Actual event time (ISO format)
                         "event_type": "news_event",
                         "actor_a": domain,
                         "actor_b": language,
@@ -560,7 +584,7 @@ class GDELTFetcher(BaseAPIClient):
                         "title": title,
                         "domain": domain,
                         "language": language,
-                        "fetched_at": datetime.utcnow().isoformat(),
+                        "fetched_at": datetime.utcnow().isoformat() + "Z",  # When fetched from API
                         "trace_id": logger.trace_id
                     }
                     labels.append(label)
@@ -669,7 +693,7 @@ class BinanceFetcher(BaseAPIClient):
 
             label = {
                 "event_id": f"binance_{symbol}_{open_time}",
-                "timestamp": datetime.fromtimestamp(open_time / 1000).isoformat(),
+                "event_timestamp": datetime.fromtimestamp(open_time / 1000).isoformat() + "Z",  # Actual event time
                 "symbol": symbol,
                 "open": open_price,
                 "close": close_price,
@@ -681,7 +705,7 @@ class BinanceFetcher(BaseAPIClient):
                 "volatility_score": min(abs(change_pct) / 10.0, 1.0),
                 "confidence": 0.95,
                 "source_url": "https://www.binance.com",
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.utcnow().isoformat() + "Z",  # When fetched from API
                 "trace_id": logger.trace_id
             }
             labels.append(label)

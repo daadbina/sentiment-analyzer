@@ -24,6 +24,7 @@ class KafkaProducerClient:
 
     def __init__(self):
         """Initialize Kafka producer."""
+        self.config = config
         self.brokers = config.kafka.brokers
         self.schema_registry_url = config.kafka.schema_registry_url
         self.topic = config.kafka.ground_truth_topic
@@ -54,8 +55,7 @@ class KafkaProducerClient:
             # Initialize Avro serializer
             self.avro_serializer = AvroSerializer(
                 self.schema_registry_client,
-                schema_str,
-                conf={"auto.register.schemas": False}
+                schema_str
             )
 
             # Initialize key serializer
@@ -207,7 +207,7 @@ class KafkaProducerClient:
             raise KafkaError("produce_label", self.topic, str(e))
 
     async def produce_batch(self, labels: List[Dict[str, Any]]) -> bool:
-        """Produce batch of labels to Kafka."""
+        """Produce batch of labels to Kafka in smaller chunks to avoid timeout."""
         if not labels:
             return True
 
@@ -217,23 +217,45 @@ class KafkaProducerClient:
         start_time = time.time()
         success_count = 0
         error_count = 0
+        batch_size = self.config.kafka.producer_batch_size
 
         try:
-            for label in labels:
-                try:
-                    await self.produce_label(label)
-                    success_count += 1
-                except Exception as e:
-                    logger.error(
-                        f"Failed to produce label: {str(e)}",
-                        operation="produce_batch",
-                        event_id=label.get("event_id"),
-                        error_type=type(e).__name__
-                    )
-                    error_count += 1
+            # Produce labels in smaller batches to avoid consumer timeout
+            for i in range(0, len(labels), batch_size):
+                batch = labels[i:i + batch_size]
+                batch_start = time.time()
 
-            # Flush all messages
-            self.producer.flush()
+                logger.info(
+                    f"Producing batch {i // batch_size + 1} of {(len(labels) + batch_size - 1) // batch_size}",
+                    operation="produce_batch",
+                    batch_start_index=i,
+                    batch_size=len(batch)
+                )
+
+                for label in batch:
+                    try:
+                        await self.produce_label(label)
+                        success_count += 1
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to produce label: {str(e)}",
+                            operation="produce_batch",
+                            event_id=label.get("event_id"),
+                            error_type=type(e).__name__
+                        )
+                        error_count += 1
+
+                # Flush after each batch
+                self.producer.flush()
+                batch_duration = time.time() - batch_start
+
+                logger.info(
+                    f"Batch flushed",
+                    operation="produce_batch",
+                    batch_index=i // batch_size,
+                    batch_size=len(batch),
+                    batch_duration_seconds=batch_duration
+                )
 
             duration_seconds = time.time() - start_time
             metrics.record_fetch("kafka", success_count, duration_seconds)

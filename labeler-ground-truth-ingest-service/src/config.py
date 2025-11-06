@@ -33,6 +33,16 @@ class KafkaSettings(BaseSettings):
         alias="KAFKA_SEMANTIC_GROUPS_TOPIC",
         description="Kafka topic for semantic groups"
     )
+    max_poll_interval_ms: int = Field(
+        default=900000,
+        alias="KAFKA_MAX_POLL_INTERVAL_MS",
+        description="Maximum poll interval in milliseconds (15 minutes default)"
+    )
+    producer_batch_size: int = Field(
+        default=1000,
+        alias="KAFKA_PRODUCER_BATCH_SIZE",
+        description="Number of messages to produce before flushing"
+    )
 
     model_config = ConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 

@@ -10,6 +10,7 @@ from ulid import ULID
 from src.config import config
 from src.clients.api_clients import ACLEDFetcher, GDELTFetcher, BinanceFetcher, CCXTFetcher
 from src.clients.kafka_producer import KafkaProducerClient
+from src.clients.kafka_consumer import SemanticGroupConsumer
 from src.storage.delta_lake_writer import DeltaLakeWriter
 from src.storage.postgres_writer import PostgreSQLWriter
 from src.storage.audit_logger import AuditLogger
@@ -41,6 +42,7 @@ class LabelerService:
         self.ccxt_fetcher = CCXTFetcher()  # Fallback for crypto data
 
         self.kafka_producer = KafkaProducerClient()
+        self.semantic_group_consumer = SemanticGroupConsumer()
         self.delta_lake_writer = DeltaLakeWriter()
         self.postgres_writer = PostgreSQLWriter()
 
@@ -70,8 +72,11 @@ class LabelerService:
         )
 
         try:
-            # Connect to Kafka
+            # Connect to Kafka producer
             await self.kafka_producer.connect()
+
+            # Connect to semantic group consumer
+            await self.semantic_group_consumer.connect()
 
             # Connect to PostgreSQL
             await self.postgres_writer.connect()
@@ -116,6 +121,7 @@ class LabelerService:
 
         try:
             await self.kafka_producer.disconnect()
+            await self.semantic_group_consumer.disconnect()
             await self.postgres_writer.disconnect()
 
             logger.info(
@@ -313,6 +319,33 @@ class LabelerService:
 
         return all_reconciled
 
+    async def consume_semantic_groups(self):
+        """Consume semantic groups from Kafka with retries."""
+        try:
+            # Seek to beginning to get all messages
+            await self.semantic_group_consumer.seek_to_beginning()
+
+            # Try to consume with longer timeout to wait for messages
+            groups = await self.semantic_group_consumer.consume_batch(timeout_ms=10000, max_messages=1000)
+            if groups:
+                self.semantic_groups = groups
+                logger.info(
+                    f"Updated semantic groups from Kafka",
+                    operation="consume_semantic_groups",
+                    group_count=len(groups)
+                )
+            else:
+                logger.info(
+                    "No semantic groups available from Kafka",
+                    operation="consume_semantic_groups"
+                )
+        except Exception as e:
+            logger.error(
+                f"Failed to consume semantic groups: {str(e)}",
+                operation="consume_semantic_groups",
+                error_type=type(e).__name__
+            )
+
     async def process_labels(self):
         """Main label processing pipeline."""
         try:
@@ -320,6 +353,9 @@ class LabelerService:
                 "Starting label processing pipeline",
                 operation="process_labels"
             )
+
+            # Consume semantic groups from Kafka
+            await self.consume_semantic_groups()
 
             # Clear deduplication cache at start of each cycle
             # This ensures we only deduplicate within the current batch, not against historical data
@@ -333,22 +369,47 @@ class LabelerService:
 
             # Extract valid labels
             valid_labels = {}
+            all_valid_labels = []
             for source, (valid, invalid) in validation_results.items():
                 valid_labels[source] = valid
+                all_valid_labels.extend(valid)
 
-            # Reconcile labels
-            reconciled_labels = await self.reconcile_labels(valid_labels)
+            # Reconcile labels (if semantic groups are available)
+            reconciliation_map = {}
+            if self.semantic_groups:
+                reconciled_labels = await self.reconcile_labels(valid_labels)
 
-            # Write to storage
-            if reconciled_labels:
+                # Create mapping of event_id -> group_id for reconciled labels
+                for reconciled in reconciled_labels:
+                    event_id = reconciled.get("label", {}).get("event_id")
+                    group_id = reconciled.get("group_id")
+                    if event_id and group_id:
+                        reconciliation_map[event_id] = group_id
+            else:
+                logger.warning(
+                    "No semantic groups available for reconciliation",
+                    operation="process_labels",
+                    total_labels=len(all_valid_labels)
+                )
+
+            # Enrich all valid labels with reconciliation results
+            # Labels that didn't reconcile will have group_id = None
+            enriched_labels = []
+            for label in all_valid_labels:
+                event_id = label.get("event_id")
+                label["group_id"] = reconciliation_map.get(event_id)  # None if not reconciled
+                enriched_labels.append(label)
+
+            # Write to storage (all valid labels, not just reconciled ones)
+            if enriched_labels:
                 # Write to Delta Lake
-                await self.delta_lake_writer.write_labels(reconciled_labels)
+                await self.delta_lake_writer.write_labels(enriched_labels)
 
                 # Write to PostgreSQL
-                await self.postgres_writer.write_labels(reconciled_labels)
+                await self.postgres_writer.write_labels(enriched_labels)
 
-                # Produce to Kafka
-                await self.kafka_producer.produce_batch(reconciled_labels)
+                # Produce to Kafka (use enriched_labels which have the flat structure)
+                await self.kafka_producer.produce_batch(enriched_labels)
 
             logger.info(
                 "Label processing pipeline completed",

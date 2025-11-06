@@ -1,7 +1,7 @@
 """Label reconciliation engine."""
 
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, timezone, timedelta
+from typing import Any, Dict, List, Optional, Tuple, Union
 from src.config import config
 from src.exceptions import ReconciliationError
 from src.utils.trace import get_logger
@@ -17,10 +17,47 @@ class TemporalMatcher:
         """Initialize temporal matcher."""
         self.threshold_hours = threshold_hours
 
+    @staticmethod
+    def parse_timestamp(ts: Union[str, int, float]) -> Optional[datetime]:
+        """Parse timestamp from various formats.
+
+        Args:
+            ts: Timestamp as ISO string, Unix timestamp (int/float), or other format
+
+        Returns:
+            datetime object (always offset-aware with UTC timezone) or None if parsing fails
+        """
+        if not ts:
+            return None
+
+        try:
+            # Try Unix timestamp (int or float)
+            if isinstance(ts, (int, float)):
+                return datetime.fromtimestamp(ts, tz=timezone.utc)
+
+            # Try ISO format string
+            if isinstance(ts, str):
+                # Handle ISO format with Z suffix
+                ts_clean = ts.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(ts_clean)
+
+                # Ensure the datetime is offset-aware (has timezone info)
+                if dt.tzinfo is None:
+                    # If no timezone info, assume UTC
+                    dt = dt.replace(tzinfo=timezone.utc)
+
+                return dt
+
+            return None
+
+        except Exception as e:
+            logger.debug(f"Failed to parse timestamp {ts}: {str(e)}")
+            return None
+
     def match(
         self,
-        label_timestamp: str,
-        group_timestamp: str
+        label_timestamp: Union[str, int, float],
+        group_timestamp: Union[str, int, float]
     ) -> Tuple[bool, float]:
         """
         Match label and group by temporal proximity.
@@ -29,8 +66,17 @@ class TemporalMatcher:
             Tuple of (matched: bool, confidence: float)
         """
         try:
-            label_dt = datetime.fromisoformat(label_timestamp.replace("Z", "+00:00"))
-            group_dt = datetime.fromisoformat(group_timestamp.replace("Z", "+00:00"))
+            label_dt = self.parse_timestamp(label_timestamp)
+            group_dt = self.parse_timestamp(group_timestamp)
+
+            if not label_dt or not group_dt:
+                logger.debug(
+                    f"Could not parse timestamps",
+                    operation="temporal_match",
+                    label_ts=label_timestamp,
+                    group_ts=group_timestamp
+                )
+                return False, 0.0
 
             time_diff = abs((label_dt - group_dt).total_seconds() / 3600)  # hours
 
@@ -122,20 +168,39 @@ class LabelReconciler:
             best_match = None
             best_confidence = 0.0
 
+            # Use event_timestamp (actual event time) instead of fetched_at (when fetched from API)
+            label_timestamp = label.get("event_timestamp") or label.get("fetched_at", "")
+
+            if not label_timestamp:
+                logger.warning(
+                    f"Label has no timestamp for reconciliation",
+                    operation="reconcile",
+                    event_id=label.get("event_id")
+                )
+                return None
+
             for group in semantic_groups:
-                # Temporal matching
+                # Temporal matching using event_timestamp
                 temporal_match, temporal_conf = self.temporal_matcher.match(
-                    label.get("fetched_at", ""),
+                    label_timestamp,
                     group.get("created_at", "")
                 )
 
                 if not temporal_match:
                     continue
 
-                # Semantic matching
+                # Semantic matching - try multiple description fields
+                label_description = (
+                    label.get("description") or
+                    label.get("title") or
+                    label.get("event_type") or
+                    ""
+                )
+                group_description = group.get("topic_label", "")
+
                 semantic_match, semantic_conf = self.semantic_matcher.match(
-                    label.get("description", ""),
-                    group.get("topic_label", "")
+                    label_description,
+                    group_description
                 )
 
                 # Combined confidence
@@ -154,14 +219,18 @@ class LabelReconciler:
                 logger.info(
                     f"Label reconciled successfully",
                     operation="reconcile",
+                    event_id=label.get("event_id"),
                     group_id=best_match["group_id"],
-                    confidence=best_confidence
+                    confidence=best_confidence,
+                    temporal_conf=best_match["temporal_confidence"],
+                    semantic_conf=best_match["semantic_confidence"]
                 )
                 return best_match
             else:
                 logger.warning(
                     f"No matching group found for label",
                     operation="reconcile",
+                    event_id=label.get("event_id"),
                     best_confidence=best_confidence
                 )
                 return None
@@ -170,6 +239,7 @@ class LabelReconciler:
             logger.error(
                 f"Reconciliation failed: {str(e)}",
                 operation="reconcile",
+                event_id=label.get("event_id"),
                 error_type=type(e).__name__
             )
             raise ReconciliationError(

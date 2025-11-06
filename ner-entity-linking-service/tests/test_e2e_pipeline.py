@@ -61,13 +61,15 @@ class TestE2EPipeline:
         # Create input message
         input_message = NewsCanonicalMessage(
             article_id="test-article-1",
+            canonical_url="https://test.com/article",
             title="Test Article",
-            content="John Smith works at Microsoft. He is from Seattle.",
+            normalized_body="John Smith works at Microsoft. He is from Seattle.",
             language="en",
+            publisher_id="pub-001",
+            publisher_credibility=0.95,
             domain="test.com",
             published_at="2025-11-03T20:00:00Z",
             normalized_at="2025-11-03T20:00:00Z",
-            source_url="https://test.com/article",
             trace_id="test-trace-1",
         )
         
@@ -75,17 +77,19 @@ class TestE2EPipeline:
         entity1 = Entity(
             entity_id="entity-1",
             text="John Smith",
-            entity_type="PERSON",
+            normalized_text="john smith",
+            entity_type=EntityType.PERSON,
             confidence=0.95,
             start_char=0,
             end_char=10,
             context_snippet="John Smith works at Microsoft",
         )
-        
+
         entity2 = Entity(
             entity_id="entity-2",
             text="Microsoft",
-            entity_type="ORGANIZATION",
+            normalized_text="microsoft",
+            entity_type=EntityType.ORGANIZATION,
             confidence=0.98,
             start_char=21,
             end_char=30,

@@ -16,15 +16,15 @@ class NERClient:
     def __init__(self):
         """Initialize NER client with orchestrator."""
         try:
-            # Add NER service to path for imports
-            ner_service_path = Path(__file__).parent.parent.parent.parent / "ner-entity-linking-service"
+            # Add NER service src directory to path for imports
+            ner_service_path = Path(__file__).parent.parent.parent.parent / "ner-entity-linking-service" / "src"
             if str(ner_service_path) not in sys.path:
                 sys.path.insert(0, str(ner_service_path))
 
-            # Import NER components
-            from src.ner.orchestrator import NEROrchestrator
-            from src.ner.model_registry import NERModelRegistry
-            from src.models import EntityType
+            # Import NER components (from src directory)
+            from ner.orchestrator import NEROrchestrator
+            from ner.model_registry import NERModelRegistry
+            from models import EntityType
 
             self.NEROrchestrator = NEROrchestrator
             self.NERModelRegistry = NERModelRegistry

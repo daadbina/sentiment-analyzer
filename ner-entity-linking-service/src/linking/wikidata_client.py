@@ -128,7 +128,11 @@ class WikidataClient:
 
         sparql.setQuery(query)
         sparql.setReturnFormat(JSON)
-        sparql.setTimeout(self.timeout)  # CRITICAL FIX: Set timeout to prevent hanging
+        # CRITICAL FIX: SPARQLWrapper.setTimeout() takes MILLISECONDS, not seconds!
+        # Convert timeout from seconds to milliseconds
+        timeout_ms = self.timeout * 1000
+        sparql.setTimeout(timeout_ms)
+        logger.debug(f"Set SPARQL timeout to {timeout_ms}ms ({self.timeout}s)")
 
         results = sparql.query().convert()
         bindings = results.get("results", {}).get("bindings", [])

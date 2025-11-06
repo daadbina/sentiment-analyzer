@@ -57,11 +57,12 @@ class NEREntityLinkingService:
             self.config.external_apis.wikidata_api_url,
             self.config.external_apis.wikidata_timeout_seconds,
             redis_client=self.redis_client,
-            cache_ttl=self.config.redis.cache_ttl_seconds,
+            cache_ttl=self.config.ner.entity_linking_cache_ttl_seconds,
         )
         self.entity_linker = EntityLinker(
             self.wikidata_client,
             self.config.ner.entity_linking_confidence_threshold,
+            self.config.ner.min_entity_length,
         )
         self.actor_repository = ActorRepository(
             self.config.postgres.connection_string,

@@ -1,7 +1,7 @@
 """Temporal feature extractor."""
 
 from typing import Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 import math
 from .base import FeatureExtractor, SemanticGroup, Article, Actor
 from ..utils import StructuredLogger
@@ -93,7 +93,8 @@ class TemporalExtractor(FeatureExtractor):
                 features["temporal_concentration"] = 0.0
 
             # days_since_first_article: Days elapsed since first publication
-            now = datetime.utcnow()
+            # Use timezone-aware UTC now to match the offset-aware timestamps from articles
+            now = datetime.now(timezone.utc)
             days_elapsed = (now - earliest).total_seconds() / (24 * 3600)
             features["days_since_first_article"] = max(0.0, days_elapsed)
 
@@ -109,6 +110,8 @@ class TemporalExtractor(FeatureExtractor):
                 "Error extracting temporal features",
                 group_id=self.get_group_id(group),
                 error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
             )
             return {}
 

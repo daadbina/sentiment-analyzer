@@ -398,22 +398,44 @@ class GDELTFetcher(BaseAPIClient):
             from datetime import datetime, timedelta
             import sys
             import io
+            import logging
 
             # Get yesterday's date in YYYYMMDD format
             yesterday = (datetime.utcnow() - timedelta(days=1)).strftime("%Y%m%d")
 
             # Search for events from yesterday
             # The gdelt library returns a DataFrame with articles
-            # Suppress gdelt library debug output by redirecting stdout and stderr
+            # Suppress gdelt library debug output by redirecting stdout, stderr, and logging
             old_stdout = sys.stdout
             old_stderr = sys.stderr
+
+            # Suppress gdelt library logging
+            gdelt_logger = logging.getLogger('gdelt')
+            old_gdelt_level = gdelt_logger.level
+            gdelt_logger.setLevel(logging.CRITICAL)
+
+            # Also suppress print statements from gdelt by redirecting file descriptors
+            import os
+            old_stdout_fd = os.dup(1)
+            old_stderr_fd = os.dup(2)
+            devnull = os.open(os.devnull, os.O_WRONLY)
+
             sys.stdout = io.StringIO()
             sys.stderr = io.StringIO()
+            os.dup2(devnull, 1)
+            os.dup2(devnull, 2)
+
             try:
                 results = self.gdelt_client.Search(yesterday, coverage=True)
             finally:
+                os.dup2(old_stdout_fd, 1)
+                os.dup2(old_stderr_fd, 2)
+                os.close(devnull)
+                os.close(old_stdout_fd)
+                os.close(old_stderr_fd)
                 sys.stdout = old_stdout
                 sys.stderr = old_stderr
+                gdelt_logger.setLevel(old_gdelt_level)
 
             labels = await self.parse_response(results)
 

@@ -3,6 +3,7 @@
 import json
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from confluent_kafka import SerializingProducer
 from confluent_kafka.schema_registry import SchemaRegistryClient
@@ -97,33 +98,55 @@ class KafkaProducerClient:
             )
 
     def _load_schema(self) -> str:
-        """Load Avro schema."""
-        schema = {
-            "type": "record",
-            "name": "GroundTruthValue",
-            "namespace": "com.sentiment.labeler",
-            "fields": [
-                {"name": "event_id", "type": "string"},
-                {"name": "group_id", "type": ["null", "string"]},
-                {"name": "description", "type": ["null", "string"]},
-                {"name": "domain", "type": ["null", "string"]},
-                {"name": "time_window", "type": ["null", "string"]},
-                {"name": "realization_metric", "type": ["null", "string"]},
-                {"name": "threshold", "type": ["null", "double"]},
-                {"name": "verified_at", "type": ["null", "string"]},
-                {"name": "label_realized", "type": ["null", "boolean"]},
-                {"name": "label_confidence", "type": ["null", "double"]},
-                {"name": "source_confidence", "type": ["null", "double"]},
-                {"name": "label_source", "type": ["null", "string"]},
-                {"name": "label_source_license", "type": ["null", "string"]},
-                {"name": "label_source_url", "type": ["null", "string"]},
-                {"name": "last_license_check", "type": ["null", "string"]},
-                {"name": "last_updated", "type": ["null", "string"]},
-                {"name": "trace_id", "type": ["null", "string"]},
-                {"name": "schema_version", "type": ["null", "string"]}
-            ]
-        }
-        return json.dumps(schema)
+        """Load Avro schema from file.
+
+        Returns:
+            JSON string of Avro schema
+
+        Raises:
+            FileNotFoundError: If schema file not found
+            json.JSONDecodeError: If schema file is invalid JSON
+        """
+        try:
+            # Get path to schema file relative to this file
+            schema_path = Path(__file__).parent.parent.parent / "schemas" / "ground_truth.avsc"
+
+            logger.debug(
+                "Loading schema from file",
+                operation="_load_schema",
+                schema_path=str(schema_path)
+            )
+
+            if not schema_path.exists():
+                raise FileNotFoundError(f"Schema file not found: {schema_path}")
+
+            # Load and parse schema
+            with open(schema_path, 'r') as f:
+                schema = json.load(f)
+
+            logger.info(
+                "Schema loaded successfully",
+                operation="_load_schema",
+                schema_name=schema.get("name"),
+                schema_namespace=schema.get("namespace")
+            )
+
+            return json.dumps(schema)
+
+        except FileNotFoundError as e:
+            logger.error(
+                f"Schema file not found: {str(e)}",
+                operation="_load_schema",
+                error_type=type(e).__name__
+            )
+            raise
+        except json.JSONDecodeError as e:
+            logger.error(
+                f"Invalid JSON in schema file: {str(e)}",
+                operation="_load_schema",
+                error_type=type(e).__name__
+            )
+            raise
 
     def _delivery_report(self, err, msg):
         """Delivery report callback."""

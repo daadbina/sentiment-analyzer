@@ -1,0 +1,116 @@
+{
+  "type": "record",
+  "name": "GroundTruth",
+  "namespace": "com.sentiment.labeler",
+  "doc": "Ground truth labels for event realization prediction",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "doc": "Unique event identifier"
+    },
+    {
+      "name": "group_id",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Semantic group ID this label is reconciled to"
+    },
+    {
+      "name": "description",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Event description"
+    },
+    {
+      "name": "domain",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Event domain (conflict, financial, etc.)"
+    },
+    {
+      "name": "time_window",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Time window for event realization"
+    },
+    {
+      "name": "realization_metric",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Metric used to measure realization"
+    },
+    {
+      "name": "threshold",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Threshold for realization metric"
+    },
+    {
+      "name": "verified_at",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "ISO-8601 timestamp when label was verified"
+    },
+    {
+      "name": "label_realized",
+      "type": ["null", "boolean"],
+      "default": null,
+      "doc": "Whether event was realized (true/false/null for unknown)"
+    },
+    {
+      "name": "label_confidence",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Confidence score of label (0.0-1.0)"
+    },
+    {
+      "name": "source_confidence",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Confidence score from source API"
+    },
+    {
+      "name": "label_source",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Source of label (ACLED, GDELT, CoinGecko, etc.)"
+    },
+    {
+      "name": "label_source_license",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "License of label source"
+    },
+    {
+      "name": "label_source_url",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "URL to label source"
+    },
+    {
+      "name": "last_license_check",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "ISO-8601 timestamp of last license compliance check"
+    },
+    {
+      "name": "last_updated",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "ISO-8601 timestamp of last update"
+    },
+    {
+      "name": "trace_id",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Distributed trace ID for debugging"
+    },
+    {
+      "name": "schema_version",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Schema version of this record"
+    }
+  ]
+}
+

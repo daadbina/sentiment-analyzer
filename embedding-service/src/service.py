@@ -164,6 +164,9 @@ class EmbeddingService:
                 meta = {
                     "article_id": msg.get("article_id", ""),
                     "embedded_at": current_time_timestamp,
+                    "published_at": msg.get("published_at", ""),  # Article publication time (ISO format)
+                    "title": msg.get("title", ""),  # Include title for feature extraction
+                    "body": msg.get("body", ""),  # Include body for feature extraction
                     "publisher_credibility": msg.get("publisher_credibility", 0.5),
                     "publisher_id": msg.get("publisher_id", "unknown"),
                     "source": msg.get("source", "unknown"),

@@ -120,8 +120,8 @@ class ExternalAPIsConfig(BaseSettings):
     opensanctions_api_url: str = Field(
         default="", env="OPENSANCTIONS_API_URL"
     )
-    wikidata_timeout_seconds: int = Field(default=10, env="WIKIDATA_TIMEOUT_SECONDS")
-    dbpedia_timeout_seconds: int = Field(default=10, env="DBPEDIA_TIMEOUT_SECONDS")
+    wikidata_timeout_seconds: int = Field(default=30, env="WIKIDATA_TIMEOUT_SECONDS")
+    dbpedia_timeout_seconds: int = Field(default=30, env="DBPEDIA_TIMEOUT_SECONDS")
     circuit_breaker_threshold: int = Field(
         default=5, env="CIRCUIT_BREAKER_THRESHOLD"
     )
@@ -214,8 +214,8 @@ def get_config() -> ServiceConfig:
         wikidata_api_url=os.getenv("WIKIDATA_API_URL", "https://query.wikidata.org/sparql"),
         dbpedia_spotlight_url=os.getenv("DBPEDIA_SPOTLIGHT_URL", "https://api.dbpedia-spotlight.org/en/annotate"),
         opensanctions_api_url=os.getenv("OPENSANCTIONS_API_URL", ""),
-        wikidata_timeout_seconds=int(os.getenv("WIKIDATA_TIMEOUT_SECONDS", "10")),
-        dbpedia_timeout_seconds=int(os.getenv("DBPEDIA_TIMEOUT_SECONDS", "10")),
+        wikidata_timeout_seconds=int(os.getenv("WIKIDATA_TIMEOUT_SECONDS", "30")),
+        dbpedia_timeout_seconds=int(os.getenv("DBPEDIA_TIMEOUT_SECONDS", "30")),
         circuit_breaker_threshold=int(os.getenv("CIRCUIT_BREAKER_THRESHOLD", "5")),
         circuit_breaker_timeout=int(os.getenv("CIRCUIT_BREAKER_TIMEOUT", "60"))
     )

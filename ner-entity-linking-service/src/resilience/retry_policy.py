@@ -69,23 +69,28 @@ class RetryPolicy:
         for attempt in range(1, self.max_attempts + 1):
             self.attempt_count = attempt
             try:
+                logger.debug(f"Retry policy {self.name} attempt {attempt}/{self.max_attempts}")
                 result = func(*args, **kwargs)
                 if attempt > 1:
-                    logger.info(f"Retry policy {self.name} succeeded on attempt {attempt}")
+                    logger.info(f"Retry policy {self.name} succeeded on attempt {attempt} after {attempt-1} failures")
+                else:
+                    logger.debug(f"Retry policy {self.name} succeeded on first attempt")
                 return result
             except Exception as e:
                 self.last_exception = e
                 if not self._is_retryable(e):
+                    logger.error(f"Retry policy {self.name} encountered non-retryable exception: {type(e).__name__}: {str(e)}")
                     raise
                 if attempt == self.max_attempts:
                     logger.error(
-                        f"Retry policy {self.name} failed after {self.max_attempts} attempts"
+                        f"Retry policy {self.name} failed after {self.max_attempts} attempts. "
+                        f"Last error: {type(e).__name__}: {str(e)}"
                     )
                     raise
                 delay = self._calculate_delay(attempt)
                 logger.warning(
-                    f"Retry policy {self.name} attempt {attempt} failed, "
-                    f"retrying in {delay:.2f}s: {str(e)}"
+                    f"Retry policy {self.name} attempt {attempt}/{self.max_attempts} failed, "
+                    f"retrying in {delay:.2f}s: {type(e).__name__}: {str(e)}"
                 )
                 time.sleep(delay)
 

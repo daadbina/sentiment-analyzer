@@ -1,11 +1,10 @@
 """Wikidata entity linking client."""
 
 import logging
-import aiohttp
 import redis
 import json
+import requests
 from typing import Optional, Dict, List
-from SPARQLWrapper import SPARQLWrapper, JSON
 from src.resilience.retry_policy import get_retry_policy, BackoffStrategy
 from src.resilience.circuit_breaker import get_circuit_breaker
 
@@ -15,13 +14,13 @@ logger = logging.getLogger(__name__)
 class WikidataClient:
     """Client for Wikidata entity linking with caching, retry, and circuit breaker."""
 
-    def __init__(self, api_url: str, timeout: int = 10, redis_client: Optional[redis.Redis] = None, cache_ttl: int = 2592000):
+    def __init__(self, api_url: str, timeout: int = 30, redis_client: Optional[redis.Redis] = None, cache_ttl: int = 2592000):
         """
         Initialize Wikidata client.
 
         Args:
             api_url: Wikidata SPARQL endpoint URL
-            timeout: Request timeout in seconds
+            timeout: Request timeout in seconds (default 30s per architecture)
             redis_client: Redis client for caching
             cache_ttl: Cache TTL in seconds (default 30 days)
         """
@@ -31,10 +30,10 @@ class WikidataClient:
         self.cache_ttl = cache_ttl
 
         # Initialize retry policy with exponential backoff
-        # Reduced to 1 attempt to fail fast on Wikidata timeouts
+        # Per architecture: 3 attempts with exponential backoff for resilience
         self.retry_policy = get_retry_policy(
             name="wikidata_search",
-            max_attempts=1,
+            max_attempts=3,
             initial_delay=1.0,
             max_delay=30.0,
             backoff_strategy=BackoffStrategy.EXPONENTIAL,
@@ -75,9 +74,10 @@ class WikidataClient:
                 except Exception as e:
                     logger.warning(f"Cache lookup failed: {e}")
 
-            logger.debug(f"Searching Wikidata for entity: {entity_text} (type: {entity_type}, language: {language})")
+            logger.debug(f"Searching Wikidata for entity: {entity_text} (type: {entity_type}, language: {language}, timeout: {self.timeout}s)")
 
             # Execute with retry policy and circuit breaker
+            logger.debug(f"Circuit breaker state: {self.circuit_breaker.get_state()}")
             result = self.circuit_breaker.call(
                 self.retry_policy.execute,
                 self._search_wikidata,
@@ -101,14 +101,21 @@ class WikidataClient:
             return result
 
         except Exception as e:
-            logger.error(f"Error searching Wikidata for {entity_text}: {e}")
+            logger.error(f"Error searching Wikidata for {entity_text}: {type(e).__name__}: {e}")
+            logger.debug(f"Circuit breaker state after error: {self.circuit_breaker.get_state()}")
             return None
 
     def _search_wikidata(
         self, entity_text: str, entity_type: str, language: str = "en"
     ) -> Optional[Dict]:
         """
-        Internal method to search Wikidata (used with retry policy).
+        Internal method to search Wikidata using MediaWiki Action API (used with retry policy).
+
+        Uses the wbsearchentities endpoint which is:
+        - More reliable than SPARQL (no timeout issues)
+        - Designed specifically for entity search
+        - Returns results with confidence scores
+        - Supports fuzzy matching
 
         Args:
             entity_text: Entity text to search
@@ -118,147 +125,128 @@ class WikidataClient:
         Returns:
             Entity data or None
         """
-        sparql = SPARQLWrapper(self.api_url)
+        # Use MediaWiki Action API endpoint for entity search
+        # This is much more reliable than SPARQL for simple entity lookups
+        api_url = "https://www.wikidata.org/w/api.php"
 
-        # Build SPARQL query based on entity type
-        query = self._build_search_query(entity_text, entity_type, language)
-        logger.debug(f"SPARQL query: {query}")
+        logger.debug(f"Searching Wikidata using MediaWiki API for: {entity_text} (type: {entity_type}, language: {language})")
 
-        sparql.setQuery(query)
-        sparql.setReturnFormat(JSON)
-        sparql.setTimeout(self.timeout)  # CRITICAL FIX: Set timeout to prevent hanging
+        try:
+            # Call wbsearchentities endpoint
+            params = {
+                "action": "wbsearchentities",
+                "search": entity_text,
+                "language": language,
+                "format": "json",
+                "limit": 5,  # Get top 5 results
+                "type": "item"  # Search for items, not properties
+            }
 
-        results = sparql.query().convert()
-        bindings = results.get("results", {}).get("bindings", [])
+            logger.debug(f"MediaWiki API params: {params}")
 
-        logger.debug(f"Wikidata returned {len(bindings)} results for: {entity_text}")
+            # Make request with timeout
+            response = requests.get(
+                api_url,
+                params=params,
+                timeout=self.timeout,
+                headers={"User-Agent": "sentiment-analyzer-ner-service/1.0"}
+            )
 
-        if not bindings:
-            logger.debug(f"No Wikidata results for: {entity_text}")
-            return None
+            logger.debug(f"MediaWiki API response status: {response.status_code}")
 
-        # Return first result (highest ranked)
-        result = bindings[0]
-        wikidata_id = result.get("item", {}).get("value", "").split("/")[-1]
-        label = result.get("itemLabel", {}).get("value", entity_text)
-        logger.debug(f"Found Wikidata match: {label} ({wikidata_id})")
+            # Raise exception for HTTP errors
+            response.raise_for_status()
 
-        return {
-            "wikidata_id": wikidata_id,
-            "label": label,
-            "description": result.get("itemDescription", {}).get("value", ""),
-            "country": result.get("country", {}).get("value", ""),
-        }
+            results = response.json()
+            search_results = results.get("search", [])
 
-    def _build_search_query(self, entity_text: str, entity_type: str, language: str) -> str:
-        """
-        Build SPARQL query for entity search using flexible label matching.
+            logger.debug(f"Wikidata returned {len(search_results)} results for: {entity_text}")
 
-        Uses a two-tier approach:
-        1. First try exact label matching in specified language
-        2. Fall back to case-insensitive prefix matching in English
+            if not search_results:
+                logger.debug(f"No Wikidata results for: {entity_text}")
+                return None
 
-        Args:
-            entity_text: Entity text
-            entity_type: Entity type
-            language: Language code
+            # Return first result (highest ranked by Wikidata)
+            result = search_results[0]
+            wikidata_id = result.get("id", "")
+            label = result.get("label", entity_text)
+            description = result.get("description", "")
 
-        Returns:
-            SPARQL query string
-        """
-        # Type mapping to Wikidata classes
-        type_mapping = {
-            "PERSON": "wd:Q5",  # human
-            "ORGANIZATION": "wd:Q43229",  # organization
-            "LOCATION": "wd:Q618123",  # geographic location
-            "GPE": "wd:Q6256",  # country
-            "CURRENCY": "wd:Q8142",  # currency
-        }
+            logger.debug(f"Found Wikidata match: {label} ({wikidata_id}) - confidence: {result.get('match', {}).get('type', 'unknown')}")
 
-        wikidata_type = type_mapping.get(entity_type, "")
+            return {
+                "wikidata_id": wikidata_id,
+                "label": label,
+                "description": description,
+                "country": "",  # Not available from search API, would need separate call
+            }
 
-        # Escape quotes in entity text for SPARQL
-        escaped_text = entity_text.replace('"', '\\"')
+        except requests.exceptions.Timeout:
+            logger.error(f"Timeout searching Wikidata for {entity_text} after {self.timeout}s")
+            raise
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request error searching Wikidata for {entity_text}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Error parsing Wikidata response for {entity_text}: {e}")
+            raise
 
-        if wikidata_type:
-            # Use flexible label matching: try exact first, then prefix matching
-            query = f"""
-            SELECT ?item ?itemLabel ?itemDescription ?country WHERE {{
-              {{
-                # Try exact label match in specified language
-                ?item rdfs:label "{escaped_text}"@{language} .
-              }} UNION {{
-                # Try exact label match in English
-                ?item rdfs:label "{escaped_text}"@en .
-              }} UNION {{
-                # Try case-insensitive prefix match using FILTER
-                ?item rdfs:label ?label .
-                FILTER(REGEX(?label, "^{escaped_text}$", "i"))
-              }}
-              ?item wdt:P31 {wikidata_type} .
-              OPTIONAL {{ ?item wdt:P17 ?countryEntity . ?countryEntity rdfs:label ?country . }}
-              SERVICE wikibase:label {{ bd:serviceParam wikibase:language "{language},en" . }}
-            }}
-            LIMIT 5
-            """
-        else:
-            query = f"""
-            SELECT ?item ?itemLabel ?itemDescription ?country WHERE {{
-              {{
-                # Try exact label match in specified language
-                ?item rdfs:label "{escaped_text}"@{language} .
-              }} UNION {{
-                # Try exact label match in English
-                ?item rdfs:label "{escaped_text}"@en .
-              }} UNION {{
-                # Try case-insensitive prefix match using FILTER
-                ?item rdfs:label ?label .
-                FILTER(REGEX(?label, "^{escaped_text}$", "i"))
-              }}
-              OPTIONAL {{ ?item wdt:P17 ?countryEntity . ?countryEntity rdfs:label ?country . }}
-              SERVICE wikibase:label {{ bd:serviceParam wikibase:language "{language},en" . }}
-            }}
-            LIMIT 5
-            """
 
-        return query
 
     def get_entity_info(self, wikidata_id: str) -> Optional[Dict]:
         """
-        Get detailed entity information from Wikidata.
+        Get detailed entity information from Wikidata using MediaWiki API.
 
         Args:
-            wikidata_id: Wikidata identifier
+            wikidata_id: Wikidata identifier (e.g., "Q42")
 
         Returns:
             Entity information
         """
         try:
-            sparql = SPARQLWrapper(self.api_url)
+            api_url = "https://www.wikidata.org/w/api.php"
 
-            query = f"""
-            SELECT ?item ?itemLabel ?itemDescription ?country WHERE {{
-              BIND(wd:{wikidata_id} AS ?item)
-              OPTIONAL {{ ?item wdt:P17 ?countryEntity . ?countryEntity rdfs:label ?country . }}
-              SERVICE wikibase:label {{ bd:serviceParam wikibase:language "en" . }}
-            }}
-            """
+            logger.debug(f"Getting entity info for: {wikidata_id}")
 
-            sparql.setQuery(query)
-            sparql.setReturnFormat(JSON)
+            # Use wbgetentities endpoint to get entity data
+            params = {
+                "action": "wbgetentities",
+                "ids": wikidata_id,
+                "format": "json",
+                "languages": "en",
+                "props": "labels|descriptions"
+            }
 
-            results = sparql.query().convert()
-            bindings = results.get("results", {}).get("bindings", [])
+            response = requests.get(
+                api_url,
+                params=params,
+                timeout=self.timeout,
+                headers={"User-Agent": "sentiment-analyzer-ner-service/1.0"}
+            )
 
-            if not bindings:
+            response.raise_for_status()
+            results = response.json()
+
+            entities = results.get("entities", {})
+            entity_data = entities.get(wikidata_id, {})
+
+            if not entity_data or "missing" in entity_data:
+                logger.debug(f"Entity not found: {wikidata_id}")
                 return None
 
-            result = bindings[0]
+            labels = entity_data.get("labels", {})
+            descriptions = entity_data.get("descriptions", {})
+
+            label = labels.get("en", {}).get("value", "")
+            description = descriptions.get("en", {}).get("value", "")
+
+            logger.debug(f"Retrieved entity info: {label} ({wikidata_id})")
+
             return {
                 "wikidata_id": wikidata_id,
-                "label": result.get("itemLabel", {}).get("value", ""),
-                "description": result.get("itemDescription", {}).get("value", ""),
-                "country": result.get("country", {}).get("value", ""),
+                "label": label,
+                "description": description,
+                "country": "",  # Would need additional query to get country
             }
 
         except Exception as e:

@@ -25,21 +25,21 @@ data:
   ner_max_entities_per_article: "100"
   
   # Entity Linking Configuration
-  entity_linking_timeout: "10"
-  entity_linking_cache_ttl: "3600"
-  entity_linking_confidence_threshold: "0.7"
-  
+  entity_linking_timeout: "30"
+  entity_linking_cache_ttl: "2592000"
+  entity_linking_confidence_threshold: "0.75"
+
   # Wikidata Configuration
-  wikidata_api_timeout: "10"
+  wikidata_api_timeout: "30"
   wikidata_max_retries: "3"
   wikidata_retry_delay: "1"
-  
+
   # DBpedia Configuration
-  dbpedia_api_timeout: "10"
+  dbpedia_api_timeout: "30"
   dbpedia_confidence_threshold: "0.5"
-  
+
   # OpenSanctions Configuration
-  opensanctions_api_timeout: "10"
+  opensanctions_api_timeout: "30"
   opensanctions_enabled: "true"
   
   # Database Configuration

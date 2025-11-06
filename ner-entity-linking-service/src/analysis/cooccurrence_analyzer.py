@@ -40,14 +40,16 @@ except:
 class CooccurrenceAnalyzer:
     """Analyze entity co-occurrences in text."""
 
-    def __init__(self, window_size: int = 50):
+    def __init__(self, window_size: int = 50, cooccurrence_threshold: int = 3):
         """
         Initialize co-occurrence analyzer.
 
         Args:
             window_size: Context window size in characters (default 50)
+            cooccurrence_threshold: Minimum co-occurrence count for clustering (from config)
         """
         self.window_size = window_size
+        self.cooccurrence_threshold = cooccurrence_threshold
 
         # Use global metrics
         self.cooccurrences_found = _cooccurrences_found
@@ -212,21 +214,25 @@ class CooccurrenceAnalyzer:
     def detect_entity_clusters(
         self,
         cooccurrence_matrix: Dict[Tuple[str, str], int],
-        threshold: int = 3,
+        threshold: int = None,
     ) -> List[List[str]]:
         """
         Detect clusters of frequently co-occurring entities.
-        
+
         Args:
             cooccurrence_matrix: Co-occurrence matrix
-            threshold: Minimum co-occurrence count for edge
-            
+            threshold: Minimum co-occurrence count for edge (uses instance default if None)
+
         Returns:
             List of entity clusters
         """
+        # Use instance threshold if not provided
+        if threshold is None:
+            threshold = self.cooccurrence_threshold
+
         # Build adjacency list
         graph = defaultdict(set)
-        
+
         for (entity1, entity2), count in cooccurrence_matrix.items():
             if count >= threshold:
                 graph[entity1].add(entity2)

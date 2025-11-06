@@ -16,6 +16,8 @@ from src.clients.kafka_producer import KafkaProducerClient
 from src.actors.repository import ActorRepository
 from src.normalization.entity_normalizer import EntityNormalizer
 from src.linking.entity_linker import EntityLinker
+from src.linking.wikidata_client import WikidataClient
+from tests.test_fixtures import sample_entity
 
 
 @pytest.mark.integration
@@ -30,7 +32,8 @@ class TestE2EPipeline:
     @pytest.fixture
     def linker(self):
         """Create entity linker."""
-        return EntityLinker()
+        wikidata_client = WikidataClient(api_url="https://www.wikidata.org/w/api.php")
+        return EntityLinker(wikidata_client=wikidata_client)
 
     def test_entity_normalization_pipeline(self, normalizer: EntityNormalizer):
         """Test entity normalization in pipeline."""
@@ -42,19 +45,12 @@ class TestE2EPipeline:
         assert isinstance(normalized, str)
         assert len(normalized) > 0
 
-    def test_entity_linking_pipeline(self, linker: EntityLinker):
+    def test_entity_linking_pipeline(self, linker: EntityLinker, sample_entity: Entity):
         """Test entity linking in pipeline."""
-        entity_text = "Barack Obama"
-        entity_type = "PERSON"
-        language = "en"
-        
-        linked_entity = linker.link_entity(
-            entity_text=entity_text,
-            entity_type=entity_type,
-            language=language,
-        )
-        
+        linked_entity = linker.link_entity(sample_entity)
+
         assert linked_entity is not None
+        assert linked_entity.text == sample_entity.text
 
     def test_full_message_processing(
         self,
@@ -65,13 +61,15 @@ class TestE2EPipeline:
         # Create input message
         input_message = NewsCanonicalMessage(
             article_id="test-article-1",
+            canonical_url="https://test.com/article",
             title="Test Article",
-            content="John Smith works at Microsoft. He is from Seattle.",
+            normalized_body="John Smith works at Microsoft. He is from Seattle.",
             language="en",
+            publisher_id="pub-001",
+            publisher_credibility=0.95,
             domain="test.com",
             published_at="2025-11-03T20:00:00Z",
             normalized_at="2025-11-03T20:00:00Z",
-            source_url="https://test.com/article",
             trace_id="test-trace-1",
         )
         
@@ -79,17 +77,19 @@ class TestE2EPipeline:
         entity1 = Entity(
             entity_id="entity-1",
             text="John Smith",
-            entity_type="PERSON",
+            normalized_text="john smith",
+            entity_type=EntityType.PERSON,
             confidence=0.95,
             start_char=0,
             end_char=10,
             context_snippet="John Smith works at Microsoft",
         )
-        
+
         entity2 = Entity(
             entity_id="entity-2",
             text="Microsoft",
-            entity_type="ORGANIZATION",
+            normalized_text="microsoft",
+            entity_type=EntityType.ORGANIZATION,
             confidence=0.98,
             start_char=21,
             end_char=30,

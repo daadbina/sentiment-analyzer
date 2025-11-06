@@ -52,6 +52,7 @@ class EntityLinker:
         self,
         wikidata_client: WikidataClient,
         confidence_threshold: float = 0.75,
+        min_entity_length: int = 2,
     ):
         """
         Initialize entity linker.
@@ -59,9 +60,11 @@ class EntityLinker:
         Args:
             wikidata_client: Wikidata client instance
             confidence_threshold: Minimum confidence for linking
+            min_entity_length: Minimum entity text length (from config)
         """
         self.wikidata_client = wikidata_client
         self.confidence_threshold = confidence_threshold
+        self.min_entity_length = min_entity_length
 
     def _should_skip_entity(self, entity: Entity) -> bool:
         """
@@ -78,9 +81,9 @@ class EntityLinker:
             logger.debug(f"Skipping common word: '{entity.text}'")
             return True
 
-        # Skip very short entities (likely noise)
-        if len(entity.text) < 2:
-            logger.debug(f"Skipping short entity: '{entity.text}'")
+        # Skip very short entities (likely noise) - use configurable threshold
+        if len(entity.text) < self.min_entity_length:
+            logger.debug(f"Skipping short entity: '{entity.text}' (length < {self.min_entity_length})")
             return True
 
         return False

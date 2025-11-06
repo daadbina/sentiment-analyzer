@@ -103,6 +103,15 @@ class NERConfig(BaseSettings):
         default=30, env="PROCESSING_TIMEOUT_SECONDS"
     )
     model_cache_size: int = Field(default=5, env="MODEL_CACHE_SIZE")
+    min_entity_length: int = Field(
+        default=2, env="MIN_ENTITY_LENGTH", description="Minimum entity text length"
+    )
+    cooccurrence_threshold: int = Field(
+        default=3, env="COOCCURRENCE_THRESHOLD", description="Minimum co-occurrence count for entity clustering"
+    )
+    entity_linking_cache_ttl_seconds: int = Field(
+        default=2592000, env="ENTITY_LINKING_CACHE_TTL_SECONDS", description="Cache TTL in seconds (default 30 days)"
+    )
 
     model_config = SettingsConfigDict(case_sensitive=False, extra="ignore")
 
@@ -120,8 +129,8 @@ class ExternalAPIsConfig(BaseSettings):
     opensanctions_api_url: str = Field(
         default="", env="OPENSANCTIONS_API_URL"
     )
-    wikidata_timeout_seconds: int = Field(default=10, env="WIKIDATA_TIMEOUT_SECONDS")
-    dbpedia_timeout_seconds: int = Field(default=10, env="DBPEDIA_TIMEOUT_SECONDS")
+    wikidata_timeout_seconds: int = Field(default=30, env="WIKIDATA_TIMEOUT_SECONDS")
+    dbpedia_timeout_seconds: int = Field(default=30, env="DBPEDIA_TIMEOUT_SECONDS")
     circuit_breaker_threshold: int = Field(
         default=5, env="CIRCUIT_BREAKER_THRESHOLD"
     )
@@ -207,15 +216,18 @@ def get_config() -> ServiceConfig:
         coverage_threshold_en=float(os.getenv("COVERAGE_THRESHOLD_EN", "0.80")),
         coverage_threshold_other=float(os.getenv("COVERAGE_THRESHOLD_OTHER", "0.70")),
         fuzzy_match_similarity_threshold=float(os.getenv("FUZZY_MATCH_SIMILARITY_THRESHOLD", "0.90")),
-        model_cache_size=int(os.getenv("MODEL_CACHE_SIZE", "5"))
+        model_cache_size=int(os.getenv("MODEL_CACHE_SIZE", "5")),
+        min_entity_length=int(os.getenv("MIN_ENTITY_LENGTH", "2")),
+        cooccurrence_threshold=int(os.getenv("COOCCURRENCE_THRESHOLD", "3")),
+        entity_linking_cache_ttl_seconds=int(os.getenv("ENTITY_LINKING_CACHE_TTL_SECONDS", "2592000"))
     )
 
     external_apis_config = ExternalAPIsConfig.model_construct(
         wikidata_api_url=os.getenv("WIKIDATA_API_URL", "https://query.wikidata.org/sparql"),
         dbpedia_spotlight_url=os.getenv("DBPEDIA_SPOTLIGHT_URL", "https://api.dbpedia-spotlight.org/en/annotate"),
         opensanctions_api_url=os.getenv("OPENSANCTIONS_API_URL", ""),
-        wikidata_timeout_seconds=int(os.getenv("WIKIDATA_TIMEOUT_SECONDS", "10")),
-        dbpedia_timeout_seconds=int(os.getenv("DBPEDIA_TIMEOUT_SECONDS", "10")),
+        wikidata_timeout_seconds=int(os.getenv("WIKIDATA_TIMEOUT_SECONDS", "30")),
+        dbpedia_timeout_seconds=int(os.getenv("DBPEDIA_TIMEOUT_SECONDS", "30")),
         circuit_breaker_threshold=int(os.getenv("CIRCUIT_BREAKER_THRESHOLD", "5")),
         circuit_breaker_timeout=int(os.getenv("CIRCUIT_BREAKER_TIMEOUT", "60"))
     )

@@ -63,9 +63,15 @@ class CircuitBreaker:
             if self.state == CircuitState.OPEN:
                 if self._should_attempt_reset():
                     self.state = CircuitState.HALF_OPEN
-                    logger.info(f"Circuit {self.name} entering HALF_OPEN state")
+                    logger.info(f"Circuit {self.name} entering HALF_OPEN state (recovery timeout elapsed)")
                 else:
+                    elapsed = (datetime.now() - self.last_failure_time).total_seconds() if self.last_failure_time else 0
+                    logger.debug(f"Circuit {self.name} is OPEN, rejecting call (elapsed: {elapsed:.1f}s, timeout: {self.recovery_timeout}s)")
                     raise Exception(f"Circuit {self.name} is OPEN")
+            elif self.state == CircuitState.HALF_OPEN:
+                logger.debug(f"Circuit {self.name} is HALF_OPEN, attempting recovery call")
+            else:
+                logger.debug(f"Circuit {self.name} is CLOSED, executing call normally")
 
         try:
             result = func(*args, **kwargs)

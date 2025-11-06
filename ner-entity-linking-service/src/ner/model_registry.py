@@ -13,22 +13,22 @@ logger = logging.getLogger(__name__)
 class NERModelRegistry:
     """Registry for NER models by language."""
 
-    # Language to model mapping (all using HuggingFace)
+    # Language to model mapping (all using HuggingFace - publicly available NER-specific models)
     LANGUAGE_MODELS = {
-        "en": ("huggingface", "dslim/bert-base-uncased-finetuned-ner"),
-        "fa": ("huggingface", "HooshvareLab/bert-fa-base-uncased-ner"),
-        "ru": ("huggingface", "DeepPavlov/bert-base-multilingual-cased"),
-        "zh": ("huggingface", "bert-base-chinese"),
-        "ar": ("huggingface", "CAMeL-Lab/bert-base-arabic-camelbert-mix-ner"),
-        "de": ("huggingface", "dslim/bert-base-multilingual-cased-finetuned-ner"),
-        "fr": ("huggingface", "dslim/bert-base-multilingual-cased-finetuned-ner"),
-        "es": ("huggingface", "dslim/bert-base-multilingual-cased-finetuned-ner"),
-        "ja": ("huggingface", "dslim/bert-base-multilingual-cased-finetuned-ner"),
-        "ko": ("huggingface", "dslim/bert-base-multilingual-cased-finetuned-ner"),
-        "it": ("huggingface", "dslim/bert-base-multilingual-cased-finetuned-ner"),
-        "pt": ("huggingface", "dslim/bert-base-multilingual-cased-finetuned-ner"),
-        "tr": ("huggingface", "dslim/bert-base-multilingual-cased-finetuned-ner"),
-        "hi": ("huggingface", "dslim/bert-base-multilingual-cased-finetuned-ner"),
+        "en": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "fa": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "ru": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "zh": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "ar": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "de": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "fr": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "es": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "ja": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "ko": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "it": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "pt": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "tr": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
+        "hi": ("huggingface", "xlm-roberta-large-finetuned-conll03-english"),
     }
 
     def __init__(self, max_models: int = 5):

@@ -66,11 +66,11 @@ async def health_check():
     """
     try:
         status = await service.health_check()
-        return JSONResponse(status=200, content=status)
+        return JSONResponse(status_code=200, content=status)
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return JSONResponse(
-            status=503,
+            status_code=503,
             content={"error": str(e)},
         )
 
@@ -93,17 +93,17 @@ async def train_models(
     try:
         logger.info("Training request received")
         result = await service.train_pipeline(start_date, end_date)
-        return JSONResponse(status=200, content=result)
+        return JSONResponse(status_code=200, content=result)
     except TrainerError as e:
         logger.error(f"Training failed: {e}")
         return JSONResponse(
-            status=400,
+            status_code=400,
             content={"error": str(e)},
         )
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         return JSONResponse(
-            status=500,
+            status_code=500,
             content={"error": str(e)},
         )
 
@@ -119,16 +119,16 @@ async def list_models():
     try:
         if not service.trainer:
             return JSONResponse(
-                status=400,
+                status_code=400,
                 content={"error": "No models trained yet"},
             )
 
         models = service.trainer.compare_models()
-        return JSONResponse(status=200, content=models)
+        return JSONResponse(status_code=200, content=models)
     except Exception as e:
         logger.error(f"Failed to list models: {e}")
         return JSONResponse(
-            status=500,
+            status_code=500,
             content={"error": str(e)},
         )
 
@@ -144,16 +144,16 @@ async def get_evaluation_results():
     try:
         if not service.evaluator:
             return JSONResponse(
-                status=400,
+                status_code=400,
                 content={"error": "No evaluations performed yet"},
             )
 
         results = service.evaluator.get_evaluation_results()
-        return JSONResponse(status=200, content=results)
+        return JSONResponse(status_code=200, content=results)
     except Exception as e:
         logger.error(f"Failed to get evaluation results: {e}")
         return JSONResponse(
-            status=500,
+            status_code=500,
             content={"error": str(e)},
         )
 
@@ -169,16 +169,16 @@ async def get_drift_results():
     try:
         if not service.drift_detector:
             return JSONResponse(
-                status=400,
+                status_code=400,
                 content={"error": "No drift detection performed yet"},
             )
 
         results = service.drift_detector.get_drift_history()
-        return JSONResponse(status=200, content=results)
+        return JSONResponse(status_code=200, content=results)
     except Exception as e:
         logger.error(f"Failed to get drift results: {e}")
         return JSONResponse(
-            status=500,
+            status_code=500,
             content={"error": str(e)},
         )
 
@@ -194,16 +194,16 @@ async def list_artifacts():
     try:
         if not service.artifact_manager:
             return JSONResponse(
-                status=400,
+                status_code=400,
                 content={"error": "No artifacts registered yet"},
             )
 
         artifacts = service.artifact_manager.list_artifacts()
-        return JSONResponse(status=200, content=artifacts)
+        return JSONResponse(status_code=200, content=artifacts)
     except Exception as e:
         logger.error(f"Failed to list artifacts: {e}")
         return JSONResponse(
-            status=500,
+            status_code=500,
             content={"error": str(e)},
         )
 

@@ -7,7 +7,7 @@ Coordinates all training, evaluation, and registry operations.
 import logging
 import asyncio
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from src.config import config
 from src.clients.postgres_client import PostgreSQLClient
@@ -170,6 +170,17 @@ class TrainerService:
         with tracer.start_as_current_span("train_pipeline"):
             try:
                 logger.info("Starting training pipeline")
+
+                # Set default dates if not provided (18-month window)
+                if not end_date:
+                    end_date = datetime.now()
+                else:
+                    end_date = datetime.fromisoformat(end_date)
+
+                if not start_date:
+                    start_date = end_date - timedelta(days=18*30)  # 18 months
+                else:
+                    start_date = datetime.fromisoformat(start_date)
 
                 # Retrieve data
                 logger.info("Retrieving features and labels")

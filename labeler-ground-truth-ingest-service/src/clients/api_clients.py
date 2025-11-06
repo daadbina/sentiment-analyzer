@@ -442,10 +442,20 @@ class ACLEDFetcher(BaseAPIClient):
 
 
 class GDELTFetcher(BaseAPIClient):
-    """GDELT API fetcher using gdelt library."""
+    """GDELT API fetcher using gdelt library with NER-based country extraction."""
+
+    # GDELT event codes for conflict classification
+    CONFLICT_EVENT_CODES = {
+        18: "PROTEST",
+        19: "RIOT",
+        20: "VIOLENCE_AGAINST_CIVILIANS",
+        21: "MASS_VIOLENCE",
+        22: "ARMED_CONFLICT",
+        23: "MILITARY_ACTION"
+    }
 
     def __init__(self):
-        """Initialize GDELT fetcher."""
+        """Initialize GDELT fetcher with NER client."""
         super().__init__(
             name="GDELT",
             base_url=config.gdelt.api_url,
@@ -461,6 +471,22 @@ class GDELTFetcher(BaseAPIClient):
                 operation="init"
             )
             self.gdelt_client = None
+
+        # Initialize NER client for country extraction
+        try:
+            from src.clients.ner_client import NERClient
+            self.ner_client = NERClient()
+            logger.info(
+                "NER client initialized for GDELT country extraction",
+                operation="init"
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to initialize NER client: {str(e)}. Country extraction will be skipped.",
+                operation="init",
+                error_type=type(e).__name__
+            )
+            self.ner_client = None
 
     async def fetch(self) -> List[Dict[str, Any]]:
         """Fetch events from GDELT using gdelt library."""
@@ -537,7 +563,7 @@ class GDELTFetcher(BaseAPIClient):
             raise
 
     async def parse_response(self, response: Any) -> List[Dict[str, Any]]:
-        """Parse GDELT response (DataFrame from gdelt library)."""
+        """Parse GDELT response with event codes, Goldstein scale, and NER-based country extraction."""
         labels = []
 
         try:
@@ -559,7 +585,70 @@ class GDELTFetcher(BaseAPIClient):
                     domain = str(row.get("domain", "")) if "domain" in row else ""
                     language = str(row.get("language", "")) if "language" in row else "en"
 
-                    # Create label from article
+                    # Extract GDELT event code (if available)
+                    event_code = None
+                    event_type_name = "news_event"
+                    if "eventcode" in row:
+                        try:
+                            event_code = int(row.get("eventcode", 0))
+                            if event_code in self.CONFLICT_EVENT_CODES:
+                                event_type_name = self.CONFLICT_EVENT_CODES[event_code]
+                                logger.debug(
+                                    f"Extracted GDELT event code: {event_code} ({event_type_name})",
+                                    operation="gdelt_parse",
+                                    event_code=event_code,
+                                    event_type=event_type_name
+                                )
+                        except (ValueError, TypeError):
+                            event_code = None
+
+                    # Extract Goldstein scale (sentiment score: -10 to +10)
+                    goldstein_scale = 0.0
+                    if "goldstein_scale" in row:
+                        try:
+                            goldstein_scale = float(row.get("goldstein_scale", 0.0))
+                            logger.debug(
+                                f"Extracted Goldstein scale: {goldstein_scale}",
+                                operation="gdelt_parse",
+                                goldstein_scale=goldstein_scale
+                            )
+                        except (ValueError, TypeError):
+                            goldstein_scale = 0.0
+
+                    # Derive conflict label from event code or Goldstein scale
+                    label_conflict = 0
+                    if event_code and event_code in self.CONFLICT_EVENT_CODES:
+                        label_conflict = 1
+                    elif goldstein_scale < -2:  # Negative Goldstein = conflict
+                        label_conflict = 1
+
+                    # Extract countries using NER (from title + content)
+                    countries = []
+                    if self.ner_client:
+                        try:
+                            countries = await self.ner_client.extract_countries_combined(
+                                title=title,
+                                content="",  # GDELT Doc API doesn't provide full content
+                                language=language,
+                                article_id=url or f"gdelt_{idx}"
+                            )
+                            logger.debug(
+                                f"Extracted {len(countries)} countries from GDELT article",
+                                operation="gdelt_parse",
+                                countries=countries,
+                                country_count=len(countries)
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to extract countries using NER: {str(e)}",
+                                operation="gdelt_parse",
+                                error_type=type(e).__name__
+                            )
+                            countries = []
+
+                    # Use first country if available, otherwise empty string
+                    country = countries[0] if countries else ""
+
                     # Parse seendate from GDELT (format: YYYYMMDD)
                     try:
                         if seendate and len(seendate) == 8:
@@ -573,21 +662,34 @@ class GDELTFetcher(BaseAPIClient):
                     label = {
                         "event_id": url or f"gdelt_{idx}",
                         "event_date": seendate,
-                        "event_timestamp": event_timestamp,  # Actual event time (ISO format)
-                        "event_type": "news_event",
-                        "actor_a": domain,
-                        "actor_b": language,
-                        "goldstein_scale": 0.0,  # GDELT Doc API doesn't provide tone
+                        "event_timestamp": event_timestamp,
+                        "event_code": event_code,  # GDELT event code (18-23 for conflicts)
+                        "event_type": event_type_name,  # Derived from event code
+                        "country": country,  # Extracted using NER
+                        "countries": countries,  # All extracted countries
+                        "goldstein_scale": goldstein_scale,  # Sentiment score (-10 to +10)
+                        "label_conflict": label_conflict,  # Binary conflict label (0/1)
                         "label_event_type": "news_article",
                         "confidence": 0.80,  # Confidence for GDELT articles
                         "source_url": url,
                         "title": title,
                         "domain": domain,
                         "language": language,
-                        "fetched_at": datetime.utcnow().isoformat() + "Z",  # When fetched from API
+                        "fetched_at": datetime.utcnow().isoformat() + "Z",
                         "trace_id": logger.trace_id
                     }
                     labels.append(label)
+
+                    logger.debug(
+                        f"Parsed GDELT article: event_code={event_code}, goldstein={goldstein_scale}, "
+                        f"conflict={label_conflict}, countries={countries}",
+                        operation="gdelt_parse",
+                        event_code=event_code,
+                        goldstein_scale=goldstein_scale,
+                        label_conflict=label_conflict,
+                        countries=countries
+                    )
+
                 except Exception as e:
                     logger.warning(
                         f"Failed to parse GDELT article: {str(e)}",

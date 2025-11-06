@@ -23,6 +23,7 @@ from src.validation.drift_detector import DriftDetector
 from src.utils.trace import get_logger, TimedOperation
 from src.metrics import get_metrics
 from src.exceptions import LabelError
+from src.health import HealthChecker
 
 
 logger = get_logger(__name__, config.logging.log_level)
@@ -59,6 +60,9 @@ class LabelerService:
         self.deduplication_engine = DeduplicationEngine()
         self.drift_detector = DriftDetector()
         self.audit_logger = AuditLogger()
+
+        # Initialize health checker
+        self.health_checker = HealthChecker()
 
         self.running = False
         self.semantic_groups: List[Dict[str, Any]] = []
@@ -97,6 +101,14 @@ class LabelerService:
             # Initialize audit logger with database pool
             self.audit_logger.db_pool = self.postgres_writer.pool
             await self.audit_logger.ensure_audit_table()
+
+            # Set health checker dependencies
+            self.health_checker.set_dependencies(
+                kafka_producer=self.kafka_producer,
+                kafka_consumer=self.semantic_group_consumer,
+                postgres_client=self.postgres_client,
+                schema_registry_client=self.kafka_producer.schema_registry_client
+            )
 
             # Start metrics server
             metrics.start_server()
@@ -494,25 +506,36 @@ class LabelerService:
                 await asyncio.sleep(60)
 
     async def health_check(self) -> Dict[str, Any]:
-        """Health check endpoint."""
+        """Health check endpoint (/health)."""
+        health = await self.health_checker.get_health()
         return {
-            "status": "healthy" if self.running else "unhealthy",
+            "status": health["status"],
             "service": self.service_name,
             "version": self.service_version,
-            "timestamp": datetime.utcnow().isoformat()
+            "running": self.running,
+            "timestamp": datetime.utcnow().isoformat(),
+            "checks": health["checks"]
         }
 
     async def readiness_check(self) -> Dict[str, Any]:
-        """Readiness check endpoint."""
-        ready = (
-            self.running and
-            self.kafka_producer.producer is not None and
-            self.postgres_writer.pool is not None
-        )
-
+        """Readiness check endpoint (/ready)."""
+        ready = await self.health_checker.get_ready()
         return {
-            "ready": ready,
+            "ready": ready["ready"],
             "service": self.service_name,
-            "timestamp": datetime.utcnow().isoformat()
+            "version": self.service_version,
+            "timestamp": datetime.utcnow().isoformat(),
+            "checks": ready["checks"]
+        }
+
+    async def liveness_check(self) -> Dict[str, Any]:
+        """Liveness check endpoint (/live)."""
+        live = await self.health_checker.get_live()
+        return {
+            "alive": live["alive"],
+            "service": self.service_name,
+            "version": self.service_version,
+            "timestamp": datetime.utcnow().isoformat(),
+            "uptime_seconds": live["uptime_seconds"]
         }
 

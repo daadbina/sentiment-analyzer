@@ -1,0 +1,237 @@
+"""Health check endpoints for labeler service."""
+
+from typing import Dict, Any, Optional
+from datetime import datetime
+
+from src.config import config
+from src.utils.trace import get_logger
+
+logger = get_logger(__name__, config.logging.log_level)
+
+
+class HealthChecker:
+    """Health check manager for service dependencies."""
+
+    def __init__(self):
+        """Initialize health checker."""
+        self.start_time = datetime.now()
+        self.last_check_time: Optional[datetime] = None
+        self.kafka_producer = None
+        self.kafka_consumer = None
+        self.postgres_client = None
+        self.schema_registry_client = None
+
+    def set_dependencies(
+        self,
+        kafka_producer=None,
+        kafka_consumer=None,
+        postgres_client=None,
+        schema_registry_client=None
+    ):
+        """Set service dependencies for health checks.
+        
+        Args:
+            kafka_producer: Kafka producer client
+            kafka_consumer: Kafka consumer client
+            postgres_client: PostgreSQL client
+            schema_registry_client: Schema Registry client
+        """
+        self.kafka_producer = kafka_producer
+        self.kafka_consumer = kafka_consumer
+        self.postgres_client = postgres_client
+        self.schema_registry_client = schema_registry_client
+
+    async def check_kafka_producer(self) -> Dict[str, Any]:
+        """Check Kafka producer health.
+        
+        Returns:
+            Health status dictionary
+        """
+        try:
+            if not self.kafka_producer:
+                return {"status": "unknown", "message": "Producer not initialized"}
+            
+            status = self.kafka_producer.get_health_status()
+            
+            if status.get("connected"):
+                return {
+                    "status": "healthy",
+                    "message": "Kafka producer connected",
+                    "details": status
+                }
+            else:
+                return {
+                    "status": "unhealthy",
+                    "message": "Kafka producer not connected",
+                    "details": status
+                }
+        except Exception as e:
+            logger.error(
+                f"Error checking Kafka producer health: {str(e)}",
+                operation="check_kafka_producer"
+            )
+            return {
+                "status": "unhealthy",
+                "message": f"Error checking producer: {str(e)}"
+            }
+
+    async def check_kafka_consumer(self) -> Dict[str, Any]:
+        """Check Kafka consumer health.
+        
+        Returns:
+            Health status dictionary
+        """
+        try:
+            if not self.kafka_consumer:
+                return {"status": "unknown", "message": "Consumer not initialized"}
+            
+            status = self.kafka_consumer.get_health_status()
+            
+            if status.get("connected"):
+                return {
+                    "status": "healthy",
+                    "message": "Kafka consumer connected",
+                    "details": status
+                }
+            else:
+                return {
+                    "status": "unhealthy",
+                    "message": "Kafka consumer not connected",
+                    "details": status
+                }
+        except Exception as e:
+            logger.error(
+                f"Error checking Kafka consumer health: {str(e)}",
+                operation="check_kafka_consumer"
+            )
+            return {
+                "status": "unhealthy",
+                "message": f"Error checking consumer: {str(e)}"
+            }
+
+    async def check_postgres(self) -> Dict[str, Any]:
+        """Check PostgreSQL health.
+        
+        Returns:
+            Health status dictionary
+        """
+        try:
+            if not self.postgres_client:
+                return {"status": "unknown", "message": "PostgreSQL client not initialized"}
+            
+            # Try to execute a simple query
+            async with self.postgres_client.get_connection() as conn:
+                result = await conn.execute("SELECT 1")
+                await result.fetchone()
+            
+            return {
+                "status": "healthy",
+                "message": "PostgreSQL connected and responding"
+            }
+        except Exception as e:
+            logger.error(
+                f"Error checking PostgreSQL health: {str(e)}",
+                operation="check_postgres"
+            )
+            return {
+                "status": "unhealthy",
+                "message": f"PostgreSQL error: {str(e)}"
+            }
+
+    async def check_schema_registry(self) -> Dict[str, Any]:
+        """Check Schema Registry health.
+        
+        Returns:
+            Health status dictionary
+        """
+        try:
+            if not self.schema_registry_client:
+                return {"status": "unknown", "message": "Schema Registry client not initialized"}
+            
+            # Try to get subjects
+            subjects = self.schema_registry_client.get_subjects()
+            
+            return {
+                "status": "healthy",
+                "message": "Schema Registry connected",
+                "details": {"subjects_count": len(subjects)}
+            }
+        except Exception as e:
+            logger.error(
+                f"Error checking Schema Registry health: {str(e)}",
+                operation="check_schema_registry"
+            )
+            return {
+                "status": "unhealthy",
+                "message": f"Schema Registry error: {str(e)}"
+            }
+
+    async def get_health(self) -> Dict[str, Any]:
+        """Get overall service health.
+        
+        Returns:
+            Health status dictionary
+        """
+        self.last_check_time = datetime.now()
+        
+        kafka_producer_health = await self.check_kafka_producer()
+        kafka_consumer_health = await self.check_kafka_consumer()
+        postgres_health = await self.check_postgres()
+        schema_registry_health = await self.check_schema_registry()
+        
+        # Determine overall status
+        statuses = [
+            kafka_producer_health.get("status"),
+            kafka_consumer_health.get("status"),
+            postgres_health.get("status"),
+            schema_registry_health.get("status")
+        ]
+        
+        if "unhealthy" in statuses:
+            overall_status = "unhealthy"
+        elif "unknown" in statuses:
+            overall_status = "degraded"
+        else:
+            overall_status = "healthy"
+        
+        return {
+            "status": overall_status,
+            "timestamp": datetime.now().isoformat(),
+            "uptime_seconds": (datetime.now() - self.start_time).total_seconds(),
+            "checks": {
+                "kafka_producer": kafka_producer_health,
+                "kafka_consumer": kafka_consumer_health,
+                "postgres": postgres_health,
+                "schema_registry": schema_registry_health
+            }
+        }
+
+    async def get_ready(self) -> Dict[str, Any]:
+        """Get readiness status (all critical services must be healthy).
+        
+        Returns:
+            Readiness status dictionary
+        """
+        health = await self.get_health()
+        
+        # Service is ready if all checks are healthy
+        is_ready = health["status"] == "healthy"
+        
+        return {
+            "ready": is_ready,
+            "status": health["status"],
+            "checks": health["checks"]
+        }
+
+    async def get_live(self) -> Dict[str, Any]:
+        """Get liveness status (service is running).
+        
+        Returns:
+            Liveness status dictionary
+        """
+        return {
+            "alive": True,
+            "timestamp": datetime.now().isoformat(),
+            "uptime_seconds": (datetime.now() - self.start_time).total_seconds()
+        }
+

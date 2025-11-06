@@ -15,13 +15,13 @@ logger = logging.getLogger(__name__)
 class WikidataClient:
     """Client for Wikidata entity linking with caching, retry, and circuit breaker."""
 
-    def __init__(self, api_url: str, timeout: int = 10, redis_client: Optional[redis.Redis] = None, cache_ttl: int = 2592000):
+    def __init__(self, api_url: str, timeout: int = 30, redis_client: Optional[redis.Redis] = None, cache_ttl: int = 2592000):
         """
         Initialize Wikidata client.
 
         Args:
             api_url: Wikidata SPARQL endpoint URL
-            timeout: Request timeout in seconds
+            timeout: Request timeout in seconds (default 30s per architecture)
             redis_client: Redis client for caching
             cache_ttl: Cache TTL in seconds (default 30 days)
         """
@@ -31,10 +31,10 @@ class WikidataClient:
         self.cache_ttl = cache_ttl
 
         # Initialize retry policy with exponential backoff
-        # Reduced to 1 attempt to fail fast on Wikidata timeouts
+        # Per architecture: 3 attempts with exponential backoff for resilience
         self.retry_policy = get_retry_policy(
             name="wikidata_search",
-            max_attempts=1,
+            max_attempts=3,
             initial_delay=1.0,
             max_delay=30.0,
             backoff_strategy=BackoffStrategy.EXPONENTIAL,
@@ -75,9 +75,10 @@ class WikidataClient:
                 except Exception as e:
                     logger.warning(f"Cache lookup failed: {e}")
 
-            logger.debug(f"Searching Wikidata for entity: {entity_text} (type: {entity_type}, language: {language})")
+            logger.debug(f"Searching Wikidata for entity: {entity_text} (type: {entity_type}, language: {language}, timeout: {self.timeout}s)")
 
             # Execute with retry policy and circuit breaker
+            logger.debug(f"Circuit breaker state: {self.circuit_breaker.get_state()}")
             result = self.circuit_breaker.call(
                 self.retry_policy.execute,
                 self._search_wikidata,
@@ -101,7 +102,8 @@ class WikidataClient:
             return result
 
         except Exception as e:
-            logger.error(f"Error searching Wikidata for {entity_text}: {e}")
+            logger.error(f"Error searching Wikidata for {entity_text}: {type(e).__name__}: {e}")
+            logger.debug(f"Circuit breaker state after error: {self.circuit_breaker.get_state()}")
             return None
 
     def _search_wikidata(

@@ -5,6 +5,27 @@ All notable changes to the NER Entity Linking Service will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2025-11-06
+
+### In Progress - Architecture Audit & Resilience Fixes
+
+**Audit Findings:**
+- Circuit breaker opening due to Wikidata API timeouts (max_attempts=1 too aggressive)
+- Retry policy not following architecture spec (should have 3 attempts with exponential backoff)
+- Wikidata client timeout configuration needs adjustment
+- Circuit breaker recovery timeout needs validation
+- All configuration parameters must be externalized to config.py
+
+**Tasks:**
+1. [ ] Fix retry policy: increase max_attempts from 1 to 3 with exponential backoff
+2. [ ] Fix Wikidata client timeout: increase from 10s to 30s per architecture
+3. [ ] Validate circuit breaker configuration matches architecture (threshold=5, timeout=60)
+4. [ ] Add debug logging to circuit breaker state transitions
+5. [ ] Add debug logging to retry policy execution
+6. [ ] Test Wikidata API resilience with multiple articles
+7. [ ] Verify no circuit breaker opens during normal operation
+8. [ ] Commit all fixes with conventional commits
+
 ## [1.0.0] - 2025-11-04
 
 ### Completed

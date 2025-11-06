@@ -2,6 +2,7 @@
 
 import logging
 import sys
+import importlib.util
 from typing import List, Optional
 from pathlib import Path
 
@@ -16,25 +17,61 @@ class NERClient:
     def __init__(self):
         """Initialize NER client with orchestrator."""
         try:
-            # Add NER service src directory to path for imports
-            ner_service_path = Path(__file__).parent.parent.parent.parent / "ner-entity-linking-service" / "src"
-            if str(ner_service_path) not in sys.path:
-                sys.path.insert(0, str(ner_service_path))
+            # Get NER service paths
+            ner_service_root = Path(__file__).parent.parent.parent.parent / "ner-entity-linking-service"
+            ner_service_src = ner_service_root / "src"
 
-            # Import NER components (from src directory)
-            from ner.orchestrator import NEROrchestrator
-            from ner.model_registry import NERModelRegistry
-            from models import EntityType
+            ner_service_root_str = str(ner_service_root.resolve())
+            ner_service_src_str = str(ner_service_src.resolve())
 
-            self.NEROrchestrator = NEROrchestrator
-            self.NERModelRegistry = NERModelRegistry
-            self.EntityType = EntityType
+            logger.info(f"Loading NER service from: {ner_service_root_str}")
 
-            # Initialize model registry and orchestrator
-            self.model_registry = NERModelRegistry(cache_size=100)
-            self.orchestrator = NEROrchestrator(self.model_registry)
+            # Save original sys.path and sys.modules
+            original_sys_path = sys.path.copy()
+            original_src_module = sys.modules.get('src')
 
-            logger.info("NER client initialized successfully")
+            try:
+                # Clear sys.path and add only NER service root
+                # This ensures that the NER service's imports work correctly
+                sys.path = [ner_service_root_str] + [p for p in sys.path if p != ner_service_root_str]
+
+                # Remove 'src' from sys.modules so it gets re-imported from NER service
+                if 'src' in sys.modules:
+                    del sys.modules['src']
+
+                # Remove all src.* modules from sys.modules
+                modules_to_remove = [key for key in sys.modules.keys() if key.startswith('src.')]
+                for key in modules_to_remove:
+                    del sys.modules[key]
+
+                logger.info(f"Temporarily modified sys.path for NER service import")
+
+                # Now import the NER components
+                from src.ner.orchestrator import NEROrchestrator
+                from src.ner.model_registry import NERModelRegistry
+                from src.models import EntityType
+
+                logger.info(f"Successfully imported NER components")
+
+                self.NEROrchestrator = NEROrchestrator
+                self.NERModelRegistry = NERModelRegistry
+                self.EntityType = EntityType
+
+                # Initialize model registry and orchestrator
+                self.model_registry = NERModelRegistry(max_models=5)
+                self.orchestrator = NEROrchestrator(self.model_registry)
+
+                logger.info("NER client initialized successfully")
+
+            finally:
+                # Restore original sys.path
+                sys.path = original_sys_path
+
+                # Restore original src module if it existed
+                if original_src_module is not None:
+                    sys.modules['src'] = original_src_module
+                elif 'src' in sys.modules:
+                    del sys.modules['src']
 
         except ImportError as e:
             logger.error(f"Failed to import NER components: {str(e)}")

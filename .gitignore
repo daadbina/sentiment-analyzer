@@ -101,3 +101,6 @@ development/
 # MLflow
 mlruns/
 .mlflow/
+
+# Other
+COMPREHENSIVE_VALIDATION_REPORT.json

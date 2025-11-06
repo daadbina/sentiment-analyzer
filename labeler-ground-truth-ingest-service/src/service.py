@@ -322,11 +322,8 @@ class LabelerService:
     async def consume_semantic_groups(self):
         """Consume semantic groups from Kafka with retries."""
         try:
-            # Seek to beginning to get all messages
-            await self.semantic_group_consumer.seek_to_beginning()
-
-            # Try to consume with longer timeout to wait for messages
-            groups = await self.semantic_group_consumer.consume_batch(timeout_ms=10000, max_messages=1000)
+            # Consume semantic groups (seek_to_beginning already called in connect())
+            groups = await self.semantic_group_consumer.consume_batch(max_messages=1000)
             if groups:
                 self.semantic_groups = groups
                 logger.info(

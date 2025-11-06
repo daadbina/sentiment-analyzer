@@ -44,7 +44,8 @@ class SemanticGroupConsumer:
                 "bootstrap.servers": self.config.kafka.brokers,
                 "group.id": self.config.kafka.consumer_group,
                 "auto.offset.reset": "earliest",
-                "enable.auto.commit": False,
+                "enable.auto.commit": self.config.kafka.consumer_auto_commit_enabled,
+                "auto.commit.interval.ms": self.config.kafka.consumer_auto_commit_interval_ms,
                 "isolation.level": "read_committed",  # Exactly-once semantics
                 "max.poll.interval.ms": self.config.kafka.max_poll_interval_ms,  # Allow long processing
             }
@@ -58,7 +59,10 @@ class SemanticGroupConsumer:
                 operation="connect"
             )
             import time
-            time.sleep(1)  # Give consumer time to join group and get partitions
+            time.sleep(self.config.kafka.consumer_partition_wait_ms / 1000.0)
+
+            # Seek to beginning once on startup
+            await self.seek_to_beginning()
 
             logger.info(
                 "Kafka consumer connected for semantic groups",
@@ -93,12 +97,12 @@ class SemanticGroupConsumer:
             import time
             from confluent_kafka import TopicPartition
 
-            max_retries = 10
+            max_retries = self.config.kafka.consumer_max_retries
             retry_count = 0
             partitions = []
 
             while retry_count < max_retries and not partitions:
-                time.sleep(0.5)  # Wait for partition assignment
+                time.sleep(self.config.kafka.consumer_partition_wait_ms / 1000.0)
                 partitions = self.consumer.assignment()
                 retry_count += 1
 
@@ -145,12 +149,13 @@ class SemanticGroupConsumer:
                 exc_info=True
             )
 
-    async def consume_batch(self, timeout_ms: int = 5000, max_messages: int = 1000) -> List[Dict[str, Any]]:
+    async def consume_batch(self, timeout_ms: int = None, max_messages: int = 1000, force_reset: bool = False) -> List[Dict[str, Any]]:
         """Consume a batch of semantic groups.
 
         Args:
-            timeout_ms: Timeout in milliseconds per poll
+            timeout_ms: Timeout in milliseconds per poll (uses config default if None)
             max_messages: Maximum messages to consume in one batch
+            force_reset: Force seek to beginning (for recovery)
 
         Returns:
             List of semantic groups
@@ -159,21 +164,31 @@ class SemanticGroupConsumer:
             logger.error("Consumer not connected", operation="consume_batch")
             return []
 
+        # Use config default if timeout not specified
+        if timeout_ms is None:
+            timeout_ms = self.config.kafka.consumer_poll_timeout_ms
+
         groups = []
         messages_consumed = 0
         poll_count = 0
         consecutive_timeouts = 0
-        max_consecutive_timeouts = 5  # Break after 5 consecutive timeouts
+        max_consecutive_timeouts = self.config.kafka.consumer_max_consecutive_timeouts
         try:
             logger.info(
                 "Starting to consume semantic groups",
                 operation="consume_batch",
                 timeout_ms=timeout_ms,
-                max_messages=max_messages
+                max_messages=max_messages,
+                force_reset=force_reset
             )
 
-            # Poll multiple times to trigger rebalancing and get messages
-            max_polls = 50  # Poll up to 50 times
+            # Force seek to beginning if requested (for recovery)
+            if force_reset:
+                logger.info("Force reset requested, seeking to beginning", operation="consume_batch")
+                await self.seek_to_beginning()
+
+            # Poll multiple times to get messages
+            max_polls = self.config.kafka.consumer_max_polls
             while messages_consumed < max_messages and poll_count < max_polls:
                 msg = self.consumer.poll(timeout_ms / 1000.0)
                 poll_count += 1
@@ -221,10 +236,18 @@ class SemanticGroupConsumer:
                     groups.append(group_data)
                     messages_consumed += 1
 
-                    # Commit offset
-                    self.consumer.commit(asynchronous=False)
+                    # Batch commit offsets every N messages (if auto-commit disabled)
+                    if not self.config.kafka.consumer_auto_commit_enabled:
+                        if messages_consumed % self.config.kafka.consumer_batch_commit_interval == 0:
+                            self.consumer.commit(asynchronous=False)
+                            logger.debug(
+                                "Committed offset batch",
+                                operation="consume_batch",
+                                messages_committed=messages_consumed,
+                                offset=msg.offset()
+                            )
 
-                    logger.info(
+                    logger.debug(
                         "Consumed semantic group",
                         operation="consume_batch",
                         group_id=group_data.get("group_id"),

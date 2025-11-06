@@ -321,6 +321,10 @@ class LabelerService:
                 operation="process_labels"
             )
 
+            # Clear deduplication cache at start of each cycle
+            # This ensures we only deduplicate within the current batch, not against historical data
+            self.deduplication_engine.clear_cache()
+
             # Fetch labels
             labels = await self.fetch_labels()
 

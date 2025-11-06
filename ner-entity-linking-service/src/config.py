@@ -27,7 +27,6 @@ class KafkaConfig(BaseSettings):
     output_topic: str = Field(default="entities_extracted", env="KAFKA_OUTPUT_TOPIC")
     auto_offset_reset: str = Field(default="earliest", env="KAFKA_AUTO_OFFSET_RESET")
     session_timeout_ms: int = Field(default=30000, env="KAFKA_SESSION_TIMEOUT_MS")
-    request_timeout_ms: int = Field(default=40000, env="KAFKA_REQUEST_TIMEOUT_MS")
 
     model_config = SettingsConfigDict(case_sensitive=False, extra="ignore")
 
@@ -178,8 +177,7 @@ def get_config() -> ServiceConfig:
         input_topic=os.getenv("KAFKA_INPUT_TOPIC", "news_canonical"),
         output_topic=os.getenv("KAFKA_OUTPUT_TOPIC", "entities_extracted"),
         auto_offset_reset=os.getenv("KAFKA_AUTO_OFFSET_RESET", "earliest"),
-        session_timeout_ms=int(os.getenv("KAFKA_SESSION_TIMEOUT_MS", "30000")),
-        request_timeout_ms=int(os.getenv("KAFKA_REQUEST_TIMEOUT_MS", "40000"))
+        session_timeout_ms=int(os.getenv("KAFKA_SESSION_TIMEOUT_MS", "30000"))
     )
 
     postgres_config = PostgresConfig.model_construct(

@@ -1,6 +1,7 @@
 """Main FastAPI application."""
 
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, generate_latest
@@ -11,13 +12,6 @@ from .scheduler import ClusteringScheduler
 from .migrations import MigrationRunner
 
 logger = logging.getLogger(__name__)
-
-# Initialize FastAPI app
-app = FastAPI(
-    title="Clustering-Semantic-Grouping-Service",
-    description="Phase 2 semantic clustering service",
-    version="0.1.0",
-)
 
 # Initialize scheduler
 scheduler = ClusteringScheduler()
@@ -38,9 +32,10 @@ clusters_created_total = Counter(
 )
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Startup event handler."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup and shutdown events."""
+    # Startup
     logger.info("Starting clustering service")
     try:
         # Run database migrations
@@ -57,16 +52,24 @@ async def startup_event():
         logger.error(f"Startup failed: {e}", exc_info=True)
         raise
 
+    yield
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Shutdown event handler."""
+    # Shutdown
     logger.info("Shutting down clustering service")
     try:
         scheduler.stop()
         logger.info("Service shut down successfully")
     except Exception as e:
         logger.error(f"Shutdown failed: {e}", exc_info=True)
+
+
+# Initialize FastAPI app with lifespan
+app = FastAPI(
+    title="Clustering-Semantic-Grouping-Service",
+    description="Phase 2 semantic clustering service",
+    version="0.1.0",
+    lifespan=lifespan,
+)
 
 
 @app.get("/health")

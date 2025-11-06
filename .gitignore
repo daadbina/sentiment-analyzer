@@ -104,3 +104,4 @@ mlruns/
 
 # Other
 COMPREHENSIVE_VALIDATION_REPORT.json
+logs/

@@ -3,6 +3,9 @@
 import logging
 import signal
 import sys
+import redis
+import threading
+import time
 from datetime import datetime
 from src.config import get_config
 from src.ner.orchestrator import NEROrchestrator
@@ -27,6 +30,25 @@ class NEREntityLinkingService:
         """Initialize service."""
         self.config = get_config()
         self.running = False
+        self.redis_client = None
+
+        # Initialize Redis for caching
+        try:
+            self.redis_client = redis.Redis(
+                host=self.config.redis.host,
+                port=self.config.redis.port,
+                db=self.config.redis.db,
+                password=self.config.redis.password if self.config.redis.password else None,
+                socket_connect_timeout=self.config.redis.socket_connect_timeout,
+                socket_timeout=self.config.redis.socket_timeout,
+                decode_responses=True
+            )
+            # Test connection
+            self.redis_client.ping()
+            logger.info(f"Redis connected: {self.config.redis.host}:{self.config.redis.port}")
+        except Exception as e:
+            logger.warning(f"Redis connection failed: {e}. Continuing without caching.")
+            self.redis_client = None
 
         # Initialize components
         self.model_registry = NERModelRegistry(self.config.ner.model_cache_size)
@@ -34,6 +56,8 @@ class NEREntityLinkingService:
         self.wikidata_client = WikidataClient(
             self.config.external_apis.wikidata_api_url,
             self.config.external_apis.wikidata_timeout_seconds,
+            redis_client=self.redis_client,
+            cache_ttl=self.config.redis.cache_ttl_seconds,
         )
         self.entity_linker = EntityLinker(
             self.wikidata_client,
@@ -68,7 +92,9 @@ class NEREntityLinkingService:
             logger.info("Starting NER Entity Linking Service")
 
             # Initialize database schema
+            logger.info("Initializing database schema...")
             self.actor_repository.initialize_schema()
+            logger.info("Database schema initialized successfully")
 
             # Start Prometheus metrics server
             start_http_server(self.config.monitoring.prometheus_port)
@@ -112,10 +138,18 @@ class NEREntityLinkingService:
                 message.normalized_body, message.language, message.article_id
             )
 
-            # Link entities
-            linked_entities, linking_success_rate = self.entity_linker.link_entities(
-                ner_result.entities
-            )
+            # Link entities with timeout (max 60 seconds per article)
+            try:
+                start_time = time.time()
+                linked_entities, linking_success_rate = self.entity_linker.link_entities(
+                    ner_result.entities
+                )
+                linking_time = time.time() - start_time
+                logger.debug(f"Entity linking completed in {linking_time:.2f}s for article {message.article_id}")
+            except Exception as e:
+                logger.warning(f"Entity linking failed for article {message.article_id}: {e}. Using unlinked entities.")
+                linked_entities = ner_result.entities
+                linking_success_rate = 0.0
 
             # Persist actors
             for entity in linked_entities:
@@ -169,6 +203,9 @@ class NEREntityLinkingService:
             self.actor_repository.close()
             self.kafka_consumer.close()
             self.kafka_producer.close()
+            if self.redis_client:
+                self.redis_client.close()
+                logger.info("Redis connection closed")
             logger.info("Service shutdown complete")
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")

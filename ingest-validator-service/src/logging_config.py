@@ -28,10 +28,13 @@ def setup_logging(log_level: str = None) -> None:
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
-    # Add console handler
+    # Add console handler with UTF-8 encoding
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(level)
     console_handler.setFormatter(formatter)
+    # Force UTF-8 encoding to handle Unicode characters
+    if hasattr(console_handler, 'stream') and hasattr(console_handler.stream, 'reconfigure'):
+        console_handler.stream.reconfigure(encoding='utf-8')
     root_logger.addHandler(console_handler)
 
     # Set specific loggers

@@ -25,23 +25,32 @@ class ActorRepository:
             max_overflow: Maximum overflow connections
         """
         try:
+            logger.debug(f"Creating SQLAlchemy engine with pool_size={pool_size}, max_overflow={max_overflow}")
             self.engine = create_engine(
                 connection_string,
                 poolclass=QueuePool,
                 pool_size=pool_size,
                 max_overflow=max_overflow,
                 echo=False,
+                pool_pre_ping=True,
+                pool_recycle=3600,
+                connect_args={"connect_timeout": 10, "options": "-c statement_timeout=30000"},
             )
+            logger.debug("SQLAlchemy engine created successfully")
             logger.info("Actor repository initialized")
         except Exception as e:
-            logger.error(f"Failed to initialize actor repository: {e}")
+            logger.error(f"Failed to initialize actor repository: {e}", exc_info=True)
             raise ActorRepositoryError(f"Failed to initialize repository: {e}")
 
     def initialize_schema(self) -> None:
         """Initialize database schema."""
         try:
+            logger.debug("Attempting to get database connection...")
             with self.engine.connect() as conn:
+                logger.debug("Database connection established")
+
                 # Create actors table
+                logger.debug("Creating actors table...")
                 conn.execute(
                     text("""
                     CREATE TABLE IF NOT EXISTS actors (
@@ -64,32 +73,45 @@ class ActorRepository:
                     )
                     """)
                 )
+                logger.debug("Actors table created successfully")
 
                 # Create indexes
+                logger.debug("Creating index: idx_actors_normalized_name...")
                 conn.execute(
                     text(
                         "CREATE INDEX IF NOT EXISTS idx_actors_normalized_name ON actors(normalized_name)"
                     )
                 )
+                logger.debug("Index idx_actors_normalized_name created")
+
+                logger.debug("Creating index: idx_actors_wikidata_id...")
                 conn.execute(
                     text(
                         "CREATE INDEX IF NOT EXISTS idx_actors_wikidata_id ON actors(wikidata_id) WHERE wikidata_id IS NOT NULL"
                     )
                 )
+                logger.debug("Index idx_actors_wikidata_id created")
+
+                logger.debug("Creating index: idx_actors_type...")
                 conn.execute(
                     text("CREATE INDEX IF NOT EXISTS idx_actors_type ON actors(type)")
                 )
+                logger.debug("Index idx_actors_type created")
+
+                logger.debug("Creating index: idx_actors_country...")
                 conn.execute(
                     text(
                         "CREATE INDEX IF NOT EXISTS idx_actors_country ON actors(country) WHERE country IS NOT NULL"
                     )
                 )
+                logger.debug("Index idx_actors_country created")
 
+                logger.debug("Committing transaction...")
                 conn.commit()
-                logger.info("Actor schema initialized")
+                logger.info("Actor schema initialized successfully")
 
         except Exception as e:
-            logger.error(f"Failed to initialize schema: {e}")
+            logger.error(f"Failed to initialize schema: {e}", exc_info=True)
             raise ActorRepositoryError(f"Failed to initialize schema: {e}")
 
     def upsert_actor(self, actor: Actor) -> str:

@@ -3,8 +3,9 @@
 import logging
 from typing import Optional
 from confluent_kafka import Producer
-from confluent_kafka.schema_registry import SchemaRegistryClient, SerializationContext, MessageField
+from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroSerializer
+from confluent_kafka.serialization import SerializationContext, MessageField
 from src.config import get_config
 from src.exceptions import KafkaError as KafkaErrorException
 from src.models import NewsValidated, NewsRejected

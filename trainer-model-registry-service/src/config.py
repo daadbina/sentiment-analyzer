@@ -366,7 +366,7 @@ class ServiceConfig(BaseSettings):
     version: str = Field(
         default="1.0.0", alias="SERVICE_VERSION", description="Service version"
     )
-    port: int = Field(default=8000, alias="SERVICE_PORT", description="Service port")
+    port: int = Field(default=8008, alias="SERVICE_PORT", description="Service port")
     host: str = Field(
         default="0.0.0.0", alias="SERVICE_HOST", description="Service host"
     )

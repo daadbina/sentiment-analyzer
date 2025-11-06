@@ -3,8 +3,9 @@
 import logging
 import json
 from confluent_kafka import Producer, KafkaError
-from confluent_kafka.schema_registry import SchemaRegistryClient, SerializationContext, MessageField
+from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroSerializer
+from confluent_kafka.serialization import SerializationContext, MessageField
 from src.models import EntitiesExtractedMessage
 from src.exceptions import KafkaError as KafkaServiceError
 

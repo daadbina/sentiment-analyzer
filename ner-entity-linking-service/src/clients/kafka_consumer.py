@@ -23,7 +23,6 @@ class KafkaConsumerClient:
         input_topic: str,
         auto_offset_reset: str = "earliest",
         session_timeout_ms: int = 30000,
-        request_timeout_ms: int = 40000,
     ):
         """
         Initialize Kafka consumer.
@@ -35,7 +34,6 @@ class KafkaConsumerClient:
             input_topic: Input topic name
             auto_offset_reset: Auto offset reset strategy
             session_timeout_ms: Session timeout
-            request_timeout_ms: Request timeout
         """
         self.brokers = brokers
         self.consumer_group = consumer_group
@@ -57,7 +55,6 @@ class KafkaConsumerClient:
                     "group.id": consumer_group,
                     "auto.offset.reset": auto_offset_reset,
                     "session.timeout.ms": session_timeout_ms,
-                    "request.timeout.ms": request_timeout_ms,
                     "enable.auto.commit": False,
                 }
             )

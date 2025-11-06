@@ -2,10 +2,10 @@
 
 import json
 import os
-from confluent_kafka import Producer
-from confluent_kafka.avro import AvroProducer
+from confluent_kafka import Producer, KafkaError
 from confluent_kafka.schema_registry import SchemaRegistryClient
-from confluent_kafka.schema_registry.schema_registry_client import Schema
+from confluent_kafka.schema_registry.avro import AvroSerializer
+from confluent_kafka.serialization import SerializationContext, MessageField
 from typing import Dict, Any, Optional, Callable
 from ..config import config
 from ..utils import StructuredLogger
@@ -20,7 +20,9 @@ class FeaturesProducer:
     def __init__(self):
         """Initialize producer."""
         self.config = config
-        self.producer: Optional[AvroProducer] = None
+        self.producer: Optional[Producer] = None
+        self.schema_registry_client: Optional[SchemaRegistryClient] = None
+        self.avro_serializer: Optional[AvroSerializer] = None
         self.topic = "features_computed"
         self.schema_str: Optional[str] = None
 
@@ -31,8 +33,8 @@ class FeaturesProducer:
             True if connection successful
         """
         try:
-            # Register schema with Schema Registry
-            schema_registry_client = SchemaRegistryClient(
+            # Initialize schema registry client
+            self.schema_registry_client = SchemaRegistryClient(
                 {"url": self.config.kafka.schema_registry_url}
             )
 
@@ -44,35 +46,25 @@ class FeaturesProducer:
             with open(schema_path, "r") as f:
                 self.schema_str = f.read()
 
-            # Register value schema
-            schema = Schema(self.schema_str, schema_type="AVRO")
-            schema_id = schema_registry_client.register_schema(
-                subject_name=f"{self.topic}-value",
-                schema=schema
+            # Initialize Avro serializer
+            self.avro_serializer = AvroSerializer(
+                self.schema_registry_client,
+                self.schema_str,
             )
+
             logger.info(
-                "Schema registered",
-                schema_id=schema_id,
+                "Schema loaded and serializer initialized",
                 topic=self.topic,
             )
 
-            # Register key schema (simple string)
-            key_schema_str = '{"type": "string"}'
-            key_schema = Schema(key_schema_str, schema_type="AVRO")
-            key_schema_id = schema_registry_client.register_schema(
-                subject_name=f"{self.topic}-key",
-                schema=key_schema
-            )
-            self.key_schema_str = key_schema_str
-
+            # Initialize Kafka producer
             producer_config = {
                 "bootstrap.servers": self.config.kafka.brokers,
                 "acks": "all",  # Wait for all replicas
                 "retries": 3,
-                "schema.registry.url": self.config.kafka.schema_registry_url,
             }
 
-            self.producer = AvroProducer(producer_config)
+            self.producer = Producer(producer_config)
 
             logger.info(
                 "Kafka producer connected",
@@ -111,7 +103,7 @@ class FeaturesProducer:
         Returns:
             True if message queued successfully
         """
-        if not self.producer:
+        if not self.producer or not self.avro_serializer:
             raise KafkaErrorException("Producer not connected")
 
         try:
@@ -148,12 +140,16 @@ class FeaturesProducer:
                 if callback:
                     callback(err, msg)
 
+            # Serialize message using AvroSerializer
+            serialized_value = self.avro_serializer(
+                message_value,
+                SerializationContext(self.topic, MessageField.VALUE),
+            )
+
             self.producer.produce(
                 topic=self.topic,
-                value=message_value,
-                key=group_id,
-                value_schema=self.schema_str,
-                key_schema=self.key_schema_str,
+                value=serialized_value,
+                key=group_id.encode("utf-8"),
                 on_delivery=delivery_callback,
             )
 

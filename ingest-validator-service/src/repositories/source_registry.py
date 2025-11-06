@@ -50,8 +50,9 @@ class SourceRegistryRepository:
 
         try:
             async with self.pool.acquire() as conn:
+                # Use case-insensitive lookup
                 row = await conn.fetchrow(
-                    "SELECT * FROM sources WHERE id = $1",
+                    "SELECT * FROM sources WHERE LOWER(id) = LOWER($1)",
                     source_id,
                 )
                 return dict(row) if row else None

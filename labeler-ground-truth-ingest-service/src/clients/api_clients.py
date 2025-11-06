@@ -179,13 +179,26 @@ class ACLEDFetcher(BaseAPIClient):
         """Get OAuth access token from ACLED."""
         logger.info(
             "Requesting OAuth token from ACLED",
-            operation="acled_oauth"
+            operation="acled_oauth",
+            oauth_url=self.oauth_url
         )
+
+        # Validate credentials are configured
+        if not self.username or not self.password:
+            error_msg = "ACLED credentials not configured (ACLED_USERNAME and ACLED_PASSWORD required)"
+            logger.error(
+                error_msg,
+                operation="acled_oauth",
+                has_username=bool(self.username),
+                has_password=bool(self.password)
+            )
+            raise FetchError(error_msg)
 
         try:
             if not self.session:
                 self.session = aiohttp.ClientSession()
 
+            # Prepare OAuth request data
             data = {
                 "username": self.username,
                 "password": self.password,
@@ -198,42 +211,77 @@ class ACLEDFetcher(BaseAPIClient):
                 "Content-Type": "application/x-www-form-urlencoded"
             }
 
+            logger.info(
+                "Sending OAuth token request to ACLED",
+                operation="acled_oauth",
+                username=self.username[:10] + "***" if self.username else "N/A"
+            )
+
             async with self.session.post(
                 self.oauth_url,
                 data=data,
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=self.timeout_seconds)
             ) as resp:
+                response_text = await resp.text()
+
+                logger.info(
+                    f"OAuth response received: HTTP {resp.status}",
+                    operation="acled_oauth",
+                    status_code=resp.status,
+                    response_length=len(response_text)
+                )
+
                 if resp.status != 200:
-                    error_text = await resp.text()
                     logger.error(
                         f"OAuth token request failed: HTTP {resp.status}",
                         operation="acled_oauth",
                         status_code=resp.status,
-                        response_text=error_text
+                        response_text=response_text[:500]  # Log first 500 chars
                     )
-                    raise FetchError(f"OAuth token request failed: HTTP {resp.status}: {error_text}")
+                    raise FetchError(f"OAuth token request failed: HTTP {resp.status}: {response_text[:200]}")
 
-                response = await resp.json()
+                try:
+                    response = await resp.json()
+                except Exception as json_err:
+                    logger.error(
+                        f"Failed to parse OAuth response as JSON: {str(json_err)}",
+                        operation="acled_oauth",
+                        response_text=response_text[:500]
+                    )
+                    raise FetchError(f"Invalid JSON response from ACLED OAuth: {str(json_err)}")
+
                 self.access_token = response.get("access_token")
+                if not self.access_token:
+                    logger.error(
+                        "OAuth response missing access_token field",
+                        operation="acled_oauth",
+                        response_keys=list(response.keys())
+                    )
+                    raise FetchError(f"OAuth response missing access_token: {response}")
+
                 expires_in = response.get("expires_in", 86400)
                 self.token_expires_at = time.time() + expires_in
 
                 logger.info(
                     "Successfully obtained OAuth token from ACLED",
                     operation="acled_oauth",
-                    expires_in=expires_in
+                    expires_in=expires_in,
+                    token_length=len(self.access_token)
                 )
 
                 return self.access_token
 
+        except FetchError:
+            raise
         except Exception as e:
             logger.error(
                 f"Failed to get OAuth token: {str(e)}",
                 operation="acled_oauth",
-                error_type=type(e).__name__
+                error_type=type(e).__name__,
+                error_details=str(e)
             )
-            raise
+            raise FetchError(f"ACLED OAuth error: {str(e)}")
 
     async def _ensure_valid_token(self) -> str:
         """Ensure we have a valid OAuth token."""
@@ -254,7 +302,18 @@ class ACLEDFetcher(BaseAPIClient):
 
         try:
             # Ensure we have a valid token
+            logger.info(
+                "Ensuring valid OAuth token",
+                operation="acled_fetch"
+            )
             token = await self._ensure_valid_token()
+
+            if not token:
+                logger.error(
+                    "Failed to obtain OAuth token",
+                    operation="acled_fetch"
+                )
+                return []
 
             # Calculate date range (last 24 hours)
             end_date = datetime.utcnow()
@@ -280,11 +339,19 @@ class ACLEDFetcher(BaseAPIClient):
                 f"Fetching from ACLED with date range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
                 operation="acled_fetch",
                 start_date=start_date.strftime("%Y-%m-%d"),
-                end_date=end_date.strftime("%Y-%m-%d")
+                end_date=end_date.strftime("%Y-%m-%d"),
+                url=base_url_with_format
             )
 
             try:
                 response = await self._get(base_url_with_format, params=params, headers=headers)
+
+                logger.info(
+                    "ACLED API response received",
+                    operation="acled_fetch",
+                    response_status=response.get("status"),
+                    response_keys=list(response.keys()) if isinstance(response, dict) else "N/A"
+                )
 
                 # Check if response has status 200
                 if response.get("status") != 200:
@@ -292,7 +359,8 @@ class ACLEDFetcher(BaseAPIClient):
                     logger.error(
                         f"ACLED API returned non-200 status: {status}",
                         operation="acled_fetch",
-                        response_status=status
+                        response_status=status,
+                        full_response=str(response)[:500]
                     )
                     return []
 

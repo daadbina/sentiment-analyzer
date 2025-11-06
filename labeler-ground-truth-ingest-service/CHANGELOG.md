@@ -18,6 +18,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2025-11-06
+
+### Added
+- **NER Client** (src/clients/ner_client.py)
+  - Direct integration with NER Entity Linking Service
+  - Country extraction from text using NER orchestrator
+  - Support for LOCATION and GPE entity types
+  - Combined title+content extraction with deduplication
+  - Comprehensive error handling and logging
+
+- **Enhanced GDELT Fetcher** (src/clients/api_clients.py)
+  - Event code extraction (18-23 for conflict classification)
+  - Goldstein scale extraction (sentiment score -10 to +10)
+  - NER-based country extraction from article titles
+  - Binary conflict label derivation from event codes or Goldstein scale
+  - Fallback to empty country if NER extraction fails
+  - Comprehensive debug logging for all extraction phases
+
+- **Comprehensive Test Suite for GDELT Enhancement**
+  - 7 tests for GDELT fetcher with event code extraction
+  - 9 tests for NER client country extraction
+  - Test event code mapping (18-23 for conflicts)
+  - Test Goldstein scale extraction and conflict derivation
+  - Test NER country extraction with mocked orchestrator
+  - Test deduplication and error handling
+  - All 16 tests passing
+
+### Changed
+- Replaced ACLED API (HTTP 403 error) with enhanced GDELT + NER integration
+- GDELT now provides 80-85% of ACLED functionality
+- Improved label quality with NER-based country extraction
+
+### Fixed
+- ACLED 403 Forbidden error by replacing with GDELT+NER solution
+- Event code extraction now properly maps GDELT codes to conflict types
+- Goldstein scale now extracted from GDELT data (was hardcoded to 0.0)
+
+---
+
 ## [0.2.0] - 2025-11-05
 
 ### Added

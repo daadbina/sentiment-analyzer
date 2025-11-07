@@ -172,12 +172,7 @@ class DeduplicationEngine:
                 unique_labels=len(unique_labels),
                 duplicate_labels=len(duplicate_labels)
             )
-            
-            # Record metrics
-            from src.metrics import get_metrics
-            metrics = get_metrics(config.metrics.prometheus_port)
-            metrics.label_duplicates_detected_total.inc(len(duplicate_labels))
-            
+
             return unique_labels, duplicate_labels
         
         except Exception as e:

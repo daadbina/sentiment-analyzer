@@ -10,8 +10,11 @@ from confluent_kafka.schema_registry.error import SchemaRegistryError
 from src.config import config
 from src.utils.trace import get_logger
 from src.clients.circuit_breaker import CircuitBreaker, ExponentialBackoff
+from src.metrics import get_metrics
+import time
 
 logger = get_logger(__name__, config.logging.log_level)
+metrics = get_metrics(config.metrics.prometheus_port)
 
 
 class SemanticGroupConsumer:
@@ -206,8 +209,16 @@ class SemanticGroupConsumer:
 
             # Poll multiple times to get messages
             max_polls = self.config.kafka.consumer_max_polls
+            poll_start_time = time.time()
+
             while messages_consumed < max_messages and poll_count < max_polls:
+                poll_iteration_start = time.time()
                 msg = self.consumer.poll(timeout_ms / 1000.0)
+                poll_iteration_duration = time.time() - poll_iteration_start
+
+                # Record poll duration
+                metrics.record_kafka_consumer_poll(self.topic, poll_iteration_duration)
+
                 poll_count += 1
 
                 if msg is None:
@@ -253,15 +264,25 @@ class SemanticGroupConsumer:
                     groups.append(group_data)
                     messages_consumed += 1
 
+                    # Record consumed message
+                    metrics.record_kafka_consumer_message(self.topic)
+
                     # Batch commit offsets every N messages (if auto-commit disabled)
                     if not self.config.kafka.consumer_auto_commit_enabled:
                         if messages_consumed % self.config.kafka.consumer_batch_commit_interval == 0:
+                            commit_start = time.time()
                             self.consumer.commit(asynchronous=False)
-                            logger.debug(
+                            commit_duration = time.time() - commit_start
+
+                            # Record commit duration
+                            metrics.record_kafka_offset_commit(self.topic, commit_duration)
+
+                            logger.info(
                                 "Committed offset batch",
                                 operation="consume_batch",
                                 messages_committed=messages_consumed,
-                                offset=msg.offset()
+                                offset=msg.offset(),
+                                commit_duration_ms=commit_duration * 1000
                             )
 
                     logger.debug(
@@ -269,22 +290,31 @@ class SemanticGroupConsumer:
                         operation="consume_batch",
                         group_id=group_data.get("group_id"),
                         offset=msg.offset(),
+                        partition=msg.partition(),
                         messages_so_far=messages_consumed
                     )
 
                 except Exception as e:
+                    # Record deserialization error
+                    metrics.record_kafka_deserialization_error(self.topic)
+
                     logger.error(
                         f"Failed to deserialize message: {str(e)}",
                         operation="consume_batch",
-                        error_type=type(e).__name__
+                        error_type=type(e).__name__,
+                        offset=msg.offset() if msg else None,
+                        partition=msg.partition() if msg else None
                     )
 
+            total_duration = time.time() - poll_start_time
             logger.info(
                 f"Consume batch completed",
                 operation="consume_batch",
                 group_count=len(groups),
                 poll_count=poll_count,
-                max_polls=max_polls
+                max_polls=max_polls,
+                total_duration_seconds=total_duration,
+                messages_per_second=len(groups) / total_duration if total_duration > 0 else 0
             )
 
             return groups

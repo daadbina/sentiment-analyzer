@@ -15,6 +15,7 @@ from src.exceptions import KafkaError, SchemaRegistryError
 from src.utils.trace import get_logger
 from src.metrics import get_metrics
 from src.clients.circuit_breaker import CircuitBreaker, ExponentialBackoff
+import time
 
 
 logger = get_logger(__name__, config.logging.log_level)
@@ -275,6 +276,10 @@ class KafkaProducerClient:
                     try:
                         await self.produce_label(label)
                         success_count += 1
+
+                        # Record produced message
+                        metrics.record_kafka_producer_message(self.topic)
+
                     except Exception as e:
                         logger.error(
                             f"Failed to produce label: {str(e)}",
@@ -283,6 +288,9 @@ class KafkaProducerClient:
                             error_type=type(e).__name__
                         )
                         error_count += 1
+
+                        # Record production error
+                        metrics.record_kafka_production_error(self.topic)
 
                 # Flush after each batch
                 self.producer.flush()
@@ -297,6 +305,9 @@ class KafkaProducerClient:
                 )
 
             duration_seconds = time.time() - start_time
+
+            # Record production duration
+            metrics.record_kafka_production(self.topic, duration_seconds)
             metrics.record_fetch("kafka", success_count, duration_seconds)
 
             logger.info(
@@ -304,6 +315,8 @@ class KafkaProducerClient:
                 operation="produce_batch",
                 total_labels=len(labels),
                 success_count=success_count,
+                duration_seconds=duration_seconds,
+                throughput_labels_per_second=success_count / duration_seconds if duration_seconds > 0 else 0,
                 error_count=error_count,
                 duration_seconds=duration_seconds
             )

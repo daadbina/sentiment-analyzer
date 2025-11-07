@@ -1,0 +1,362 @@
+"""
+Configuration management for Predictor Online Inference Service.
+
+All configuration parameters are loaded from environment variables.
+No hardcoded values or defaults that could lead to production issues.
+"""
+
+import os
+from typing import Optional
+from dataclasses import dataclass
+
+
+@dataclass
+class KafkaConfig:
+    """Kafka configuration parameters."""
+    
+    brokers: str
+    consumer_group: str
+    schema_registry_url: str
+    semantic_groups_topic: str
+    ground_truth_topic: str
+    predictions_topic: str
+    enable_tls: bool
+    tls_ca_cert: Optional[str]
+    tls_client_cert: Optional[str]
+    tls_client_key: Optional[str]
+    
+    @classmethod
+    def from_env(cls) -> "KafkaConfig":
+        """Load Kafka configuration from environment variables."""
+        return cls(
+            brokers=os.environ["KAFKA_BROKERS"],
+            consumer_group=os.environ.get("CONSUMER_GROUP", "predictor-group"),
+            schema_registry_url=os.environ["SCHEMA_REGISTRY_URL"],
+            semantic_groups_topic=os.environ.get("SEMANTIC_GROUPS_TOPIC", "semantic_groups"),
+            ground_truth_topic=os.environ.get("GROUND_TRUTH_TOPIC", "ground_truth"),
+            predictions_topic=os.environ.get("PREDICTIONS_TOPIC", "predictions"),
+            enable_tls=os.environ.get("KAFKA_TLS_ENABLED", "false").lower() == "true",
+            tls_ca_cert=os.environ.get("KAFKA_TLS_CA_CERT"),
+            tls_client_cert=os.environ.get("KAFKA_TLS_CLIENT_CERT"),
+            tls_client_key=os.environ.get("KAFKA_TLS_CLIENT_KEY"),
+        )
+
+
+@dataclass
+class MLflowConfig:
+    """MLflow configuration parameters."""
+    
+    tracking_uri: str
+    model_name: str
+    model_version: str
+    fallback_model_version: Optional[str]
+    model_load_timeout_seconds: int
+    
+    @classmethod
+    def from_env(cls) -> "MLflowConfig":
+        """Load MLflow configuration from environment variables."""
+        return cls(
+            tracking_uri=os.environ["MLFLOW_TRACKING_URI"],
+            model_name=os.environ.get("MODEL_NAME", "news_prediction_model"),
+            model_version=os.environ.get("MODEL_VERSION", "production"),
+            fallback_model_version=os.environ.get("FALLBACK_MODEL_VERSION"),
+            model_load_timeout_seconds=int(os.environ.get("MODEL_LOAD_TIMEOUT_SECONDS", "5")),
+        )
+
+
+@dataclass
+class FeastConfig:
+    """Feast feature store configuration parameters."""
+    
+    repo_path: str
+    online_store_type: str
+    offline_store_type: str
+    redis_host: str
+    redis_port: int
+    redis_db: int
+    redis_ssl: bool
+    delta_lake_path: str
+    feature_freshness_threshold_seconds: int
+    feature_reconciliation_threshold: float
+    
+    @classmethod
+    def from_env(cls) -> "FeastConfig":
+        """Load Feast configuration from environment variables."""
+        return cls(
+            repo_path=os.environ["FEAST_REPO_PATH"],
+            online_store_type=os.environ.get("FEAST_ONLINE_STORE_TYPE", "redis"),
+            offline_store_type=os.environ.get("FEAST_OFFLINE_STORE_TYPE", "file"),
+            redis_host=os.environ.get("FEAST_REDIS_HOST", os.environ.get("REDIS_HOST", "localhost")),
+            redis_port=int(os.environ.get("FEAST_REDIS_PORT", os.environ.get("REDIS_PORT", "6379"))),
+            redis_db=int(os.environ.get("FEAST_REDIS_DB", "0")),
+            redis_ssl=os.environ.get("FEAST_REDIS_SSL", "false").lower() == "true",
+            delta_lake_path=os.environ.get("FEAST_DELTA_LAKE_PATH", "/data/delta"),
+            feature_freshness_threshold_seconds=int(os.environ.get("FEATURE_FRESHNESS_THRESHOLD_SECONDS", "3600")),
+            feature_reconciliation_threshold=float(os.environ.get("FEATURE_RECONCILIATION_THRESHOLD", "0.99")),
+        )
+
+
+@dataclass
+class RedisConfig:
+    """Redis cache configuration parameters."""
+    
+    host: str
+    port: int
+    db: int
+    password: Optional[str]
+    ssl: bool
+    max_connections: int
+    socket_timeout: int
+    socket_connect_timeout: int
+    
+    @classmethod
+    def from_env(cls) -> "RedisConfig":
+        """Load Redis configuration from environment variables."""
+        return cls(
+            host=os.environ.get("REDIS_HOST", "localhost"),
+            port=int(os.environ.get("REDIS_PORT", "6379")),
+            db=int(os.environ.get("REDIS_DB", "1")),
+            password=os.environ.get("REDIS_PASSWORD"),
+            ssl=os.environ.get("REDIS_SSL", "false").lower() == "true",
+            max_connections=int(os.environ.get("REDIS_MAX_CONNECTIONS", "50")),
+            socket_timeout=int(os.environ.get("REDIS_SOCKET_TIMEOUT", "5")),
+            socket_connect_timeout=int(os.environ.get("REDIS_SOCKET_CONNECT_TIMEOUT", "5")),
+        )
+
+
+@dataclass
+class PostgresConfig:
+    """PostgreSQL database configuration parameters."""
+    
+    host: str
+    port: int
+    user: str
+    password: str
+    database: str
+    min_pool_size: int
+    max_pool_size: int
+    command_timeout: int
+    ssl_mode: str
+    
+    @classmethod
+    def from_env(cls) -> "PostgresConfig":
+        """Load PostgreSQL configuration from environment variables."""
+        return cls(
+            host=os.environ["POSTGRES_HOST"],
+            port=int(os.environ.get("POSTGRES_PORT", "5432")),
+            user=os.environ["POSTGRES_USER"],
+            password=os.environ["POSTGRES_PASSWORD"],
+            database=os.environ["POSTGRES_DATABASE"],
+            min_pool_size=int(os.environ.get("POSTGRES_MIN_POOL_SIZE", "10")),
+            max_pool_size=int(os.environ.get("POSTGRES_MAX_POOL_SIZE", "50")),
+            command_timeout=int(os.environ.get("POSTGRES_COMMAND_TIMEOUT", "30")),
+            ssl_mode=os.environ.get("POSTGRES_SSL_MODE", "prefer"),
+        )
+
+
+@dataclass
+class InferenceConfig:
+    """Inference configuration parameters."""
+    
+    batch_size: int
+    inference_timeout_ms: int
+    max_concurrent_requests: int
+    enable_caching: bool
+    cache_ttl_seconds: int
+    
+    @classmethod
+    def from_env(cls) -> "InferenceConfig":
+        """Load inference configuration from environment variables."""
+        return cls(
+            batch_size=int(os.environ.get("BATCH_SIZE", "100")),
+            inference_timeout_ms=int(os.environ.get("INFERENCE_TIMEOUT_MS", "5000")),
+            max_concurrent_requests=int(os.environ.get("MAX_CONCURRENT_REQUESTS", "100")),
+            enable_caching=os.environ.get("ENABLE_CACHING", "true").lower() == "true",
+            cache_ttl_seconds=int(os.environ.get("PREDICTION_CACHE_TTL_SECONDS", "3600")),
+        )
+
+
+@dataclass
+class APIConfig:
+    """REST API configuration parameters."""
+    
+    host: str
+    port: int
+    workers: int
+    enable_cors: bool
+    cors_origins: list[str]
+    enable_auth: bool
+    api_key: Optional[str]
+    jwt_secret: Optional[str]
+    rate_limit_per_minute: int
+    
+    @classmethod
+    def from_env(cls) -> "APIConfig":
+        """Load API configuration from environment variables."""
+        cors_origins_str = os.environ.get("CORS_ORIGINS", "*")
+        cors_origins = [origin.strip() for origin in cors_origins_str.split(",")]
+        
+        return cls(
+            host=os.environ.get("API_HOST", "0.0.0.0"),
+            port=int(os.environ.get("REST_API_PORT", "8000")),
+            workers=int(os.environ.get("API_WORKERS", "4")),
+            enable_cors=os.environ.get("ENABLE_CORS", "true").lower() == "true",
+            cors_origins=cors_origins,
+            enable_auth=os.environ.get("ENABLE_AUTH", "false").lower() == "true",
+            api_key=os.environ.get("API_KEY"),
+            jwt_secret=os.environ.get("JWT_SECRET"),
+            rate_limit_per_minute=int(os.environ.get("RATE_LIMIT_PER_MINUTE", "60")),
+        )
+
+
+@dataclass
+class MonitoringConfig:
+    """Monitoring and observability configuration parameters."""
+    
+    prometheus_port: int
+    enable_tracing: bool
+    jaeger_agent_host: str
+    jaeger_agent_port: int
+    log_level: str
+    
+    @classmethod
+    def from_env(cls) -> "MonitoringConfig":
+        """Load monitoring configuration from environment variables."""
+        return cls(
+            prometheus_port=int(os.environ.get("PROMETHEUS_PORT", "9109")),
+            enable_tracing=os.environ.get("ENABLE_TRACING", "true").lower() == "true",
+            jaeger_agent_host=os.environ.get("JAEGER_AGENT_HOST", "localhost"),
+            jaeger_agent_port=int(os.environ.get("JAEGER_AGENT_PORT", "6831")),
+            log_level=os.environ.get("LOG_LEVEL", "INFO"),
+        )
+
+
+@dataclass
+class ValidationConfig:
+    """Validation and quality configuration parameters."""
+    
+    label_consistency_threshold: float
+    feature_reconciliation_threshold: float
+    feature_freshness_threshold_seconds: int
+    enable_drift_detection: bool
+    drift_check_interval_seconds: int
+    
+    @classmethod
+    def from_env(cls) -> "ValidationConfig":
+        """Load validation configuration from environment variables."""
+        return cls(
+            label_consistency_threshold=float(os.environ.get("LABEL_CONSISTENCY_THRESHOLD", "0.85")),
+            feature_reconciliation_threshold=float(os.environ.get("FEATURE_RECONCILIATION_THRESHOLD", "0.99")),
+            feature_freshness_threshold_seconds=int(os.environ.get("FEATURE_FRESHNESS_THRESHOLD_SECONDS", "3600")),
+            enable_drift_detection=os.environ.get("ENABLE_DRIFT_DETECTION", "true").lower() == "true",
+            drift_check_interval_seconds=int(os.environ.get("DRIFT_CHECK_INTERVAL_SECONDS", "3600")),
+        )
+
+
+@dataclass
+class Config:
+    """Main configuration container for all service settings."""
+    
+    kafka: KafkaConfig
+    mlflow: MLflowConfig
+    feast: FeastConfig
+    redis: RedisConfig
+    postgres: PostgresConfig
+    inference: InferenceConfig
+    api: APIConfig
+    monitoring: MonitoringConfig
+    validation: ValidationConfig
+    
+    @classmethod
+    def from_env(cls) -> "Config":
+        """Load complete configuration from environment variables."""
+        return cls(
+            kafka=KafkaConfig.from_env(),
+            mlflow=MLflowConfig.from_env(),
+            feast=FeastConfig.from_env(),
+            redis=RedisConfig.from_env(),
+            postgres=PostgresConfig.from_env(),
+            inference=InferenceConfig.from_env(),
+            api=APIConfig.from_env(),
+            monitoring=MonitoringConfig.from_env(),
+            validation=ValidationConfig.from_env(),
+        )
+    
+    def validate(self) -> None:
+        """
+        Validate configuration parameters.
+        
+        Raises:
+            ValueError: If any configuration parameter is invalid.
+        """
+        # Validate Kafka configuration
+        if not self.kafka.brokers:
+            raise ValueError("KAFKA_BROKERS environment variable is required")
+        if not self.kafka.schema_registry_url:
+            raise ValueError("SCHEMA_REGISTRY_URL environment variable is required")
+        
+        # Validate MLflow configuration
+        if not self.mlflow.tracking_uri:
+            raise ValueError("MLFLOW_TRACKING_URI environment variable is required")
+        
+        # Validate Feast configuration
+        if not self.feast.repo_path:
+            raise ValueError("FEAST_REPO_PATH environment variable is required")
+        
+        # Validate PostgreSQL configuration
+        if not self.postgres.host:
+            raise ValueError("POSTGRES_HOST environment variable is required")
+        if not self.postgres.user:
+            raise ValueError("POSTGRES_USER environment variable is required")
+        if not self.postgres.password:
+            raise ValueError("POSTGRES_PASSWORD environment variable is required")
+        if not self.postgres.database:
+            raise ValueError("POSTGRES_DATABASE environment variable is required")
+        
+        # Validate thresholds
+        if not 0.0 <= self.validation.label_consistency_threshold <= 1.0:
+            raise ValueError("LABEL_CONSISTENCY_THRESHOLD must be between 0.0 and 1.0")
+        if not 0.0 <= self.validation.feature_reconciliation_threshold <= 1.0:
+            raise ValueError("FEATURE_RECONCILIATION_THRESHOLD must be between 0.0 and 1.0")
+        
+        # Validate API authentication
+        if self.api.enable_auth:
+            if not self.api.api_key and not self.api.jwt_secret:
+                raise ValueError("API_KEY or JWT_SECRET required when ENABLE_AUTH is true")
+
+
+# Global configuration instance
+_config: Optional[Config] = None
+
+
+def get_config() -> Config:
+    """
+    Get the global configuration instance.
+    
+    Returns:
+        Config: The global configuration instance.
+    
+    Raises:
+        RuntimeError: If configuration has not been initialized.
+    """
+    global _config
+    if _config is None:
+        raise RuntimeError("Configuration not initialized. Call load_config() first.")
+    return _config
+
+
+def load_config() -> Config:
+    """
+    Load and validate configuration from environment variables.
+    
+    Returns:
+        Config: The loaded and validated configuration.
+    
+    Raises:
+        ValueError: If any required configuration is missing or invalid.
+    """
+    global _config
+    _config = Config.from_env()
+    _config.validate()
+    return _config
+

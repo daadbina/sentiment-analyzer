@@ -344,8 +344,9 @@ class LabelReconciler:
 
                 # If country+event type match found, use it
                 if country_event_match:
-                    # Combined confidence: temporal (0.4) + country_event (0.6)
-                    combined_confidence = (temporal_conf * 0.4) + (country_event_conf * 0.6)
+                    # Combined confidence: temporal (0.3) + country_event (0.7)
+                    # Give more weight to country+event matching since it's the primary strategy for GDELT
+                    combined_confidence = (temporal_conf * 0.3) + (country_event_conf * 0.7)
 
                     logger.debug(
                         f"Reconciliation match found (country+event type)",

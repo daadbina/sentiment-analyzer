@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed domain field mapping: now uses `domain_category` (topic category like 'politics', 'economy') from canonicalizer instead of `domain` (URL domain like 'bbc')
+- Verified all required metadata fields are correctly extracted and stored in Qdrant for clustering service consumption
+
 ### In Progress
 - Integration tests with Testcontainers
 - Contract tests for Avro schemas

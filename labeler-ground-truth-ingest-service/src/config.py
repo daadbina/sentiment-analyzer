@@ -43,6 +43,46 @@ class KafkaSettings(BaseSettings):
         alias="KAFKA_PRODUCER_BATCH_SIZE",
         description="Number of messages to produce before flushing"
     )
+    consumer_max_retries: int = Field(
+        default=10,
+        alias="KAFKA_CONSUMER_MAX_RETRIES",
+        description="Maximum retries for partition assignment"
+    )
+    consumer_max_consecutive_timeouts: int = Field(
+        default=5,
+        alias="KAFKA_CONSUMER_MAX_CONSECUTIVE_TIMEOUTS",
+        description="Maximum consecutive poll timeouts before breaking"
+    )
+    consumer_max_polls: int = Field(
+        default=20,
+        alias="KAFKA_CONSUMER_MAX_POLLS",
+        description="Maximum number of polls per consume_batch call"
+    )
+    consumer_poll_timeout_ms: int = Field(
+        default=5000,
+        alias="KAFKA_CONSUMER_POLL_TIMEOUT_MS",
+        description="Timeout in milliseconds per poll"
+    )
+    consumer_partition_wait_ms: int = Field(
+        default=1000,
+        alias="KAFKA_CONSUMER_PARTITION_WAIT_MS",
+        description="Wait time in milliseconds for partition assignment"
+    )
+    consumer_batch_commit_interval: int = Field(
+        default=100,
+        alias="KAFKA_CONSUMER_BATCH_COMMIT_INTERVAL",
+        description="Commit offset every N messages"
+    )
+    consumer_auto_commit_enabled: bool = Field(
+        default=False,
+        alias="KAFKA_CONSUMER_AUTO_COMMIT_ENABLED",
+        description="Enable automatic offset commits"
+    )
+    consumer_auto_commit_interval_ms: int = Field(
+        default=5000,
+        alias="KAFKA_CONSUMER_AUTO_COMMIT_INTERVAL_MS",
+        description="Auto-commit interval in milliseconds"
+    )
 
     model_config = ConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 

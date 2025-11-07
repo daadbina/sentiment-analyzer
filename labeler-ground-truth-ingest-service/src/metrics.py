@@ -82,6 +82,53 @@ class Metrics:
             "Size of current processing batch"
         )
 
+        # Kafka consumer metrics
+        self.kafka_consumer_lag = Gauge(
+            "kafka_consumer_lag",
+            "Kafka consumer lag in messages",
+            ["topic", "partition"]
+        )
+        self.kafka_messages_consumed_total = Counter(
+            "kafka_messages_consumed_total",
+            "Total messages consumed from Kafka",
+            ["topic"]
+        )
+        self.kafka_deserialization_errors_total = Counter(
+            "kafka_deserialization_errors_total",
+            "Total deserialization errors",
+            ["topic"]
+        )
+        self.kafka_offset_commit_duration_seconds = Histogram(
+            "kafka_offset_commit_duration_seconds",
+            "Kafka offset commit latency",
+            ["topic"],
+            buckets=(0.01, 0.05, 0.1, 0.5, 1.0)
+        )
+        self.kafka_consumer_poll_duration_seconds = Histogram(
+            "kafka_consumer_poll_duration_seconds",
+            "Kafka consumer poll latency",
+            ["topic"],
+            buckets=(0.01, 0.05, 0.1, 0.5, 1.0)
+        )
+
+        # Kafka producer metrics
+        self.kafka_messages_produced_total = Counter(
+            "kafka_messages_produced_total",
+            "Total messages produced to Kafka",
+            ["topic"]
+        )
+        self.kafka_production_errors_total = Counter(
+            "kafka_production_errors_total",
+            "Total production errors",
+            ["topic"]
+        )
+        self.kafka_production_duration_seconds = Histogram(
+            "kafka_production_duration_seconds",
+            "Kafka production latency",
+            ["topic"],
+            buckets=(0.01, 0.05, 0.1, 0.5, 1.0, 5.0)
+        )
+
     def start_server(self):
         """Start Prometheus metrics server."""
         start_http_server(self.port)
@@ -135,6 +182,38 @@ class Metrics:
     def set_batch_size(self, size: int):
         """Set batch size."""
         self.label_batch_size.set(size)
+
+    def record_kafka_consumer_message(self, topic: str):
+        """Record consumed Kafka message."""
+        self.kafka_messages_consumed_total.labels(topic=topic).inc()
+
+    def record_kafka_consumer_lag(self, topic: str, partition: int, lag: int):
+        """Record Kafka consumer lag."""
+        self.kafka_consumer_lag.labels(topic=topic, partition=partition).set(lag)
+
+    def record_kafka_deserialization_error(self, topic: str):
+        """Record Kafka deserialization error."""
+        self.kafka_deserialization_errors_total.labels(topic=topic).inc()
+
+    def record_kafka_offset_commit(self, topic: str, duration_seconds: float):
+        """Record Kafka offset commit."""
+        self.kafka_offset_commit_duration_seconds.labels(topic=topic).observe(duration_seconds)
+
+    def record_kafka_consumer_poll(self, topic: str, duration_seconds: float):
+        """Record Kafka consumer poll."""
+        self.kafka_consumer_poll_duration_seconds.labels(topic=topic).observe(duration_seconds)
+
+    def record_kafka_producer_message(self, topic: str):
+        """Record produced Kafka message."""
+        self.kafka_messages_produced_total.labels(topic=topic).inc()
+
+    def record_kafka_production_error(self, topic: str):
+        """Record Kafka production error."""
+        self.kafka_production_errors_total.labels(topic=topic).inc()
+
+    def record_kafka_production(self, topic: str, duration_seconds: float):
+        """Record Kafka production."""
+        self.kafka_production_duration_seconds.labels(topic=topic).observe(duration_seconds)
 
 
 # Global metrics instance

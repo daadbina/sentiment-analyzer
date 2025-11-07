@@ -9,8 +9,12 @@ from confluent_kafka.schema_registry.error import SchemaRegistryError
 
 from src.config import config
 from src.utils.trace import get_logger
+from src.clients.circuit_breaker import CircuitBreaker, ExponentialBackoff
+from src.metrics import get_metrics
+import time
 
 logger = get_logger(__name__, config.logging.log_level)
+metrics = get_metrics(config.metrics.prometheus_port)
 
 
 class SemanticGroupConsumer:
@@ -24,6 +28,21 @@ class SemanticGroupConsumer:
         self.schema_registry_client: Optional[SchemaRegistryClient] = None
         self.avro_deserializer: Optional[AvroDeserializer] = None
         self.semantic_groups: List[Dict[str, Any]] = []
+
+        # Initialize circuit breaker for resilience
+        self.circuit_breaker = CircuitBreaker(
+            name="semantic_group_consumer",
+            failure_threshold=5,
+            recovery_timeout_seconds=60
+        )
+
+        # Initialize exponential backoff for retries
+        self.backoff = ExponentialBackoff(
+            initial_delay_ms=100,
+            max_delay_ms=30000,
+            multiplier=2.0,
+            jitter=True
+        )
 
     async def connect(self) -> bool:
         """Connect to Kafka.
@@ -44,7 +63,8 @@ class SemanticGroupConsumer:
                 "bootstrap.servers": self.config.kafka.brokers,
                 "group.id": self.config.kafka.consumer_group,
                 "auto.offset.reset": "earliest",
-                "enable.auto.commit": False,
+                "enable.auto.commit": self.config.kafka.consumer_auto_commit_enabled,
+                "auto.commit.interval.ms": self.config.kafka.consumer_auto_commit_interval_ms,
                 "isolation.level": "read_committed",  # Exactly-once semantics
                 "max.poll.interval.ms": self.config.kafka.max_poll_interval_ms,  # Allow long processing
             }
@@ -58,7 +78,10 @@ class SemanticGroupConsumer:
                 operation="connect"
             )
             import time
-            time.sleep(1)  # Give consumer time to join group and get partitions
+            time.sleep(self.config.kafka.consumer_partition_wait_ms / 1000.0)
+
+            # Seek to beginning once on startup
+            await self.seek_to_beginning()
 
             logger.info(
                 "Kafka consumer connected for semantic groups",
@@ -73,6 +96,7 @@ class SemanticGroupConsumer:
                 operation="connect",
                 error_type=type(e).__name__
             )
+            self.circuit_breaker._on_failure()
             return False
         except Exception as e:
             logger.error(
@@ -85,72 +109,84 @@ class SemanticGroupConsumer:
     async def seek_to_beginning(self):
         """Seek consumer to the beginning of all partitions."""
         try:
+            start_time = time.time()
             if not self.consumer:
-                logger.error("Consumer not connected", operation="seek_to_beginning")
+                logger.error("Consumer not connected", operation="seek_to_beginning", duration_ms=0)
                 return
 
             # Wait for partition assignment with retries
-            import time
             from confluent_kafka import TopicPartition
 
-            max_retries = 10
+            max_retries = self.config.kafka.consumer_max_retries
             retry_count = 0
             partitions = []
 
             while retry_count < max_retries and not partitions:
-                time.sleep(0.5)  # Wait for partition assignment
+                time.sleep(self.config.kafka.consumer_partition_wait_ms / 1000.0)
                 partitions = self.consumer.assignment()
                 retry_count += 1
 
                 if not partitions:
+                    duration_ms = (time.time() - start_time) * 1000
                     logger.info(
                         f"Waiting for partition assignment",
                         operation="seek_to_beginning",
                         retry=retry_count,
-                        max_retries=max_retries
+                        max_retries=max_retries,
+                        duration_ms=duration_ms
                     )
 
+            duration_ms = (time.time() - start_time) * 1000
             logger.info(
                 f"Checking partitions for seek",
                 operation="seek_to_beginning",
                 partition_count=len(partitions) if partitions else 0,
-                retries_used=retry_count
+                retries_used=retry_count,
+                duration_ms=duration_ms
             )
 
             if not partitions:
-                logger.info("No partitions assigned after retries", operation="seek_to_beginning")
+                duration_ms = (time.time() - start_time) * 1000
+                logger.info("No partitions assigned after retries", operation="seek_to_beginning", duration_ms=duration_ms)
                 return
 
+            duration_ms = (time.time() - start_time) * 1000
             logger.info(
                 f"Seeking to beginning of {len(partitions)} partitions",
                 operation="seek_to_beginning",
-                partition_count=len(partitions)
+                partition_count=len(partitions),
+                duration_ms=duration_ms
             )
 
             # Seek to beginning for each partition
             for partition in partitions:
                 tp = TopicPartition(partition.topic(), partition.partition(), 0)
                 self.consumer.seek(tp)
+                duration_ms = (time.time() - start_time) * 1000
                 logger.info(
                     f"Seeked to beginning",
                     operation="seek_to_beginning",
                     topic=partition.topic(),
-                    partition=partition.partition()
+                    partition=partition.partition(),
+                    duration_ms=duration_ms
                 )
         except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
             logger.error(
                 f"Error seeking to beginning: {str(e)}",
                 operation="seek_to_beginning",
                 error_type=type(e).__name__,
+                duration_ms=duration_ms,
                 exc_info=True
             )
 
-    async def consume_batch(self, timeout_ms: int = 5000, max_messages: int = 1000) -> List[Dict[str, Any]]:
+    async def consume_batch(self, timeout_ms: int = None, max_messages: int = 1000, force_reset: bool = False) -> List[Dict[str, Any]]:
         """Consume a batch of semantic groups.
 
         Args:
-            timeout_ms: Timeout in milliseconds per poll
+            timeout_ms: Timeout in milliseconds per poll (uses config default if None)
             max_messages: Maximum messages to consume in one batch
+            force_reset: Force seek to beginning (for recovery)
 
         Returns:
             List of semantic groups
@@ -159,56 +195,76 @@ class SemanticGroupConsumer:
             logger.error("Consumer not connected", operation="consume_batch")
             return []
 
+        # Use config default if timeout not specified
+        if timeout_ms is None:
+            timeout_ms = self.config.kafka.consumer_poll_timeout_ms
+
         groups = []
         messages_consumed = 0
         poll_count = 0
         consecutive_timeouts = 0
-        max_consecutive_timeouts = 5  # Break after 5 consecutive timeouts
+        max_consecutive_timeouts = self.config.kafka.consumer_max_consecutive_timeouts
         try:
+            batch_start_time = time.time()
             logger.info(
                 "Starting to consume semantic groups",
                 operation="consume_batch",
                 timeout_ms=timeout_ms,
-                max_messages=max_messages
+                max_messages=max_messages,
+                force_reset=force_reset,
+                duration_ms=0
             )
 
-            # Poll multiple times to trigger rebalancing and get messages
-            max_polls = 50  # Poll up to 50 times
-            while messages_consumed < max_messages and poll_count < max_polls:
+            # Force seek to beginning if requested (for recovery)
+            if force_reset:
+                duration_ms = (time.time() - batch_start_time) * 1000
+                logger.info("Force reset requested, seeking to beginning", operation="consume_batch", duration_ms=duration_ms)
+                await self.seek_to_beginning()
+
+            # Poll multiple times to get messages
+            max_polls = self.config.kafka.consumer_max_polls
+            poll_start_time = time.time()
+
+            while messages_consumed < max_messages:
+                poll_iteration_start = time.time()
                 msg = self.consumer.poll(timeout_ms / 1000.0)
+                poll_iteration_duration = time.time() - poll_iteration_start
+
+                # Record poll duration
+                metrics.record_kafka_consumer_poll(self.topic, poll_iteration_duration)
+
                 poll_count += 1
 
                 if msg is None:
                     consecutive_timeouts += 1
+                    duration_ms = (time.time() - batch_start_time) * 1000
                     logger.info(
                         "Poll timeout reached",
                         operation="consume_batch",
                         messages_so_far=messages_consumed,
                         poll_count=poll_count,
-                        consecutive_timeouts=consecutive_timeouts
+                        consecutive_timeouts=consecutive_timeouts,
+                        duration_ms=duration_ms
                     )
-                    # Break after consecutive timeouts if we have consumed some messages
-                    if consecutive_timeouts >= max_consecutive_timeouts and messages_consumed > 0:
-                        logger.info(
-                            "Breaking consume loop after consecutive timeouts",
-                            operation="consume_batch",
-                            consecutive_timeouts=consecutive_timeouts,
-                            messages_consumed=messages_consumed
-                        )
-                        break
+                    # Continue polling indefinitely - do NOT exit on timeouts
+                    # This allows the service to wait for messages from clustering service
                     continue
 
                 if msg.error():
                     if msg.error().code() == KafkaError._PARTITION_EOF:
+                        duration_ms = (time.time() - batch_start_time) * 1000
                         logger.info(
                             "Reached end of partition",
-                            operation="consume_batch"
+                            operation="consume_batch",
+                            duration_ms=duration_ms
                         )
                         continue
                     else:
+                        duration_ms = (time.time() - batch_start_time) * 1000
                         logger.error(
                             f"Kafka error: {msg.error()}",
-                            operation="consume_batch"
+                            operation="consume_batch",
+                            duration_ms=duration_ms
                         )
                         break
 
@@ -221,39 +277,76 @@ class SemanticGroupConsumer:
                     groups.append(group_data)
                     messages_consumed += 1
 
-                    # Commit offset
-                    self.consumer.commit(asynchronous=False)
+                    # Record consumed message
+                    metrics.record_kafka_consumer_message(self.topic)
 
-                    logger.info(
+                    # Batch commit offsets every N messages (if auto-commit disabled)
+                    if not self.config.kafka.consumer_auto_commit_enabled:
+                        if messages_consumed % self.config.kafka.consumer_batch_commit_interval == 0:
+                            commit_start = time.time()
+                            self.consumer.commit(asynchronous=False)
+                            commit_duration = time.time() - commit_start
+
+                            # Record commit duration
+                            metrics.record_kafka_offset_commit(self.topic, commit_duration)
+
+                            duration_ms = (time.time() - batch_start_time) * 1000
+                            logger.info(
+                                "Committed offset batch",
+                                operation="consume_batch",
+                                messages_committed=messages_consumed,
+                                offset=msg.offset(),
+                                commit_duration_ms=commit_duration * 1000,
+                                duration_ms=duration_ms
+                            )
+
+                    duration_ms = (time.time() - batch_start_time) * 1000
+                    logger.debug(
                         "Consumed semantic group",
                         operation="consume_batch",
                         group_id=group_data.get("group_id"),
                         offset=msg.offset(),
-                        messages_so_far=messages_consumed
+                        partition=msg.partition(),
+                        messages_so_far=messages_consumed,
+                        duration_ms=duration_ms
                     )
 
                 except Exception as e:
+                    # Record deserialization error
+                    metrics.record_kafka_deserialization_error(self.topic)
+
+                    duration_ms = (time.time() - batch_start_time) * 1000
                     logger.error(
                         f"Failed to deserialize message: {str(e)}",
                         operation="consume_batch",
-                        error_type=type(e).__name__
+                        error_type=type(e).__name__,
+                        offset=msg.offset() if msg else None,
+                        partition=msg.partition() if msg else None,
+                        duration_ms=duration_ms
                     )
 
+            total_duration = time.time() - poll_start_time
+            duration_ms = (time.time() - batch_start_time) * 1000
             logger.info(
                 f"Consume batch completed",
                 operation="consume_batch",
                 group_count=len(groups),
                 poll_count=poll_count,
-                max_polls=max_polls
+                max_polls=max_polls,
+                total_duration_seconds=total_duration,
+                messages_per_second=len(groups) / total_duration if total_duration > 0 else 0,
+                duration_ms=duration_ms
             )
 
             return groups
 
         except Exception as e:
+            duration_ms = (time.time() - batch_start_time) * 1000
             logger.error(
                 f"Error consuming batch: {str(e)}",
                 operation="consume_batch",
                 error_type=type(e).__name__,
+                duration_ms=duration_ms,
                 exc_info=True
             )
             return groups
@@ -262,5 +355,17 @@ class SemanticGroupConsumer:
         """Disconnect from Kafka."""
         if self.consumer:
             self.consumer.close()
-            logger.info("Kafka consumer disconnected", operation="disconnect")
+            logger.info("Kafka consumer disconnected", operation="disconnect", duration_ms=0)
+
+    def get_health_status(self) -> dict:
+        """Get consumer health status including circuit breaker state.
+
+        Returns:
+            Health status dictionary
+        """
+        return {
+            "connected": self.consumer is not None,
+            "topic": self.topic,
+            "circuit_breaker": self.circuit_breaker.get_state()
+        }
 

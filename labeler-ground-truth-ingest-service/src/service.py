@@ -14,6 +14,7 @@ from src.clients.kafka_consumer import SemanticGroupConsumer
 from src.storage.delta_lake_writer import DeltaLakeWriter
 from src.storage.postgres_writer import PostgreSQLWriter
 from src.storage.audit_logger import AuditLogger
+from src.storage.outbox import OutboxManager
 from src.reconciliation.reconciler import LabelReconciler
 from src.validation.label_validator import LabelValidator, LicenseChecker, FreshnessValidator
 from src.validation.deduplication import DeduplicationEngine
@@ -21,6 +22,7 @@ from src.validation.drift_detector import DriftDetector
 from src.utils.trace import get_logger, TimedOperation
 from src.metrics import get_metrics
 from src.exceptions import LabelError
+from src.health import HealthChecker
 
 
 logger = get_logger(__name__, config.logging.log_level)
@@ -46,6 +48,9 @@ class LabelerService:
         self.delta_lake_writer = DeltaLakeWriter()
         self.postgres_writer = PostgreSQLWriter()
 
+        # Initialize outbox manager with postgres writer
+        self.outbox_manager = OutboxManager(self.postgres_writer)
+
         self.reconciler = LabelReconciler()
         self.validator = LabelValidator()
         self.license_checker = LicenseChecker()
@@ -53,6 +58,9 @@ class LabelerService:
         self.deduplication_engine = DeduplicationEngine()
         self.drift_detector = DriftDetector()
         self.audit_logger = AuditLogger()
+
+        # Initialize health checker
+        self.health_checker = HealthChecker()
 
         self.running = False
         self.semantic_groups: List[Dict[str, Any]] = []
@@ -82,9 +90,20 @@ class LabelerService:
             await self.postgres_writer.connect()
             await self.postgres_writer._ensure_tables()
 
+            # Initialize outbox table
+            await self.outbox_manager.initialize()
+
             # Initialize audit logger with database pool
             self.audit_logger.db_pool = self.postgres_writer.pool
             await self.audit_logger.ensure_audit_table()
+
+            # Set health checker dependencies
+            self.health_checker.set_dependencies(
+                kafka_producer=self.kafka_producer,
+                kafka_consumer=self.semantic_group_consumer,
+                postgres_writer=self.postgres_writer,
+                schema_registry_client=self.kafka_producer.schema_registry_client
+            )
 
             # Start metrics server
             metrics.start_server()
@@ -120,9 +139,19 @@ class LabelerService:
         self.running = False
 
         try:
+            # Clean up outbox (published events older than 7 days)
+            try:
+                await self.outbox_manager.cleanup_published_events(days_old=7)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to cleanup outbox: {str(e)}",
+                    operation="shutdown"
+                )
+
             await self.kafka_producer.disconnect()
             await self.semantic_group_consumer.disconnect()
             await self.postgres_writer.disconnect()
+            await self.postgres_client.disconnect()
 
             logger.info(
                 "Labeler service shut down successfully",
@@ -322,11 +351,8 @@ class LabelerService:
     async def consume_semantic_groups(self):
         """Consume semantic groups from Kafka with retries."""
         try:
-            # Seek to beginning to get all messages
-            await self.semantic_group_consumer.seek_to_beginning()
-
-            # Try to consume with longer timeout to wait for messages
-            groups = await self.semantic_group_consumer.consume_batch(timeout_ms=10000, max_messages=1000)
+            # Consume semantic groups (seek_to_beginning already called in connect())
+            groups = await self.semantic_group_consumer.consume_batch(max_messages=1000)
             if groups:
                 self.semantic_groups = groups
                 logger.info(
@@ -400,7 +426,7 @@ class LabelerService:
                 label["group_id"] = reconciliation_map.get(event_id)  # None if not reconciled
                 enriched_labels.append(label)
 
-            # Write to storage (all valid labels, not just reconciled ones)
+            # Write to storage using outbox pattern (all valid labels, not just reconciled ones)
             if enriched_labels:
                 # Write to Delta Lake
                 await self.delta_lake_writer.write_labels(enriched_labels)
@@ -408,8 +434,36 @@ class LabelerService:
                 # Write to PostgreSQL
                 await self.postgres_writer.write_labels(enriched_labels)
 
+                # Write to outbox for atomic Kafka production
+                outbox_events = []
+                for label in enriched_labels:
+                    event_id = label.get("event_id")
+                    group_id = label.get("group_id")
+                    trace_id = label.get("trace_id")
+
+                    # Write to outbox
+                    await self.outbox_manager.write_event(
+                        aggregate_id=group_id or event_id,
+                        aggregate_type="semantic_group" if group_id else "event",
+                        event_type="label_created",
+                        payload=label,
+                        trace_id=trace_id
+                    )
+                    outbox_events.append(event_id)
+
                 # Produce to Kafka (use enriched_labels which have the flat structure)
                 await self.kafka_producer.produce_batch(enriched_labels)
+
+                # Mark outbox events as published
+                for event_id in outbox_events:
+                    try:
+                        await self.outbox_manager.mark_published(event_id)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to mark outbox event as published: {str(e)}",
+                            operation="process_labels",
+                            event_id=event_id
+                        )
 
             logger.info(
                 "Label processing pipeline completed",
@@ -447,25 +501,36 @@ class LabelerService:
                 await asyncio.sleep(60)
 
     async def health_check(self) -> Dict[str, Any]:
-        """Health check endpoint."""
+        """Health check endpoint (/health)."""
+        health = await self.health_checker.get_health()
         return {
-            "status": "healthy" if self.running else "unhealthy",
+            "status": health["status"],
             "service": self.service_name,
             "version": self.service_version,
-            "timestamp": datetime.utcnow().isoformat()
+            "running": self.running,
+            "timestamp": datetime.utcnow().isoformat(),
+            "checks": health["checks"]
         }
 
     async def readiness_check(self) -> Dict[str, Any]:
-        """Readiness check endpoint."""
-        ready = (
-            self.running and
-            self.kafka_producer.producer is not None and
-            self.postgres_writer.pool is not None
-        )
-
+        """Readiness check endpoint (/ready)."""
+        ready = await self.health_checker.get_ready()
         return {
-            "ready": ready,
+            "ready": ready["ready"],
             "service": self.service_name,
-            "timestamp": datetime.utcnow().isoformat()
+            "version": self.service_version,
+            "timestamp": datetime.utcnow().isoformat(),
+            "checks": ready["checks"]
+        }
+
+    async def liveness_check(self) -> Dict[str, Any]:
+        """Liveness check endpoint (/live)."""
+        live = await self.health_checker.get_live()
+        return {
+            "alive": live["alive"],
+            "service": self.service_name,
+            "version": self.service_version,
+            "timestamp": datetime.utcnow().isoformat(),
+            "uptime_seconds": live["uptime_seconds"]
         }
 

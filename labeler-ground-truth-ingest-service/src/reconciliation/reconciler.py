@@ -428,12 +428,30 @@ class LabelReconciler:
     ) -> List[Dict[str, Any]]:
         """Reconcile batch of labels."""
         results = []
+        total_labels = len(labels)
 
-        for label in labels:
+        logger.info(
+            f"Starting batch reconciliation",
+            operation="reconcile_batch",
+            total_labels=total_labels,
+            semantic_groups=len(semantic_groups)
+        )
+
+        for idx, label in enumerate(labels):
             result = await self.reconcile(label, semantic_groups)
             if result:
                 result["label"] = label
                 results.append(result)
+
+            # Log progress every 1000 labels
+            if (idx + 1) % 1000 == 0:
+                logger.debug(
+                    f"Reconciliation progress",
+                    operation="reconcile_batch",
+                    processed=idx + 1,
+                    total=total_labels,
+                    matched_so_far=len(results)
+                )
 
         logger.info(
             f"Batch reconciliation completed",

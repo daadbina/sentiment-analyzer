@@ -176,6 +176,7 @@ class KafkaProducer:
                 {"name": "timestamp", "type": "long"},
                 {"name": "processing_time_ms", "type": "float"},
                 # Article content fields for downstream semantic processing
+                # All new fields have default values for backward compatibility
                 {"name": "title", "type": ["null", "string"], "default": None},
                 {"name": "content", "type": ["null", "string"], "default": None},
                 {"name": "url", "type": ["null", "string"], "default": None},
@@ -183,7 +184,7 @@ class KafkaProducer:
                 {"name": "publisher_id", "type": ["null", "string"], "default": None},
                 {"name": "source", "type": ["null", "string"], "default": None},
                 {"name": "domain", "type": ["null", "string"], "default": None},
-                {"name": "embedded_at", "type": "long"},
+                {"name": "embedded_at", "type": "long", "default": 0},
             ],
         })
 

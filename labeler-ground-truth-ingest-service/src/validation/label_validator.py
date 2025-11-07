@@ -19,7 +19,8 @@ class LabelValidator:
 
     def validate_confidence(self, label: Dict[str, Any]) -> Tuple[bool, str]:
         """Validate label confidence score."""
-        confidence = label.get("confidence", 0.0)
+        # Support both 'confidence' and 'label_confidence' field names
+        confidence = label.get("label_confidence") or label.get("confidence", 0.0)
 
         if not isinstance(confidence, (int, float)):
             return False, "Confidence must be numeric"
@@ -88,7 +89,6 @@ class LabelValidator:
         """Validate required fields."""
         required_fields = [
             "event_id",
-            "confidence",
             "fetched_at",
             "trace_id"
         ]
@@ -96,6 +96,10 @@ class LabelValidator:
         for field in required_fields:
             if field not in label or label[field] is None:
                 return False, f"Missing required field: {field}"
+
+        # Check for confidence field (support both 'confidence' and 'label_confidence')
+        if not (label.get("label_confidence") or label.get("confidence")):
+            return False, "Missing required field: confidence (label_confidence or confidence)"
 
         return True, "All required fields present"
 

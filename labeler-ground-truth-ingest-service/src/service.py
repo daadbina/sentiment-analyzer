@@ -3,6 +3,7 @@
 import asyncio
 import signal
 import sys
+import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from ulid import ULID
@@ -416,19 +417,66 @@ class LabelerService:
                     # Only write if there are reconciled results
                     if reconciled:
                         # Write reconciliation results to Delta Lake
+                        logger.debug(
+                            f"About to write {len(reconciled)} reconciliation results to Delta Lake",
+                            operation="reconcile_labels",
+                            source=source,
+                            result_count=len(reconciled)
+                        )
                         await self.delta_lake_writer.write_reconciliation_results(reconciled)
+                        logger.debug(
+                            f"Successfully wrote reconciliation results to Delta Lake",
+                            operation="reconcile_labels",
+                            source=source
+                        )
 
                         # Write reconciliation log to PostgreSQL
-                        batch_id = str(ULID())
+                        logger.debug(
+                            f"About to generate batch_id",
+                            operation="reconcile_labels",
+                            source=source
+                        )
+                        batch_id = str(uuid.uuid4())
+                        logger.debug(
+                            f"Generated batch_id: {batch_id}",
+                            operation="reconcile_labels",
+                            source=source,
+                            batch_id=batch_id
+                        )
+                        logger.debug(
+                            f"About to write {len(reconciled)} reconciliation logs to PostgreSQL",
+                            operation="reconcile_labels",
+                            source=source,
+                            batch_id=batch_id,
+                            result_count=len(reconciled)
+                        )
                         await self.postgres_writer.write_reconciliation_log(batch_id, reconciled)
+                        logger.debug(
+                            f"Successfully wrote reconciliation logs to PostgreSQL",
+                            operation="reconcile_labels",
+                            source=source,
+                            batch_id=batch_id
+                        )
 
                     # Log to audit trail
                     if op.duration_ms is not None:
+                        logger.debug(
+                            f"About to log reconciliation to audit trail",
+                            operation="reconcile_labels",
+                            source=source,
+                            total_labels=len(labels),
+                            reconciled_labels=len(reconciled)
+                        )
                         await self.audit_logger.log_reconciliation(
                             source=source.upper(),
                             total_labels=len(labels),
                             reconciled_labels=len(reconciled),
                             duration_ms=op.duration_ms
+                        )
+                        logger.debug(
+                            f"Successfully logged reconciliation to audit trail",
+                            operation="reconcile_labels",
+                            source=source
                         )
 
             except Exception as e:

@@ -672,18 +672,18 @@ class GDELTFetcher(BaseAPIClient):
                     seendate = str(row.get("SQLDATE", "")) if "SQLDATE" in row else ""
                     language = "en"  # GDELT is primarily English
 
-                    # Log first few articles to see what GDELT returns
-                    if idx < 3:
-                        logger.info(
-                            f"GDELT event {idx}: url={url[:50] if url else 'EMPTY'}, "
-                            f"title={title[:80] if title else 'EMPTY'}, "
-                            f"actor1={actor1_name}, actor2={actor2_name}, "
-                            f"sqldate={seendate}",
-                            operation="gdelt_parse",
-                            article_idx=idx,
-                            url_len=len(url),
-                            title_len=len(title)
-                        )
+                    # Log first few articles to see what GDELT returns (disabled for cleaner logs)
+                    # if idx < 3:
+                    #     logger.info(
+                    #         f"GDELT event {idx}: url={url[:50] if url else 'EMPTY'}, "
+                    #         f"title={title[:80] if title else 'EMPTY'}, "
+                    #         f"actor1={actor1_name}, actor2={actor2_name}, "
+                    #         f"sqldate={seendate}",
+                    #         operation="gdelt_parse",
+                    #         article_idx=idx,
+                    #         url_len=len(url),
+                    #         title_len=len(title)
+                    #     )
 
                     # Extract GDELT event code (EventCode field)
                     event_code = None
@@ -694,12 +694,12 @@ class GDELTFetcher(BaseAPIClient):
                             event_code = int(event_code_str) if event_code_str.isdigit() else None
                             if event_code and event_code in self.CONFLICT_EVENT_CODES:
                                 event_type_name = self.CONFLICT_EVENT_CODES[event_code]
-                                logger.debug(
-                                    f"Extracted GDELT event code: {event_code} ({event_type_name})",
-                                    operation="gdelt_parse",
-                                    event_code=event_code,
-                                    event_type=event_type_name
-                                )
+                                # logger.debug(
+                                #     f"Extracted GDELT event code: {event_code} ({event_type_name})",
+                                #     operation="gdelt_parse",
+                                #     event_code=event_code,
+                                #     event_type=event_type_name
+                                # )
                         except (ValueError, TypeError):
                             event_code = None
 
@@ -708,11 +708,11 @@ class GDELTFetcher(BaseAPIClient):
                     if "GoldsteinScale" in row:
                         try:
                             goldstein_scale = float(row.get("GoldsteinScale", 0.0))
-                            logger.debug(
-                                f"Extracted Goldstein scale: {goldstein_scale}",
-                                operation="gdelt_parse",
-                                goldstein_scale=goldstein_scale
-                            )
+                            # logger.debug(
+                            #     f"Extracted Goldstein scale: {goldstein_scale}",
+                            #     operation="gdelt_parse",
+                            #     goldstein_scale=goldstein_scale
+                            # )
                         except (ValueError, TypeError):
                             goldstein_scale = 0.0
 
@@ -747,15 +747,15 @@ class GDELTFetcher(BaseAPIClient):
                         country_name = COUNTRY_CODE_TO_NAME.get(code, code)  # Use code as fallback
                         countries.append(country_name)
 
-                    logger.debug(
-                        f"Extracted {len(countries)} countries from GDELT event",
-                        operation="gdelt_parse",
-                        actor1_country=actor1_country,
-                        actor2_country=actor2_country,
-                        action_country=action_country,
-                        countries=countries,
-                        country_count=len(countries)
-                    )
+                    # logger.debug(
+                    #     f"Extracted {len(countries)} countries from GDELT event",
+                    #     operation="gdelt_parse",
+                    #     actor1_country=actor1_country,
+                    #     actor2_country=actor2_country,
+                    #     action_country=action_country,
+                    #     countries=countries,
+                    #     country_count=len(countries)
+                    # )
 
                     # Use first country if available, otherwise empty string
                     country = countries[0] if countries else ""
@@ -801,15 +801,15 @@ class GDELTFetcher(BaseAPIClient):
                     }
                     labels.append(label)
 
-                    logger.debug(
-                        f"Parsed GDELT article: event_code={event_code}, goldstein={goldstein_scale}, "
-                        f"conflict={label_conflict}, countries={countries}",
-                        operation="gdelt_parse",
-                        event_code=event_code,
-                        goldstein_scale=goldstein_scale,
-                        label_conflict=label_conflict,
-                        countries=countries
-                    )
+                    # logger.debug(
+                    #     f"Parsed GDELT article: event_code={event_code}, goldstein={goldstein_scale}, "
+                    #     f"conflict={label_conflict}, countries={countries}",
+                    #     operation="gdelt_parse",
+                    #     event_code=event_code,
+                    #     goldstein_scale=goldstein_scale,
+                    #     label_conflict=label_conflict,
+                    #     countries=countries
+                    # )
 
                 except Exception as e:
                     logger.warning(

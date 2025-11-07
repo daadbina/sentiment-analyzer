@@ -154,12 +154,12 @@ class CountryEventTypeMatcher:
                     country_lower = country.lower()
                     if country_lower in group_words:
                         country_confidence = self.country_threshold
-                        logger.debug(
-                            f"Country match found",
-                            operation="country_event_match",
-                            country=country,
-                            group_desc=group_description[:50]
-                        )
+                        # logger.debug(
+                        #     f"Country match found",
+                        #     operation="country_event_match",
+                        #     country=country,
+                        #     group_desc=group_description[:50]
+                        # )
                         break
 
             # Check for event type keywords
@@ -171,12 +171,12 @@ class CountryEventTypeMatcher:
                     # Check if group mentions conflict-related keywords
                     if any(keyword in group_words for keyword in self.conflict_keywords):
                         event_type_confidence = self.event_type_threshold
-                        logger.debug(
-                            f"Event type match found",
-                            operation="country_event_match",
-                            event_type=label_event_type,
-                            group_desc=group_description[:50]
-                        )
+                        # logger.debug(
+                        #     f"Event type match found",
+                        #     operation="country_event_match",
+                        #     event_type=label_event_type,
+                        #     group_desc=group_description[:50]
+                        # )
 
             # Combined confidence: country match is primary, event type is secondary
             combined_confidence = max(country_confidence, event_type_confidence)
@@ -184,16 +184,16 @@ class CountryEventTypeMatcher:
             # Match if we have at least country or event type match
             matched = combined_confidence > 0.0
 
-            logger.debug(
-                f"Country+EventType matching result",
-                operation="country_event_match",
-                label_countries=label_countries,
-                label_event_type=label_event_type,
-                country_conf=country_confidence,
-                event_type_conf=event_type_confidence,
-                combined_conf=combined_confidence,
-                matched=matched
-            )
+            # logger.debug(
+            #     f"Country+EventType matching result",
+            #     operation="country_event_match",
+            #     label_countries=label_countries,
+            #     label_event_type=label_event_type,
+            #     country_conf=country_confidence,
+            #     event_type_conf=event_type_confidence,
+            #     combined_conf=combined_confidence,
+            #     matched=matched
+            # )
 
             return matched, combined_confidence
 
@@ -249,15 +249,15 @@ class SemanticMatcher:
             # Match if similarity meets threshold
             matched = similarity >= self.similarity_threshold
 
-            logger.debug(
-                f"Semantic matching result",
-                operation="semantic_match",
-                label_words=len(label_words),
-                group_words=len(group_words),
-                intersection=intersection,
-                similarity=similarity,
-                matched=matched
-            )
+            # logger.debug(
+            #     f"Semantic matching result",
+            #     operation="semantic_match",
+            #     label_words=len(label_words),
+            #     group_words=len(group_words),
+            #     intersection=intersection,
+            #     similarity=similarity,
+            #     matched=matched
+            # )
 
             return matched, similarity
 

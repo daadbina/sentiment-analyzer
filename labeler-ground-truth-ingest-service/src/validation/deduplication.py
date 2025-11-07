@@ -82,14 +82,15 @@ class DeduplicationEngine:
         """Register label in deduplication cache."""
         try:
             label_hash = self._compute_label_hash(label)
-            
+
             if label_hash:
                 self.seen_hashes[label_hash] = label
-                logger.debug(
-                    f"Label registered for deduplication",
-                    operation="register_label",
-                    label_hash=label_hash
-                )
+                # Disabled verbose logging for cleaner output
+                # logger.debug(
+                #     f"Label registered for deduplication",
+                #     operation="register_label",
+                #     label_hash=label_hash
+                # )
         except Exception as e:
             logger.error(
                 f"Failed to register label: {str(e)}",

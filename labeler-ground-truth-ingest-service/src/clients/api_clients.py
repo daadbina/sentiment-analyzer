@@ -483,7 +483,7 @@ class ACLEDFetcher(BaseAPIClient):
                 "event_type": event.get("event_type", ""),
                 "fatalities": int(event.get("fatalities", 0)),
                 "label_conflict": 1 if event.get("event_type") in ["Violence against civilians", "Protests"] else 0,
-                "confidence": 0.85,  # ACLED data is high confidence
+                "label_confidence": 0.85,  # ACLED data is high confidence (mapped to PostgreSQL column)
                 "label_source": "acled",  # Source identifier for deduplication
                 "source_url": event.get("source_url", ""),
                 "fetched_at": datetime.utcnow().isoformat() + "Z",  # When fetched from API
@@ -791,7 +791,7 @@ class GDELTFetcher(BaseAPIClient):
                         "goldstein_scale": goldstein_scale,  # Sentiment score (-10 to +10)
                         "label_conflict": label_conflict,  # Binary conflict label (0/1)
                         "label_event_type": "news_article",
-                        "confidence": 0.80,  # Confidence for GDELT articles
+                        "label_confidence": 0.80,  # Confidence for GDELT articles (mapped to PostgreSQL column)
                         "label_source": "gdelt",  # Source identifier for deduplication
                         "source_url": url,
                         "title": title,
@@ -928,7 +928,7 @@ class BinanceFetcher(BaseAPIClient):
                 "change_pct_10p": change_pct,
                 "label_spike": 1 if abs(change_pct) > 5.0 else 0,
                 "volatility_score": min(abs(change_pct) / 10.0, 1.0),
-                "confidence": 0.95,
+                "label_confidence": 0.95,  # Confidence for Binance prices (mapped to PostgreSQL column)
                 "label_source": "binance",  # Source identifier for deduplication
                 "source_url": "https://www.binance.com",
                 "fetched_at": datetime.utcnow().isoformat() + "Z",  # When fetched from API

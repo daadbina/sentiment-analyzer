@@ -19,6 +19,58 @@ from src.utils.trace import get_logger
 
 logger = get_logger(__name__, config.logging.log_level)
 
+# Country code to country name mapping (ISO 3166-1 alpha-2 to country name)
+COUNTRY_CODE_TO_NAME = {
+    "US": "United States",
+    "GB": "United Kingdom",
+    "CN": "China",
+    "RU": "Russia",
+    "IN": "India",
+    "BR": "Brazil",
+    "DE": "Germany",
+    "FR": "France",
+    "JP": "Japan",
+    "KR": "South Korea",
+    "IR": "Iran",
+    "SA": "Saudi Arabia",
+    "AE": "United Arab Emirates",
+    "IL": "Israel",
+    "PS": "Palestine",
+    "SY": "Syria",
+    "IQ": "Iraq",
+    "EG": "Egypt",
+    "TR": "Turkey",
+    "AU": "Australia",
+    "CA": "Canada",
+    "MX": "Mexico",
+    "ES": "Spain",
+    "IT": "Italy",
+    "NL": "Netherlands",
+    "BE": "Belgium",
+    "SE": "Sweden",
+    "NO": "Norway",
+    "DK": "Denmark",
+    "PL": "Poland",
+    "UA": "Ukraine",
+    "ZA": "South Africa",
+    "NG": "Nigeria",
+    "KE": "Kenya",
+    "TH": "Thailand",
+    "VN": "Vietnam",
+    "ID": "Indonesia",
+    "MY": "Malaysia",
+    "SG": "Singapore",
+    "PH": "Philippines",
+    "NZ": "New Zealand",
+    "AZE": "Azerbaijan",
+    "BRA": "Brazil",
+    "AJ": "Azerbaijan",
+    "RUS": "Russia",
+    "USA": "United States",
+    "RS": "Serbia",
+    "SP": "Spain",
+}
+
 
 class CircuitBreaker:
     """Circuit breaker for API calls."""
@@ -689,9 +741,11 @@ class GDELTFetcher(BaseAPIClient):
                     if action_country and action_country != "nan":
                         country_codes.add(action_country)
 
-                    # Convert country codes to country names (simple mapping)
-                    # For now, use the codes as-is; could enhance with proper mapping
-                    countries = list(country_codes)
+                    # Convert country codes to country names
+                    countries = []
+                    for code in country_codes:
+                        country_name = COUNTRY_CODE_TO_NAME.get(code, code)  # Use code as fallback
+                        countries.append(country_name)
 
                     logger.debug(
                         f"Extracted {len(countries)} countries from GDELT event",

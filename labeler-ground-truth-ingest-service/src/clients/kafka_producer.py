@@ -172,13 +172,27 @@ class KafkaProducerClient:
     def _delivery_report(self, err, msg):
         """Delivery report callback."""
         if err is not None:
-            logger.error(
-                f"Message delivery failed: {err}",
-                operation="delivery_report",
-                topic=msg.topic(),
-                partition=msg.partition(),
-                offset=msg.offset()
-            )
+            try:
+                # Try to get message details, but handle case where msg might be None or invalid
+                topic = msg.topic() if msg else "unknown"
+                partition = msg.partition() if msg else -1
+                offset = msg.offset() if msg else -1
+
+                logger.error(
+                    f"Message delivery failed: {err}",
+                    operation="delivery_report",
+                    topic=topic,
+                    partition=partition,
+                    offset=offset,
+                    error_type=type(err).__name__
+                )
+            except Exception as callback_err:
+                logger.error(
+                    f"Error in delivery report callback: {str(callback_err)}",
+                    operation="delivery_report",
+                    original_error=str(err),
+                    callback_error_type=type(callback_err).__name__
+                )
         # Removed verbose "Message delivered successfully" log - too noisy for debugging
 
     def _sanitize_value(self, value: Any, field_type: str) -> Any:

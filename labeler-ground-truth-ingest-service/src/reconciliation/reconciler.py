@@ -167,9 +167,11 @@ class CountryEventTypeMatcher:
             if label_event_type:
                 event_type_lower = label_event_type.lower()
                 # Check if event type contains conflict keywords
-                if any(keyword in event_type_lower for keyword in self.conflict_keywords):
+                has_conflict_keyword = any(keyword in event_type_lower for keyword in self.conflict_keywords)
+                if has_conflict_keyword:
                     # Check if group mentions conflict-related keywords
-                    if any(keyword in group_words for keyword in self.conflict_keywords):
+                    group_has_conflict = any(keyword in group_words for keyword in self.conflict_keywords)
+                    if group_has_conflict:
                         event_type_confidence = self.event_type_threshold
                         # logger.debug(
                         #     f"Event type match found",
@@ -177,6 +179,10 @@ class CountryEventTypeMatcher:
                         #     event_type=label_event_type,
                         #     group_desc=group_description[:50]
                         # )
+                    else:
+                        # Event type has conflict keyword but group doesn't
+                        # Give partial credit for event type match
+                        event_type_confidence = 0.4
 
             # Combined confidence: country match is primary, event type is secondary
             combined_confidence = max(country_confidence, event_type_confidence)

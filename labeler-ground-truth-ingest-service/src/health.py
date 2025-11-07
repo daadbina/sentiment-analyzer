@@ -18,27 +18,27 @@ class HealthChecker:
         self.last_check_time: Optional[datetime] = None
         self.kafka_producer = None
         self.kafka_consumer = None
-        self.postgres_client = None
+        self.postgres_writer = None
         self.schema_registry_client = None
 
     def set_dependencies(
         self,
         kafka_producer=None,
         kafka_consumer=None,
-        postgres_client=None,
+        postgres_writer=None,
         schema_registry_client=None
     ):
         """Set service dependencies for health checks.
-        
+
         Args:
             kafka_producer: Kafka producer client
             kafka_consumer: Kafka consumer client
-            postgres_client: PostgreSQL client
+            postgres_writer: PostgreSQL writer with pool
             schema_registry_client: Schema Registry client
         """
         self.kafka_producer = kafka_producer
         self.kafka_consumer = kafka_consumer
-        self.postgres_client = postgres_client
+        self.postgres_writer = postgres_writer
         self.schema_registry_client = schema_registry_client
 
     async def check_kafka_producer(self) -> Dict[str, Any]:
@@ -111,19 +111,21 @@ class HealthChecker:
 
     async def check_postgres(self) -> Dict[str, Any]:
         """Check PostgreSQL health.
-        
+
         Returns:
             Health status dictionary
         """
         try:
-            if not self.postgres_client:
-                return {"status": "unknown", "message": "PostgreSQL client not initialized"}
-            
+            if not self.postgres_writer or not self.postgres_writer.pool:
+                return {"status": "unknown", "message": "PostgreSQL writer not initialized"}
+
             # Try to execute a simple query
-            async with self.postgres_client.get_connection() as conn:
-                result = await conn.execute("SELECT 1")
-                await result.fetchone()
-            
+            conn = await self.postgres_writer.pool.acquire()
+            try:
+                await conn.fetchval("SELECT 1")
+            finally:
+                await self.postgres_writer.pool.release(conn)
+
             return {
                 "status": "healthy",
                 "message": "PostgreSQL connected and responding"

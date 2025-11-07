@@ -8,7 +8,6 @@ from sqlalchemy import text
 
 from src.config import config
 from src.utils.trace import get_logger
-from src.clients.postgres_client import PostgreSQLClient
 
 logger = get_logger(__name__, config.logging.log_level)
 
@@ -16,13 +15,13 @@ logger = get_logger(__name__, config.logging.log_level)
 class OutboxManager:
     """Manages outbox table for atomic writes across Kafka and PostgreSQL."""
 
-    def __init__(self, postgres_client: PostgreSQLClient):
+    def __init__(self, postgres_writer):
         """Initialize outbox manager.
-        
+
         Args:
-            postgres_client: PostgreSQL client instance
+            postgres_writer: PostgreSQL writer instance with pool
         """
-        self.postgres_client = postgres_client
+        self.postgres_writer = postgres_writer
         self.outbox_table = "outbox"
 
     async def initialize(self):
@@ -42,19 +41,21 @@ class OutboxManager:
                 error_message TEXT,
                 trace_id VARCHAR(255)
             );
-            
-            CREATE INDEX IF NOT EXISTS idx_outbox_published 
-                ON {self.outbox_table}(published) 
+
+            CREATE INDEX IF NOT EXISTS idx_outbox_published
+                ON {self.outbox_table}(published)
                 WHERE published = FALSE;
-            
-            CREATE INDEX IF NOT EXISTS idx_outbox_created_at 
+
+            CREATE INDEX IF NOT EXISTS idx_outbox_created_at
                 ON {self.outbox_table}(created_at);
             """
-            
-            async with self.postgres_client.get_connection() as conn:
-                await conn.execute(text(create_table_sql))
-                await conn.commit()
-            
+
+            conn = await self.postgres_writer.pool.acquire()
+            try:
+                await conn.execute(create_table_sql)
+            finally:
+                await self.postgres_writer.pool.release(conn)
+
             logger.info(
                 "Outbox table initialized",
                 operation="initialize",
@@ -90,26 +91,26 @@ class OutboxManager:
         """
         try:
             event_id = str(uuid.uuid4())
-            
+
             insert_sql = f"""
-            INSERT INTO {self.outbox_table} 
+            INSERT INTO {self.outbox_table}
             (id, aggregate_id, aggregate_type, event_type, payload, trace_id)
-            VALUES (:id, :aggregate_id, :aggregate_type, :event_type, :payload, :trace_id)
+            VALUES ($1, $2, $3, $4, $5, $6)
             """
-            
-            async with self.postgres_client.get_connection() as conn:
+
+            conn = await self.postgres_writer.pool.acquire()
+            try:
                 await conn.execute(
-                    text(insert_sql),
-                    {
-                        "id": event_id,
-                        "aggregate_id": aggregate_id,
-                        "aggregate_type": aggregate_type,
-                        "event_type": event_type,
-                        "payload": json.dumps(payload),
-                        "trace_id": trace_id
-                    }
+                    insert_sql,
+                    event_id,
+                    aggregate_id,
+                    aggregate_type,
+                    event_type,
+                    json.dumps(payload),
+                    trace_id
                 )
-                await conn.commit()
+            finally:
+                await self.postgres_writer.pool.release(conn)
             
             logger.debug(
                 "Event written to outbox",
@@ -145,24 +146,23 @@ class OutboxManager:
             FROM {self.outbox_table}
             WHERE published = FALSE
             ORDER BY created_at ASC
-            LIMIT :limit
+            LIMIT $1
             """
-            
-            async with self.postgres_client.get_connection() as conn:
-                result = await conn.execute(
-                    text(select_sql),
-                    {"limit": limit}
-                )
-                rows = result.fetchall()
-            
+
+            conn = await self.postgres_writer.pool.acquire()
+            try:
+                rows = await conn.fetch(select_sql, limit)
+            finally:
+                await self.postgres_writer.pool.release(conn)
+
             events = [
                 {
-                    "id": row[0],
-                    "aggregate_id": row[1],
-                    "aggregate_type": row[2],
-                    "event_type": row[3],
-                    "payload": json.loads(row[4]),
-                    "trace_id": row[5]
+                    "id": row["id"],
+                    "aggregate_id": row["aggregate_id"],
+                    "aggregate_type": row["aggregate_type"],
+                    "event_type": row["event_type"],
+                    "payload": json.loads(row["payload"]),
+                    "trace_id": row["trace_id"]
                 }
                 for row in rows
             ]
@@ -193,15 +193,14 @@ class OutboxManager:
             update_sql = f"""
             UPDATE {self.outbox_table}
             SET published = TRUE, published_at = CURRENT_TIMESTAMP
-            WHERE id = :id
+            WHERE id = $1
             """
-            
-            async with self.postgres_client.get_connection() as conn:
-                await conn.execute(
-                    text(update_sql),
-                    {"id": event_id}
-                )
-                await conn.commit()
+
+            conn = await self.postgres_writer.pool.acquire()
+            try:
+                await conn.execute(update_sql, event_id)
+            finally:
+                await self.postgres_writer.pool.release(conn)
             
             logger.debug(
                 "Event marked as published",
@@ -227,13 +226,15 @@ class OutboxManager:
         try:
             delete_sql = f"""
             DELETE FROM {self.outbox_table}
-            WHERE published = TRUE 
+            WHERE published = TRUE
             AND published_at < CURRENT_TIMESTAMP - INTERVAL '{days_old} days'
             """
-            
-            async with self.postgres_client.get_connection() as conn:
-                result = await conn.execute(text(delete_sql))
-                await conn.commit()
+
+            conn = await self.postgres_writer.pool.acquire()
+            try:
+                await conn.execute(delete_sql)
+            finally:
+                await self.postgres_writer.pool.release(conn)
             
             logger.info(
                 "Cleaned up published events",

@@ -315,10 +315,9 @@ class KafkaProducerClient:
                 operation="produce_batch",
                 total_labels=len(labels),
                 success_count=success_count,
-                duration_seconds=duration_seconds,
-                throughput_labels_per_second=success_count / duration_seconds if duration_seconds > 0 else 0,
                 error_count=error_count,
-                duration_seconds=duration_seconds
+                duration_seconds=duration_seconds,
+                throughput_labels_per_second=success_count / duration_seconds if duration_seconds > 0 else 0
             )
 
             return error_count == 0

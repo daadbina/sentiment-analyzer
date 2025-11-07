@@ -11,7 +11,6 @@ from src.config import config
 from src.clients.api_clients import ACLEDFetcher, GDELTFetcher, BinanceFetcher, CCXTFetcher
 from src.clients.kafka_producer import KafkaProducerClient
 from src.clients.kafka_consumer import SemanticGroupConsumer
-from src.clients.postgres_client import PostgreSQLClient
 from src.storage.delta_lake_writer import DeltaLakeWriter
 from src.storage.postgres_writer import PostgreSQLWriter
 from src.storage.audit_logger import AuditLogger
@@ -49,9 +48,8 @@ class LabelerService:
         self.delta_lake_writer = DeltaLakeWriter()
         self.postgres_writer = PostgreSQLWriter()
 
-        # Initialize PostgreSQL client for outbox
-        self.postgres_client = PostgreSQLClient()
-        self.outbox_manager = OutboxManager(self.postgres_client)
+        # Initialize outbox manager with postgres writer
+        self.outbox_manager = OutboxManager(self.postgres_writer)
 
         self.reconciler = LabelReconciler()
         self.validator = LabelValidator()
@@ -92,9 +90,6 @@ class LabelerService:
             await self.postgres_writer.connect()
             await self.postgres_writer._ensure_tables()
 
-            # Connect to PostgreSQL client for outbox
-            await self.postgres_client.connect()
-
             # Initialize outbox table
             await self.outbox_manager.initialize()
 
@@ -106,7 +101,7 @@ class LabelerService:
             self.health_checker.set_dependencies(
                 kafka_producer=self.kafka_producer,
                 kafka_consumer=self.semantic_group_consumer,
-                postgres_client=self.postgres_client,
+                postgres_writer=self.postgres_writer,
                 schema_registry_client=self.kafka_producer.schema_registry_client
             )
 

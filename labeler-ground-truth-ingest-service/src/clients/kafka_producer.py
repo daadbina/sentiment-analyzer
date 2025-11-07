@@ -2,6 +2,7 @@
 
 import json
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -15,7 +16,6 @@ from src.exceptions import KafkaError, SchemaRegistryError
 from src.utils.trace import get_logger
 from src.metrics import get_metrics
 from src.clients.circuit_breaker import CircuitBreaker, ExponentialBackoff
-import time
 
 
 logger = get_logger(__name__, config.logging.log_level)
@@ -245,6 +245,14 @@ class KafkaProducerClient:
             # Prepare message key - ensure it's a string
             key = str(label.get("event_id", ""))
 
+            # Log original label fields for debugging
+            logger.debug(
+                f"Original label fields: {list(label.keys())}",
+                operation="produce_label",
+                event_id=key,
+                original_field_count=len(label)
+            )
+
             # Prepare message value - only include fields that match schema
             # Use sanitize_value to properly handle None and type conversions
             # IMPORTANT: Only include fields defined in the Avro schema
@@ -269,6 +277,14 @@ class KafkaProducerClient:
                 "schema_version": self._sanitize_value(label.get("schema_version"), 'string')
             }
 
+            # Log sanitized value fields for debugging
+            logger.debug(
+                f"Sanitized value fields: {list(value.keys())}",
+                operation="produce_label",
+                event_id=key,
+                sanitized_field_count=len(value)
+            )
+
             # Validate all values are serializable (no bytes, MemoryView, etc.)
             # This is critical because Avro serializer will fail on non-string types
             for field_name, field_value in value.items():
@@ -292,7 +308,7 @@ class KafkaProducerClient:
                         value[field_name] = str(field_value)
                     # Log field types for debugging
                     logger.debug(
-                        f"Field {field_name} type: {type(field_value).__name__}",
+                        f"Field {field_name} type: {type(field_value).__name__}, value_repr: {repr(field_value)[:100]}",
                         operation="produce_label",
                         event_id=key,
                         field_name=field_name,
@@ -302,6 +318,15 @@ class KafkaProducerClient:
             # Produce message - SerializingProducer handles serialization
             # CRITICAL: Pass ONLY the filtered value dict, not the original label
             try:
+                logger.debug(
+                    f"About to produce message to Kafka",
+                    operation="produce_label",
+                    event_id=key,
+                    topic=self.topic,
+                    key_type=type(key).__name__,
+                    value_type=type(value).__name__
+                )
+
                 self.producer.produce(
                     topic=self.topic,
                     key=key,
@@ -309,9 +334,21 @@ class KafkaProducerClient:
                     on_delivery=self._delivery_report
                 )
 
+                logger.debug(
+                    f"Message produced successfully, polling for delivery reports",
+                    operation="produce_label",
+                    event_id=key
+                )
+
                 # Poll immediately to trigger delivery reports and catch errors early
                 # This helps catch serialization errors before they accumulate
                 self.producer.poll(0.1)
+
+                logger.debug(
+                    f"Poll completed successfully",
+                    operation="produce_label",
+                    event_id=key
+                )
 
             except TypeError as te:
                 # Log detailed info about the error for debugging
@@ -401,7 +438,22 @@ class KafkaProducerClient:
 
                 # Flush after each batch with timeout to prevent hanging
                 try:
+                    logger.debug(
+                        f"Starting flush for batch {i // batch_size + 1}",
+                        operation="produce_batch",
+                        batch_index=i // batch_size,
+                        batch_size=len(batch)
+                    )
+
                     remaining_messages = self.producer.flush(timeout=30)  # 30 second timeout
+
+                    logger.debug(
+                        f"Flush completed for batch {i // batch_size + 1}",
+                        operation="produce_batch",
+                        batch_index=i // batch_size,
+                        remaining_messages=remaining_messages
+                    )
+
                     if remaining_messages > 0:
                         logger.warning(
                             f"Flush timeout: {remaining_messages} messages still in queue",
@@ -413,7 +465,11 @@ class KafkaProducerClient:
                     logger.error(
                         f"Error during flush: {str(flush_error)}",
                         operation="produce_batch",
-                        error_type=type(flush_error).__name__
+                        error_type=type(flush_error).__name__,
+                        batch_index=i // batch_size,
+                        batch_size=len(batch),
+                        error_message=str(flush_error),
+                        error_traceback=traceback.format_exc()
                     )
                     raise
 

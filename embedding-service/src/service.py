@@ -168,6 +168,7 @@ class EmbeddingService:
                 #
                 # Clustering service requires: domain, source, country, publisher_credibility, published_at
                 # These fields are extracted from news_canonical topic
+                # Also include body and title for semantic topic label generation
                 meta = {
                     "article_id": msg.get("article_id", ""),
                     "embedded_at": current_time_timestamp,
@@ -179,6 +180,10 @@ class EmbeddingService:
                     "source": msg.get("source", "unknown"),
                     "country": msg.get("country"),  # Optional country field from canonicalizer
                     "content_type": msg.get("content_type", "article"),
+                    # Include article content for downstream semantic processing
+                    "title": msg.get("title", ""),
+                    "body": msg.get("normalized_body", ""),  # Article content for topic label generation
+                    "url": msg.get("url", ""),
                 }
                 logger.info(f"Extracted metadata for article {msg.get('article_id', 'unknown')}: {meta}")
                 metadata.append(meta)

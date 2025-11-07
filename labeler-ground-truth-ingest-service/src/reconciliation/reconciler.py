@@ -99,8 +99,12 @@ class TemporalMatcher:
 class SemanticMatcher:
     """Semantic matching for labels and semantic groups."""
 
-    def __init__(self, similarity_threshold: float = 0.85):
-        """Initialize semantic matcher."""
+    def __init__(self, similarity_threshold: float = 0.3):
+        """Initialize semantic matcher.
+
+        Args:
+            similarity_threshold: Minimum Jaccard similarity for match (default 0.3 for lenient matching)
+        """
         self.similarity_threshold = similarity_threshold
 
     def match(
@@ -109,28 +113,43 @@ class SemanticMatcher:
         group_description: str
     ) -> Tuple[bool, float]:
         """
-        Match label and group by semantic similarity.
+        Match label and group by semantic similarity using Jaccard index.
+
+        Uses lenient keyword-based matching to handle diverse label formats.
+        Returns confidence based on word overlap between label and group descriptions.
 
         Returns:
             Tuple of (matched: bool, confidence: float)
         """
         try:
-            # Simple keyword-based matching
-            label_words = set(label_description.lower().split())
-            group_words = set(group_description.lower().split())
+            # Extract words and filter out common stop words
+            label_words = set(w.lower() for w in label_description.split() if len(w) > 2)
+            group_words = set(w.lower() for w in group_description.split() if len(w) > 2)
 
             if not label_words or not group_words:
-                return False, 0.0
+                # If either is empty, return low confidence but don't reject
+                return False, 0.1
 
+            # Calculate Jaccard similarity
             intersection = len(label_words & group_words)
             union = len(label_words | group_words)
 
             similarity = intersection / union if union > 0 else 0.0
 
-            if similarity >= self.similarity_threshold:
-                return True, similarity
-            else:
-                return False, similarity
+            # Match if similarity meets threshold
+            matched = similarity >= self.similarity_threshold
+
+            logger.debug(
+                f"Semantic matching result",
+                operation="semantic_match",
+                label_words=len(label_words),
+                group_words=len(group_words),
+                intersection=intersection,
+                similarity=similarity,
+                matched=matched
+            )
+
+            return matched, similarity
 
         except Exception as e:
             logger.error(

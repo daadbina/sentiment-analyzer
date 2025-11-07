@@ -659,6 +659,15 @@ class GDELTFetcher(BaseAPIClient):
                     except Exception:
                         event_timestamp = datetime.utcnow().isoformat() + "Z"
 
+                    # Create description for semantic matching
+                    # Combine event type, countries, and title for better semantic matching
+                    description_parts = [event_type_name]
+                    if countries:
+                        description_parts.extend(countries)
+                    if title:
+                        description_parts.append(title)
+                    description = " ".join(description_parts)
+
                     label = {
                         "event_id": url or f"gdelt_{idx}",
                         "event_date": seendate,
@@ -673,6 +682,7 @@ class GDELTFetcher(BaseAPIClient):
                         "confidence": 0.80,  # Confidence for GDELT articles
                         "source_url": url,
                         "title": title,
+                        "description": description,  # For semantic matching with semantic groups
                         "domain": domain,
                         "language": language,
                         "fetched_at": datetime.utcnow().isoformat() + "Z",

@@ -320,17 +320,23 @@ class PostgreSQLWriter:
                     batch_data = []
                     for label in batch:
                         # Parse timestamp from ISO string to datetime (offset-naive for PostgreSQL)
-                        ts_str = label.get("event_timestamp") or label.get("timestamp")
-                        ts = None
-                        if ts_str:
+                        def parse_iso_timestamp(ts_str):
+                            if not ts_str:
+                                return None
                             try:
-                                ts_clean = ts_str.replace("Z", "+00:00")
-                                ts = datetime.fromisoformat(ts_clean)
-                                # Convert to offset-naive (remove timezone info)
-                                if ts.tzinfo is not None:
-                                    ts = ts.replace(tzinfo=None)
+                                if isinstance(ts_str, str):
+                                    ts_clean = ts_str.replace("Z", "+00:00")
+                                    dt = datetime.fromisoformat(ts_clean)
+                                    # Convert to offset-naive for PostgreSQL
+                                    if dt.tzinfo is not None:
+                                        dt = dt.replace(tzinfo=None)
+                                    return dt
+                                return ts_str  # Already a datetime
                             except:
-                                ts = None
+                                return None
+
+                        ts_str = label.get("event_timestamp") or label.get("timestamp")
+                        ts = parse_iso_timestamp(ts_str)
 
                         batch_data.append((
                             label.get("event_id"),
@@ -351,8 +357,8 @@ class PostgreSQLWriter:
                             label.get("label_source"),
                             label.get("label_source_license"),
                             label.get("label_source_url"),
-                            label.get("last_license_check"),
-                            label.get("last_updated"),
+                            parse_iso_timestamp(label.get("last_license_check")),
+                            parse_iso_timestamp(label.get("last_updated")),
                             label.get("trace_id"),
                             label.get("schema_version")
                         ))

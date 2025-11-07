@@ -3,6 +3,7 @@
 import asyncio
 import signal
 import sys
+import time
 import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
@@ -638,15 +639,47 @@ class LabelerService:
 
             # Write event labels to storage using outbox pattern
             if enriched_event_labels:
+                logger.info(
+                    f"About to write {len(enriched_event_labels)} enriched event labels to storage",
+                    operation="process_labels",
+                    label_count=len(enriched_event_labels)
+                )
+
                 # Write to Delta Lake
+                logger.info(
+                    f"About to write {len(enriched_event_labels)} labels to Delta Lake",
+                    operation="process_labels",
+                    label_count=len(enriched_event_labels)
+                )
                 await self.delta_lake_writer.write_labels(enriched_event_labels)
+                logger.info(
+                    f"Successfully wrote {len(enriched_event_labels)} labels to Delta Lake",
+                    operation="process_labels",
+                    label_count=len(enriched_event_labels)
+                )
 
                 # Write to PostgreSQL ground_truth table
+                logger.info(
+                    f"About to write {len(enriched_event_labels)} labels to PostgreSQL",
+                    operation="process_labels",
+                    label_count=len(enriched_event_labels)
+                )
                 await self.postgres_writer.write_labels(enriched_event_labels)
+                logger.info(
+                    f"Successfully wrote {len(enriched_event_labels)} labels to PostgreSQL",
+                    operation="process_labels",
+                    label_count=len(enriched_event_labels)
+                )
 
                 # Write to outbox for atomic Kafka production
+                logger.info(
+                    f"About to write {len(enriched_event_labels)} labels to outbox",
+                    operation="process_labels",
+                    label_count=len(enriched_event_labels)
+                )
                 outbox_events = []
-                for label in enriched_event_labels:
+                outbox_start = time.time()
+                for i, label in enumerate(enriched_event_labels):
                     event_id = label.get("event_id")
                     group_id = label.get("group_id")
                     trace_id = label.get("trace_id")
@@ -662,15 +695,43 @@ class LabelerService:
                     )
                     outbox_events.append(outbox_event_id)
 
+                    # Log progress every 1000 labels
+                    if (i + 1) % 1000 == 0:
+                        logger.debug(
+                            f"Outbox write progress: {i + 1}/{len(enriched_event_labels)}",
+                            operation="process_labels",
+                            progress=i + 1,
+                            total=len(enriched_event_labels)
+                        )
+
+                outbox_duration = time.time() - outbox_start
+                logger.info(
+                    f"Successfully wrote {len(enriched_event_labels)} labels to outbox",
+                    operation="process_labels",
+                    label_count=len(enriched_event_labels),
+                    duration_seconds=outbox_duration
+                )
+
                 # Produce event labels to Kafka
+                logger.info(
+                    f"About to produce {len(enriched_event_labels)} labels to Kafka",
+                    operation="process_labels",
+                    label_count=len(enriched_event_labels)
+                )
                 try:
                     await self.kafka_producer.produce_batch(enriched_event_labels)
+                    logger.info(
+                        f"Successfully produced batch to Kafka",
+                        operation="process_labels",
+                        label_count=len(enriched_event_labels)
+                    )
                 except Exception as e:
                     logger.error(
                         f"Failed to produce batch to Kafka: {str(e)}",
                         operation="process_labels",
                         error_type=type(e).__name__,
-                        label_count=len(enriched_event_labels)
+                        label_count=len(enriched_event_labels),
+                        traceback=str(e)
                     )
                     # Continue with outbox marking even if Kafka production fails
                     # This ensures the outbox pattern is maintained

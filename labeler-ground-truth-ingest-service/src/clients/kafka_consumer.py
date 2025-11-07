@@ -258,8 +258,32 @@ class SemanticGroupConsumer:
                         consecutive_timeouts=consecutive_timeouts,
                         duration_ms=duration_ms
                     )
-                    # Continue polling indefinitely - do NOT exit on timeouts
-                    # This allows the service to wait for messages from clustering service
+
+                    # Exit if we've reached max polls or max consecutive timeouts
+                    if poll_count >= max_polls:
+                        duration_ms = (time.time() - batch_start_time) * 1000
+                        logger.info(
+                            "Max polls reached, exiting consume loop",
+                            operation="consume_batch",
+                            poll_count=poll_count,
+                            max_polls=max_polls,
+                            messages_consumed=messages_consumed,
+                            duration_ms=duration_ms
+                        )
+                        break
+
+                    if consecutive_timeouts >= max_consecutive_timeouts:
+                        duration_ms = (time.time() - batch_start_time) * 1000
+                        logger.info(
+                            "Max consecutive timeouts reached, exiting consume loop",
+                            operation="consume_batch",
+                            consecutive_timeouts=consecutive_timeouts,
+                            max_consecutive_timeouts=max_consecutive_timeouts,
+                            messages_consumed=messages_consumed,
+                            duration_ms=duration_ms
+                        )
+                        break
+
                     continue
 
                 if msg.error():

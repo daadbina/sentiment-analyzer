@@ -10,7 +10,6 @@ from ulid import ULID
 from src.config import config
 from src.clients.api_clients import ACLEDFetcher, GDELTFetcher, BinanceFetcher, CCXTFetcher
 from src.clients.kafka_producer import KafkaProducerClient
-from src.clients.kafka_consumer import SemanticGroupConsumer
 from src.storage.delta_lake_writer import DeltaLakeWriter
 from src.storage.postgres_writer import PostgreSQLWriter
 from src.storage.audit_logger import AuditLogger
@@ -44,7 +43,6 @@ class LabelerService:
         self.ccxt_fetcher = CCXTFetcher()  # Fallback for crypto data
 
         self.kafka_producer = KafkaProducerClient()
-        self.semantic_group_consumer = SemanticGroupConsumer()
         self.delta_lake_writer = DeltaLakeWriter()
         self.postgres_writer = PostgreSQLWriter()
 
@@ -83,9 +81,6 @@ class LabelerService:
             # Connect to Kafka producer
             await self.kafka_producer.connect()
 
-            # Connect to semantic group consumer
-            await self.semantic_group_consumer.connect()
-
             # Connect to PostgreSQL
             await self.postgres_writer.connect()
             await self.postgres_writer._ensure_tables()
@@ -100,7 +95,6 @@ class LabelerService:
             # Set health checker dependencies
             self.health_checker.set_dependencies(
                 kafka_producer=self.kafka_producer,
-                kafka_consumer=self.semantic_group_consumer,
                 postgres_writer=self.postgres_writer,
                 schema_registry_client=self.kafka_producer.schema_registry_client
             )
@@ -149,9 +143,7 @@ class LabelerService:
                 )
 
             await self.kafka_producer.disconnect()
-            await self.semantic_group_consumer.disconnect()
             await self.postgres_writer.disconnect()
-            await self.postgres_client.disconnect()
 
             logger.info(
                 "Labeler service shut down successfully",
@@ -342,25 +334,32 @@ class LabelerService:
         return all_reconciled
 
     async def consume_semantic_groups(self):
-        """Consume semantic groups from Kafka with retries."""
+        """Fetch semantic groups from PostgreSQL.
+
+        Per design spec (labeler-ground-truth-ingest-service.md line 16):
+        Input: External APIs (ACLED, GDELT, CoinGecko), PostgreSQL `semantic_groups` table
+
+        The labeler queries PostgreSQL for semantic groups, not Kafka.
+        Kafka semantic_groups topic is for downstream consumers (feature-engineering-service).
+        """
         try:
-            # Consume semantic groups (seek_to_beginning already called in connect())
-            groups = await self.semantic_group_consumer.consume_batch(max_messages=1000)
+            # Fetch semantic groups from PostgreSQL
+            groups = await self.postgres_writer.fetch_semantic_groups()
             if groups:
                 self.semantic_groups = groups
                 logger.info(
-                    f"Updated semantic groups from Kafka",
+                    f"Updated semantic groups from PostgreSQL",
                     operation="consume_semantic_groups",
                     group_count=len(groups)
                 )
             else:
                 logger.info(
-                    "No semantic groups available from Kafka",
+                    "No semantic groups available in PostgreSQL",
                     operation="consume_semantic_groups"
                 )
         except Exception as e:
             logger.error(
-                f"Failed to consume semantic groups: {str(e)}",
+                f"Failed to fetch semantic groups from PostgreSQL: {str(e)}",
                 operation="consume_semantic_groups",
                 error_type=type(e).__name__
             )

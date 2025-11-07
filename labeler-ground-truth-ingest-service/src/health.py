@@ -17,14 +17,12 @@ class HealthChecker:
         self.start_time = datetime.now()
         self.last_check_time: Optional[datetime] = None
         self.kafka_producer = None
-        self.kafka_consumer = None
         self.postgres_writer = None
         self.schema_registry_client = None
 
     def set_dependencies(
         self,
         kafka_producer=None,
-        kafka_consumer=None,
         postgres_writer=None,
         schema_registry_client=None
     ):
@@ -32,12 +30,10 @@ class HealthChecker:
 
         Args:
             kafka_producer: Kafka producer client
-            kafka_consumer: Kafka consumer client
             postgres_writer: PostgreSQL writer with pool
             schema_registry_client: Schema Registry client
         """
         self.kafka_producer = kafka_producer
-        self.kafka_consumer = kafka_consumer
         self.postgres_writer = postgres_writer
         self.schema_registry_client = schema_registry_client
 
@@ -73,40 +69,6 @@ class HealthChecker:
             return {
                 "status": "unhealthy",
                 "message": f"Error checking producer: {str(e)}"
-            }
-
-    async def check_kafka_consumer(self) -> Dict[str, Any]:
-        """Check Kafka consumer health.
-        
-        Returns:
-            Health status dictionary
-        """
-        try:
-            if not self.kafka_consumer:
-                return {"status": "unknown", "message": "Consumer not initialized"}
-            
-            status = self.kafka_consumer.get_health_status()
-            
-            if status.get("connected"):
-                return {
-                    "status": "healthy",
-                    "message": "Kafka consumer connected",
-                    "details": status
-                }
-            else:
-                return {
-                    "status": "unhealthy",
-                    "message": "Kafka consumer not connected",
-                    "details": status
-                }
-        except Exception as e:
-            logger.error(
-                f"Error checking Kafka consumer health: {str(e)}",
-                operation="check_kafka_consumer"
-            )
-            return {
-                "status": "unhealthy",
-                "message": f"Error checking consumer: {str(e)}"
             }
 
     async def check_postgres(self) -> Dict[str, Any]:
@@ -170,39 +132,36 @@ class HealthChecker:
 
     async def get_health(self) -> Dict[str, Any]:
         """Get overall service health.
-        
+
         Returns:
             Health status dictionary
         """
         self.last_check_time = datetime.now()
-        
+
         kafka_producer_health = await self.check_kafka_producer()
-        kafka_consumer_health = await self.check_kafka_consumer()
         postgres_health = await self.check_postgres()
         schema_registry_health = await self.check_schema_registry()
-        
+
         # Determine overall status
         statuses = [
             kafka_producer_health.get("status"),
-            kafka_consumer_health.get("status"),
             postgres_health.get("status"),
             schema_registry_health.get("status")
         ]
-        
+
         if "unhealthy" in statuses:
             overall_status = "unhealthy"
         elif "unknown" in statuses:
             overall_status = "degraded"
         else:
             overall_status = "healthy"
-        
+
         return {
             "status": overall_status,
             "timestamp": datetime.now().isoformat(),
             "uptime_seconds": (datetime.now() - self.start_time).total_seconds(),
             "checks": {
                 "kafka_producer": kafka_producer_health,
-                "kafka_consumer": kafka_consumer_health,
                 "postgres": postgres_health,
                 "schema_registry": schema_registry_health
             }

@@ -270,6 +270,49 @@ class PostgreSQLWriter:
             )
             raise StorageError("postgresql", "write_reconciliation_log", str(e))
 
+    async def fetch_semantic_groups(self) -> List[Dict[str, Any]]:
+        """Fetch all semantic groups from PostgreSQL.
+
+        Returns:
+            List of semantic group dictionaries
+        """
+        if not self.pool:
+            raise StorageError("postgresql", "fetch_semantic_groups", "Connection pool not initialized")
+
+        try:
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch("""
+                    SELECT
+                        group_id,
+                        article_count,
+                        similarity_avg,
+                        topic_label,
+                        centroid_vector,
+                        cluster_metadata,
+                        created_at,
+                        updated_at
+                    FROM semantic_groups
+                    ORDER BY created_at DESC
+                """)
+
+            groups = [dict(row) for row in rows]
+
+            logger.info(
+                f"Fetched {len(groups)} semantic groups from PostgreSQL",
+                operation="fetch_semantic_groups",
+                group_count=len(groups)
+            )
+
+            return groups
+
+        except Exception as e:
+            logger.error(
+                f"Failed to fetch semantic groups from PostgreSQL: {str(e)}",
+                operation="fetch_semantic_groups",
+                error_type=type(e).__name__
+            )
+            raise StorageError("postgresql", "fetch_semantic_groups", str(e))
+
     async def write_license_audit(
         self,
         source: str,

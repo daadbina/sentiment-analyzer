@@ -156,9 +156,22 @@ class ClusterValidator:
         if not articles:
             return True
 
-        published_times = [
-            a.get("published_at") for a in articles if a.get("published_at")
-        ]
+        published_times = []
+        for a in articles:
+            pub_at = a.get("published_at")
+            if pub_at:
+                # Parse ISO format string to datetime if needed
+                if isinstance(pub_at, str):
+                    try:
+                        # Handle ISO format with or without timezone
+                        if pub_at.endswith('Z'):
+                            pub_at = pub_at[:-1] + '+00:00'
+                        pub_at = datetime.fromisoformat(pub_at.replace('Z', '+00:00'))
+                    except (ValueError, AttributeError):
+                        logger.warning(f"Could not parse published_at: {pub_at}")
+                        continue
+                published_times.append(pub_at)
+
         if not published_times:
             return True
 
@@ -174,9 +187,22 @@ class ClusterValidator:
 
     def _validate_time_span(self, articles: List[dict]) -> Tuple[bool, float]:
         """Validate time span from earliest to latest article."""
-        published_times = [
-            a.get("published_at") for a in articles if a.get("published_at")
-        ]
+        published_times = []
+        for a in articles:
+            pub_at = a.get("published_at")
+            if pub_at:
+                # Parse ISO format string to datetime if needed
+                if isinstance(pub_at, str):
+                    try:
+                        # Handle ISO format with or without timezone
+                        if pub_at.endswith('Z'):
+                            pub_at = pub_at[:-1] + '+00:00'
+                        pub_at = datetime.fromisoformat(pub_at.replace('Z', '+00:00'))
+                    except (ValueError, AttributeError):
+                        logger.warning(f"Could not parse published_at: {pub_at}")
+                        continue
+                published_times.append(pub_at)
+
         if len(published_times) < 2:
             return True, 0.0
 

@@ -215,7 +215,12 @@ class LabelReconciler:
                     label.get("event_type") or
                     ""
                 )
-                group_description = group.get("topic_label", "")
+                # Try multiple fields for group description (topic_label might be null)
+                group_description = (
+                    group.get("topic_label") or
+                    group.get("cluster_metadata", {}).get("topic_label") or
+                    ""
+                )
 
                 semantic_match, semantic_conf = self.semantic_matcher.match(
                     label_description,
@@ -224,6 +229,20 @@ class LabelReconciler:
 
                 # Combined confidence
                 combined_confidence = (temporal_conf * 0.5) + (semantic_conf * 0.5)
+
+                # Debug logging for first few matches
+                if best_confidence < 0.1:  # Log first few attempts
+                    logger.debug(
+                        f"Reconciliation attempt",
+                        operation="reconcile",
+                        event_id=label.get("event_id"),
+                        group_id=group.get("group_id"),
+                        label_desc=label_description[:100] if label_description else "EMPTY",
+                        group_desc=group_description[:100] if group_description else "EMPTY",
+                        temporal_conf=temporal_conf,
+                        semantic_conf=semantic_conf,
+                        combined_conf=combined_confidence
+                    )
 
                 if combined_confidence > best_confidence:
                     best_confidence = combined_confidence

@@ -146,6 +146,12 @@ class OutboxManager:
             return []
 
         try:
+            logger.debug(
+                f"Starting batch write to outbox",
+                operation="write_events_batch",
+                event_count=len(events)
+            )
+
             event_ids = []
 
             # Use executemany for batch insert
@@ -155,8 +161,18 @@ class OutboxManager:
             VALUES ($1, $2, $3, $4, $5, $6)
             """
 
+            logger.debug(
+                f"Acquiring connection from pool",
+                operation="write_events_batch"
+            )
+
             conn = await self.postgres_writer.pool.acquire()
             try:
+                logger.debug(
+                    f"Preparing batch data for {len(events)} events",
+                    operation="write_events_batch"
+                )
+
                 # Prepare batch data
                 batch_data = []
                 for event in events:
@@ -171,8 +187,19 @@ class OutboxManager:
                         event.get("trace_id")
                     ))
 
+                logger.debug(
+                    f"Executing batch insert for {len(batch_data)} rows",
+                    operation="write_events_batch"
+                )
+
                 # Execute batch insert
                 await conn.executemany(insert_sql, batch_data)
+
+                logger.debug(
+                    f"Batch insert completed successfully",
+                    operation="write_events_batch",
+                    event_count=len(event_ids)
+                )
 
                 logger.info(
                     f"Batch wrote {len(event_ids)} events to outbox",
@@ -181,7 +208,16 @@ class OutboxManager:
                 )
 
             finally:
+                logger.debug(
+                    f"Releasing connection back to pool",
+                    operation="write_events_batch"
+                )
                 await self.postgres_writer.pool.release(conn)
+
+            logger.debug(
+                f"Returning {len(event_ids)} event IDs",
+                operation="write_events_batch"
+            )
 
             return event_ids
 

@@ -278,14 +278,35 @@ class KafkaProducerClient:
                             event_id=key
                         )
                         value[field_name] = str(field_value)
+                    # Check for nested dict/list that might contain bytes
+                    elif isinstance(field_value, (dict, list)):
+                        logger.warning(
+                            f"Field {field_name} contains {type(field_value).__name__}, converting to string",
+                            operation="produce_label",
+                            event_id=key,
+                            field_type=type(field_value).__name__
+                        )
+                        value[field_name] = str(field_value)
 
             # Produce message - SerializingProducer handles serialization
-            self.producer.produce(
-                topic=self.topic,
-                key=key,
-                value=value,
-                on_delivery=self._delivery_report
-            )
+            try:
+                self.producer.produce(
+                    topic=self.topic,
+                    key=key,
+                    value=value,
+                    on_delivery=self._delivery_report
+                )
+            except TypeError as te:
+                # Log detailed error info for MemoryView issues
+                logger.error(
+                    f"TypeError during Kafka production: {str(te)}",
+                    operation="produce_label",
+                    event_id=key,
+                    error_type=type(te).__name__,
+                    value_keys=list(value.keys()),
+                    value_types={k: type(v).__name__ for k, v in value.items()}
+                )
+                raise
 
             # Poll to trigger delivery reports
             self.producer.poll(0)

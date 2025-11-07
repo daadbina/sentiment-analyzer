@@ -55,10 +55,12 @@ class StructuredLogger:
         context.update({
             "msg": message,
             "operation": operation,
-            "duration_ms": duration_ms,
             "status": status,
             **kwargs
         })
+        # Only include duration_ms if it's not None
+        if duration_ms is not None:
+            context["duration_ms"] = duration_ms
         self._log_json(logging.INFO, context)
 
     def debug(
@@ -73,9 +75,11 @@ class StructuredLogger:
         context.update({
             "msg": message,
             "operation": operation,
-            "duration_ms": duration_ms,
             **kwargs
         })
+        # Only include duration_ms if it's not None
+        if duration_ms is not None:
+            context["duration_ms"] = duration_ms
         self._log_json(logging.DEBUG, context)
 
     def warning(

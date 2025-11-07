@@ -259,14 +259,6 @@ class KafkaProducerClient:
             # Prepare message key - ensure it's a string
             key = str(label.get("event_id", ""))
 
-            # Log original label fields for debugging
-            logger.debug(
-                f"Original label fields: {list(label.keys())}",
-                operation="produce_label",
-                event_id=key,
-                original_field_count=len(label)
-            )
-
             # Prepare message value - only include fields that match schema
             # Use sanitize_value to properly handle None and type conversions
             # IMPORTANT: Only include fields defined in the Avro schema
@@ -291,56 +283,32 @@ class KafkaProducerClient:
                 "schema_version": self._sanitize_value(label.get("schema_version"), 'string')
             }
 
-            # Log sanitized value fields for debugging
-            logger.debug(
-                f"Sanitized value fields: {list(value.keys())}",
-                operation="produce_label",
-                event_id=key,
-                sanitized_field_count=len(value)
-            )
-
             # Validate all values are serializable (no bytes, MemoryView, etc.)
             # This is critical because Avro serializer will fail on non-string types
+            problematic_fields = []
             for field_name, field_value in value.items():
                 if field_value is not None:
                     # Check for problematic types
                     if isinstance(field_value, (bytes, memoryview)):
-                        logger.warning(
-                            f"Field {field_name} contains {type(field_value).__name__}, converting to string",
-                            operation="produce_label",
-                            event_id=key
-                        )
+                        problematic_fields.append(f"{field_name}({type(field_value).__name__})")
                         value[field_name] = str(field_value)
                     # Check for nested dict/list that might contain bytes
                     elif isinstance(field_value, (dict, list)):
-                        logger.warning(
-                            f"Field {field_name} contains {type(field_value).__name__}, converting to string",
-                            operation="produce_label",
-                            event_id=key,
-                            field_type=type(field_value).__name__
-                        )
+                        problematic_fields.append(f"{field_name}({type(field_value).__name__})")
                         value[field_name] = str(field_value)
-                    # Log field types for debugging
-                    logger.debug(
-                        f"Field {field_name} type: {type(field_value).__name__}, value_repr: {repr(field_value)[:100]}",
-                        operation="produce_label",
-                        event_id=key,
-                        field_name=field_name,
-                        field_type=type(field_value).__name__
-                    )
+
+            # Log problematic fields only if any were found
+            if problematic_fields:
+                logger.warning(
+                    f"Converted {len(problematic_fields)} problematic fields to string",
+                    operation="produce_label",
+                    event_id=key,
+                    problematic_fields=problematic_fields
+                )
 
             # Produce message - SerializingProducer handles serialization
             # CRITICAL: Pass ONLY the filtered value dict, not the original label
             try:
-                logger.debug(
-                    f"About to produce message to Kafka",
-                    operation="produce_label",
-                    event_id=key,
-                    topic=self.topic,
-                    key_type=type(key).__name__,
-                    value_type=type(value).__name__
-                )
-
                 self.producer.produce(
                     topic=self.topic,
                     key=key,
@@ -348,21 +316,9 @@ class KafkaProducerClient:
                     on_delivery=self._delivery_report
                 )
 
-                logger.debug(
-                    f"Message produced successfully, polling for delivery reports",
-                    operation="produce_label",
-                    event_id=key
-                )
-
                 # Poll immediately to trigger delivery reports and catch errors early
                 # This helps catch serialization errors before they accumulate
                 self.producer.poll(0.1)
-
-                logger.debug(
-                    f"Poll completed successfully",
-                    operation="produce_label",
-                    event_id=key
-                )
 
             except TypeError as te:
                 # Log detailed info about the error for debugging
@@ -384,14 +340,6 @@ class KafkaProducerClient:
                     value_fields={k: type(v).__name__ for k, v in value.items()}
                 )
                 raise
-
-            duration_seconds = time.time() - start_time
-            logger.debug(
-                f"Label produced to Kafka",
-                operation="produce_label",
-                event_id=label.get("event_id"),
-                duration_seconds=duration_seconds
-            )
 
             return True
 

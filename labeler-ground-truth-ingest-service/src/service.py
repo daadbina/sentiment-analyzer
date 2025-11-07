@@ -185,12 +185,22 @@ class LabelerService:
         )
 
         try:
-            # Fetch from GDELT
-            with TimedOperation(logger, "fetch_gdelt", source="GDELT") as op:
-                labels["gdelt"] = await self.gdelt_fetcher.fetch()
-            # Record metrics after context manager exits (duration_ms is set in __exit__)
-            if op.duration_ms is not None:
-                metrics.record_fetch("GDELT", len(labels["gdelt"]), op.duration_ms / 1000)
+            # Check if GDELT fetch interval has elapsed (1 hour)
+            gdelt_interval_seconds = config.gdelt.fetch_interval_hours * 3600
+            if self.gdelt_fetcher.should_fetch(gdelt_interval_seconds):
+                with TimedOperation(logger, "fetch_gdelt", source="GDELT") as op:
+                    labels["gdelt"] = await self.gdelt_fetcher.fetch()
+                    self.gdelt_fetcher.record_fetch_time()
+                # Record metrics after context manager exits (duration_ms is set in __exit__)
+                if op.duration_ms is not None:
+                    metrics.record_fetch("GDELT", len(labels["gdelt"]), op.duration_ms / 1000)
+            else:
+                logger.debug(
+                    "Skipping GDELT fetch - interval not elapsed",
+                    operation="fetch_labels",
+                    source="GDELT",
+                    interval_hours=config.gdelt.fetch_interval_hours
+                )
 
         except Exception as e:
             logger.error(
@@ -201,12 +211,22 @@ class LabelerService:
             )
 
         try:
-            # Fetch from Binance (primary)
-            with TimedOperation(logger, "fetch_binance", source="Binance") as op:
-                labels["binance"] = await self.binance_fetcher.fetch()
-            # Record metrics after context manager exits (duration_ms is set in __exit__)
-            if op.duration_ms is not None:
-                metrics.record_fetch("Binance", len(labels["binance"]), op.duration_ms / 1000)
+            # Check if Binance fetch interval has elapsed (5 minutes)
+            binance_interval_seconds = config.binance.fetch_interval_minutes * 60
+            if self.binance_fetcher.should_fetch(binance_interval_seconds):
+                with TimedOperation(logger, "fetch_binance", source="Binance") as op:
+                    labels["binance"] = await self.binance_fetcher.fetch()
+                    self.binance_fetcher.record_fetch_time()
+                # Record metrics after context manager exits (duration_ms is set in __exit__)
+                if op.duration_ms is not None:
+                    metrics.record_fetch("Binance", len(labels["binance"]), op.duration_ms / 1000)
+            else:
+                logger.debug(
+                    "Skipping Binance fetch - interval not elapsed",
+                    operation="fetch_labels",
+                    source="Binance",
+                    interval_minutes=config.binance.fetch_interval_minutes
+                )
 
         except Exception as e:
             logger.error(
@@ -225,6 +245,7 @@ class LabelerService:
                 )
                 with TimedOperation(logger, "fetch_ccxt_fallback", source="CCXT") as op:
                     labels["binance"] = await self.ccxt_fetcher.fetch()
+                    self.binance_fetcher.record_fetch_time()  # Record time for fallback too
                 # Record metrics after context manager exits
                 if op.duration_ms is not None:
                     metrics.record_fetch("CCXT", len(labels["binance"]), op.duration_ms / 1000)

@@ -124,6 +124,7 @@ class BaseAPIClient(ABC):
             timeout_seconds=config.api_client.circuit_breaker_timeout_seconds
         )
         self.session: Optional[aiohttp.ClientSession] = None
+        self.last_fetch_time: Optional[float] = None  # Track last fetch time for interval checking
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -198,6 +199,26 @@ class BaseAPIClient(ABC):
                     raise FetchError(self.name, str(e), attempt)
 
         raise FetchError(self.name, "Max retries exceeded", config.api_client.retry_max_attempts)
+
+    def should_fetch(self, interval_seconds: int) -> bool:
+        """Check if enough time has passed since last fetch.
+
+        Args:
+            interval_seconds: Minimum seconds between fetches
+
+        Returns:
+            True if fetch should proceed, False if interval hasn't elapsed
+        """
+        if self.last_fetch_time is None:
+            # First fetch, always proceed
+            return True
+
+        elapsed_seconds = time.time() - self.last_fetch_time
+        return elapsed_seconds >= interval_seconds
+
+    def record_fetch_time(self):
+        """Record the current time as the last fetch time."""
+        self.last_fetch_time = time.time()
 
     @abstractmethod
     async def fetch(self) -> List[Dict[str, Any]]:

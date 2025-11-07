@@ -484,6 +484,7 @@ class ACLEDFetcher(BaseAPIClient):
                 "fatalities": int(event.get("fatalities", 0)),
                 "label_conflict": 1 if event.get("event_type") in ["Violence against civilians", "Protests"] else 0,
                 "confidence": 0.85,  # ACLED data is high confidence
+                "label_source": "acled",  # Source identifier for deduplication
                 "source_url": event.get("source_url", ""),
                 "fetched_at": datetime.utcnow().isoformat() + "Z",  # When fetched from API
                 "trace_id": logger.trace_id
@@ -791,6 +792,7 @@ class GDELTFetcher(BaseAPIClient):
                         "label_conflict": label_conflict,  # Binary conflict label (0/1)
                         "label_event_type": "news_article",
                         "confidence": 0.80,  # Confidence for GDELT articles
+                        "label_source": "gdelt",  # Source identifier for deduplication
                         "source_url": url,
                         "title": title,
                         "description": description,  # For semantic matching with semantic groups
@@ -927,6 +929,7 @@ class BinanceFetcher(BaseAPIClient):
                 "label_spike": 1 if abs(change_pct) > 5.0 else 0,
                 "volatility_score": min(abs(change_pct) / 10.0, 1.0),
                 "confidence": 0.95,
+                "label_source": "binance",  # Source identifier for deduplication
                 "source_url": "https://www.binance.com",
                 "fetched_at": datetime.utcnow().isoformat() + "Z",  # When fetched from API
                 "trace_id": logger.trace_id

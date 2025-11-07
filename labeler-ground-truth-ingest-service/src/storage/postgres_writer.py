@@ -215,8 +215,25 @@ class PostgreSQLWriter:
                     batch = labels[i:i + batch_size]
 
                     # Prepare batch data
-                    batch_data = [
-                        (
+                    batch_data = []
+                    for label in batch:
+                        # Parse ISO format timestamps to datetime objects
+                        def parse_iso_timestamp(ts_str):
+                            if not ts_str:
+                                return None
+                            try:
+                                if isinstance(ts_str, str):
+                                    ts_clean = ts_str.replace("Z", "+00:00")
+                                    dt = datetime.fromisoformat(ts_clean)
+                                    # Convert to offset-naive for PostgreSQL
+                                    if dt.tzinfo is not None:
+                                        dt = dt.replace(tzinfo=None)
+                                    return dt
+                                return ts_str  # Already a datetime
+                            except:
+                                return None
+
+                        batch_data.append((
                             label.get("event_id"),
                             label.get("group_id"),
                             label.get("description"),
@@ -224,20 +241,18 @@ class PostgreSQLWriter:
                             label.get("time_window"),
                             label.get("realization_metric"),
                             label.get("threshold"),
-                            label.get("verified_at"),
+                            parse_iso_timestamp(label.get("verified_at")),
                             label.get("label_realized"),
                             label.get("label_confidence"),
                             label.get("source_confidence"),
                             label.get("label_source"),
                             label.get("label_source_license"),
                             label.get("label_source_url"),
-                            label.get("last_license_check"),
-                            label.get("last_updated"),
+                            parse_iso_timestamp(label.get("last_license_check")),
+                            parse_iso_timestamp(label.get("last_updated")),
                             label.get("trace_id"),
                             label.get("schema_version")
-                        )
-                        for label in batch
-                    ]
+                        ))
 
                     # Use executemany for batch insert
                     async with conn.transaction():

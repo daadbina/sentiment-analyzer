@@ -114,6 +114,12 @@ class VectorRetriever:
                         "language": point.payload.get("language"),
                         "domain": point.payload.get("domain"),
                         "content_type": point.payload.get("content_type"),
+                        # Include article content for semantic topic label generation
+                        "title": point.payload.get("title", ""),
+                        "body": point.payload.get("body", ""),
+                        "content": point.payload.get("content", ""),  # Alternative field name
+                        "url": point.payload.get("url", ""),
+                        "published_at": point.payload.get("published_at", ""),
                     }
                     all_embeddings.append(embedding)
                     all_metadata.append(metadata)

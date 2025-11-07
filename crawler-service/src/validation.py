@@ -54,6 +54,14 @@ class ArticleValidator:
             errors.append(f"R1: {e.message}")
             score -= 0.15
 
+        # Recency check: Article must be published within last 30 days
+        # This ensures we process current news, not historical archives
+        try:
+            self._validate_article_recency(article)
+        except ValidationError as e:
+            errors.append(f"Recency: {e.message}")
+            score -= 0.20
+
         # R2: Language detection (≥0.90 confidence)
         try:
             self._validate_r2_language(article)
@@ -140,6 +148,44 @@ class ArticleValidator:
                 f"Timestamp validation failed: {str(e)}",
                 field="published_at",
                 error_code="R1_VALIDATION_FAILED",
+            )
+
+    def _validate_article_recency(self, article: ParsedArticle) -> None:
+        """
+        Validate article recency (published within last 30 days).
+
+        For news crawling, we only process recent articles to ensure
+        the system handles current news, not historical archives.
+        This is critical for clustering and labeling to work correctly
+        with articles from the same time period.
+
+        Args:
+            article: Article to validate.
+
+        Raises:
+            ValidationError: If article is too old.
+        """
+        try:
+            # Convert string timestamp to datetime if needed
+            published_at = article.published_at
+            if isinstance(published_at, str):
+                published_at = TimestampUtils.from_iso8601(published_at)
+
+            # Check article is recent (within last 30 days)
+            if not TimestampUtils.is_recent_article(published_at, max_age_days=30):
+                raise ValidationError(
+                    "Article is too old (published more than 30 days ago)",
+                    field="published_at",
+                    error_code="RECENCY_TOO_OLD",
+                )
+
+        except ValidationError:
+            raise
+        except Exception as e:
+            raise ValidationError(
+                f"Article recency validation failed: {str(e)}",
+                field="published_at",
+                error_code="RECENCY_VALIDATION_FAILED",
             )
 
     def _validate_r2_language(self, article: ParsedArticle) -> None:

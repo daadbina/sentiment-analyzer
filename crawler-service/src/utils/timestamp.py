@@ -134,6 +134,35 @@ class TimestampUtils:
         return True
 
     @staticmethod
+    def is_recent_article(dt: datetime, max_age_days: int = 30) -> bool:
+        """
+        Check if article is recent (published within max_age_days).
+
+        For news crawling, we only want recent articles to ensure
+        the system processes current news, not historical archives.
+
+        Args:
+            dt: Article publication datetime.
+            max_age_days: Maximum age in days (default 30 days).
+
+        Returns:
+            bool: True if article is recent enough.
+        """
+        now = TimestampUtils.now_utc()
+
+        # Ensure dt is timezone-aware
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        age_days = (now - dt).days
+
+        if age_days > max_age_days:
+            logger.debug(f"Article is too old: {age_days} days > {max_age_days} days max")
+            return False
+
+        return True
+
+    @staticmethod
     def get_timestamp_components(dt: datetime) -> dict:
         """
         Extract timestamp components.

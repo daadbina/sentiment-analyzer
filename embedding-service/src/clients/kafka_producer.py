@@ -175,6 +175,15 @@ class KafkaProducer:
                 {"name": "embedding_dimension", "type": "int"},
                 {"name": "timestamp", "type": "long"},
                 {"name": "processing_time_ms", "type": "float"},
+                # Article content fields for downstream semantic processing
+                {"name": "title", "type": ["null", "string"], "default": None},
+                {"name": "content", "type": ["null", "string"], "default": None},
+                {"name": "url", "type": ["null", "string"], "default": None},
+                {"name": "published_at", "type": ["null", "string"], "default": None},
+                {"name": "publisher_id", "type": ["null", "string"], "default": None},
+                {"name": "source", "type": ["null", "string"], "default": None},
+                {"name": "domain", "type": ["null", "string"], "default": None},
+                {"name": "embedded_at", "type": "long"},
             ],
         })
 

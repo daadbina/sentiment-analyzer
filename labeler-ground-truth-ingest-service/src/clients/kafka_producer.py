@@ -273,6 +273,7 @@ class KafkaProducerClient:
             # This is critical because Avro serializer will fail on non-string types
             for field_name, field_value in value.items():
                 if field_value is not None:
+                    # Check for problematic types
                     if isinstance(field_value, (bytes, memoryview)):
                         logger.warning(
                             f"Field {field_name} contains {type(field_value).__name__}, converting to string",
@@ -289,6 +290,14 @@ class KafkaProducerClient:
                             field_type=type(field_value).__name__
                         )
                         value[field_name] = str(field_value)
+                    # Log field types for debugging
+                    logger.debug(
+                        f"Field {field_name} type: {type(field_value).__name__}",
+                        operation="produce_label",
+                        event_id=key,
+                        field_name=field_name,
+                        field_type=type(field_value).__name__
+                    )
 
             # Produce message - SerializingProducer handles serialization
             # CRITICAL: Pass ONLY the filtered value dict, not the original label
@@ -299,6 +308,11 @@ class KafkaProducerClient:
                     value=value,
                     on_delivery=self._delivery_report
                 )
+
+                # Poll immediately to trigger delivery reports and catch errors early
+                # This helps catch serialization errors before they accumulate
+                self.producer.poll(0.1)
+
             except TypeError as te:
                 # Log detailed info about the error for debugging
                 logger.error(
@@ -309,9 +323,16 @@ class KafkaProducerClient:
                     value_fields={k: type(v).__name__ for k, v in value.items()}
                 )
                 raise
-
-            # Poll to trigger delivery reports
-            self.producer.poll(0)
+            except Exception as e:
+                # Catch any other serialization errors
+                logger.error(
+                    f"Error during Kafka produce: {str(e)}",
+                    operation="produce_label",
+                    error_type=type(e).__name__,
+                    event_id=key,
+                    value_fields={k: type(v).__name__ for k, v in value.items()}
+                )
+                raise
 
             duration_seconds = time.time() - start_time
             logger.debug(

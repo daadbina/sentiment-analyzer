@@ -102,6 +102,59 @@ class DeduplicationEngine:
                 error_type=type(e).__name__
             )
 
+    async def _batch_save_to_db(self, labels_to_save: List[Tuple[str, Dict[str, Any]]]) -> None:
+        """
+        Batch save multiple labels to database for persistence.
+
+        This is much more efficient than individual saves as it reduces
+        database round trips from N to 1.
+
+        Args:
+            labels_to_save: List of (label_hash, label) tuples
+        """
+        if not self.db_pool or not labels_to_save:
+            return
+
+        try:
+            async with self.db_pool.acquire() as conn:
+                # Prepare batch data
+                batch_data = [
+                    (
+                        label_hash,
+                        label.get("event_id"),
+                        label.get("event_date"),
+                        label.get("label_source"),
+                        label.get("label_confidence") or label.get("confidence"),
+                        json.dumps(label)
+                    )
+                    for label_hash, label in labels_to_save
+                ]
+
+                # Use executemany for batch insert
+                await conn.executemany("""
+                    INSERT INTO deduplication_cache
+                    (label_hash, event_id, event_date, label_source, label_confidence, label_data, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
+                    ON CONFLICT (label_hash) DO UPDATE SET
+                        label_confidence = EXCLUDED.label_confidence,
+                        label_data = EXCLUDED.label_data,
+                        updated_at = CURRENT_TIMESTAMP
+                """, batch_data)
+
+                logger.info(
+                    f"Batch saved {len(labels_to_save)} labels to deduplication cache",
+                    operation="_batch_save_to_db",
+                    batch_size=len(labels_to_save)
+                )
+
+        except Exception as e:
+            logger.error(
+                f"Failed to batch save labels to database: {str(e)}",
+                operation="_batch_save_to_db",
+                error_type=type(e).__name__,
+                batch_size=len(labels_to_save)
+            )
+
     def _compute_label_hash(self, label: Dict[str, Any]) -> str:
         """
         Compute hash of label for deduplication.
@@ -204,6 +257,7 @@ class DeduplicationEngine:
         unique_labels = []
         duplicate_labels = []
         batch_hashes = {}  # Track hashes in this batch
+        labels_to_save = []  # Collect labels for batch save
 
         try:
             # First pass: identify highest confidence for each hash in batch
@@ -225,7 +279,7 @@ class DeduplicationEngine:
                         # Keep existing
                         duplicate_labels.append(label)
 
-            # Second pass: check against cache and register
+            # Second pass: check against cache and collect labels to save
             for label_hash, label in batch_hashes.items():
                 is_dup, existing = self.is_duplicate(label)
 
@@ -237,7 +291,7 @@ class DeduplicationEngine:
                     if new_conf > existing_conf:
                         # Replace in cache
                         self.seen_hashes[label_hash] = label
-                        await self._save_to_db(label_hash, label)
+                        labels_to_save.append((label_hash, label))
                         unique_labels.append(label)
 
                         logger.info(
@@ -251,16 +305,22 @@ class DeduplicationEngine:
                         duplicate_labels.append(label)
                         # Removed verbose "Duplicate discarded" log - too noisy for debugging
                 else:
-                    # New label
-                    await self.register_label(label)
+                    # New label - add to cache and collect for batch save
+                    self.seen_hashes[label_hash] = label
+                    labels_to_save.append((label_hash, label))
                     unique_labels.append(label)
+
+            # Batch save all new/updated labels to database
+            if labels_to_save:
+                await self._batch_save_to_db(labels_to_save)
 
             logger.info(
                 f"Batch deduplication completed",
                 operation="deduplicate_batch",
                 total_labels=len(labels),
                 unique_labels=len(unique_labels),
-                duplicate_labels=len(duplicate_labels)
+                duplicate_labels=len(duplicate_labels),
+                saved_to_db=len(labels_to_save)
             )
 
             return unique_labels, duplicate_labels

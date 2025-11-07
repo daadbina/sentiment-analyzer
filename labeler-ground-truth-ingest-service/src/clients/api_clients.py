@@ -575,6 +575,21 @@ class GDELTFetcher(BaseAPIClient):
                 )
                 return labels
 
+            # Log DataFrame columns and first row to understand structure
+            logger.info(
+                f"GDELT DataFrame columns: {list(response.columns)}",
+                operation="gdelt_parse",
+                column_count=len(response.columns),
+                row_count=len(response)
+            )
+
+            if len(response) > 0:
+                first_row = response.iloc[0]
+                logger.info(
+                    f"GDELT first row data: {dict(first_row)}",
+                    operation="gdelt_parse"
+                )
+
             # Convert DataFrame to list of dicts
             for idx, row in response.iterrows():
                 try:

@@ -50,13 +50,16 @@ class TopicLabeler:
             return "Unknown Topic"
 
         # Extract text from articles
+        # Support both "body" (from canonicalizer) and "content" (from embedding service)
         texts = []
         for article in articles:
             title = article.get("title", "")
-            body = article.get("body", "")
+            # Try "content" first (from embedding service), fall back to "body" (from canonicalizer)
+            body = article.get("content") or article.get("body", "")
             text = f"{title} {body}".strip()
             if text:
                 texts.append(text)
+                logger.debug(f"Added text for article {article.get('article_id', 'unknown')}: {len(text)} chars")
 
         if not texts:
             return "Unknown Topic"

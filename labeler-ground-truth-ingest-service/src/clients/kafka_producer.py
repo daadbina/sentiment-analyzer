@@ -292,12 +292,23 @@ class KafkaProducerClient:
 
             # Produce message - SerializingProducer handles serialization
             # CRITICAL: Pass ONLY the filtered value dict, not the original label
-            self.producer.produce(
-                topic=self.topic,
-                key=key,
-                value=value,
-                on_delivery=self._delivery_report
-            )
+            try:
+                self.producer.produce(
+                    topic=self.topic,
+                    key=key,
+                    value=value,
+                    on_delivery=self._delivery_report
+                )
+            except TypeError as te:
+                # Log detailed info about the error for debugging
+                logger.error(
+                    f"TypeError during Kafka produce: {str(te)}",
+                    operation="produce_label",
+                    error_type="TypeError",
+                    event_id=key,
+                    value_fields={k: type(v).__name__ for k, v in value.items()}
+                )
+                raise
 
             # Poll to trigger delivery reports
             self.producer.poll(0)
@@ -367,8 +378,24 @@ class KafkaProducerClient:
                         # Record production error
                         metrics.record_kafka_production_error(self.topic)
 
-                # Flush after each batch
-                self.producer.flush()
+                # Flush after each batch with timeout to prevent hanging
+                try:
+                    remaining_messages = self.producer.flush(timeout=30)  # 30 second timeout
+                    if remaining_messages > 0:
+                        logger.warning(
+                            f"Flush timeout: {remaining_messages} messages still in queue",
+                            operation="produce_batch",
+                            batch_index=i // batch_size,
+                            remaining_messages=remaining_messages
+                        )
+                except Exception as flush_error:
+                    logger.error(
+                        f"Error during flush: {str(flush_error)}",
+                        operation="produce_batch",
+                        error_type=type(flush_error).__name__
+                    )
+                    raise
+
                 batch_duration = time.time() - batch_start
 
                 logger.info(

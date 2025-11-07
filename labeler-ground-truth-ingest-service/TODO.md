@@ -269,6 +269,59 @@
 
 ---
 
+## COMPLIANCE FIXES (Phase 4 - PUBLIC.md & Design Spec Alignment)
+
+- [x] **C1** Fix hardcoded configuration values
+  - [x] Add 9 new Kafka consumer parameters to config.py
+  - [x] Move seek_to_beginning() from process_labels() to connect()
+  - [x] Implement batched offset commits (every 100 messages)
+  - [x] Commit: "refactor(labeler-service): fix hardcoded values and optimize Kafka consumer"
+
+- [x] **C2** Implement schema file management
+  - [x] Create schemas/ground_truth.avsc with complete Avro schema
+  - [x] Load schema from file in kafka_producer.py
+  - [x] Commit: "feat(labeler-service): move schema to file and load from disk"
+
+- [x] **C3** Implement Circuit Breaker pattern
+  - [x] Create circuit_breaker.py with CircuitBreaker and ExponentialBackoff classes
+  - [x] Add circuit breaker to SemanticGroupConsumer and KafkaProducerClient
+  - [x] Implement CLOSED/OPEN/HALF_OPEN state transitions
+  - [x] Commit: "feat(labeler-service): implement circuit breaker pattern for resilience"
+
+- [x] **C4** Implement Outbox pattern
+  - [x] Create storage/outbox.py with OutboxManager class
+  - [x] Create outbox table with published flag and retry tracking
+  - [x] Write labels to outbox before Kafka production
+  - [x] Mark as published after success
+  - [x] Add cleanup job for published events older than 7 days
+  - [x] Commit: "feat(labeler-service): implement outbox pattern for atomic writes"
+
+- [x] **C5** Add health check endpoints
+  - [x] Create health.py with HealthChecker class
+  - [x] Implement /health, /ready, /live endpoints
+  - [x] Check Kafka producer, consumer, PostgreSQL, Schema Registry
+  - [x] Update service.py health_check() and readiness_check() methods
+  - [x] Add liveness_check() method
+  - [x] Commit: "feat(labeler-service): add comprehensive health check endpoints"
+
+- [x] **C6** Add comprehensive logging and metrics
+  - [x] Add Kafka consumer metrics (lag, messages consumed, deserialization errors, poll duration, offset commit duration)
+  - [x] Add Kafka producer metrics (messages produced, production errors, production duration)
+  - [x] Record metrics for every consumed and produced message
+  - [x] Add detailed logging with partition, offset, and duration information
+  - [x] Log throughput (messages per second) for batch operations
+  - [x] Commit: "feat(labeler-service): add comprehensive Kafka logging and metrics"
+
+- [x] **C7** Fix PostgreSQL client references
+  - [x] Remove incorrect PostgreSQL client import
+  - [x] Update outbox manager to use postgres_writer instead of postgres_client
+  - [x] Fix asyncpg pool usage in outbox methods (acquire/release pattern)
+  - [x] Update health checker to use postgres_writer with pool
+  - [x] Fix duplicate duration_seconds parameter in kafka_producer logging
+  - [x] Commit: "fix(labeler-service): resolve PostgreSQL client references and syntax errors"
+
+---
+
 ## VERIFICATION CHECKLIST
 
 - [x] All configuration externalized (no hardcoded values)

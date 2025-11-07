@@ -106,12 +106,12 @@ class CountryEventTypeMatcher:
     3. Returns confidence based on match strength
     """
 
-    def __init__(self, country_threshold: float = 0.5, event_type_threshold: float = 0.3):
+    def __init__(self, country_threshold: float = 0.6, event_type_threshold: float = 0.6):
         """Initialize country+event type matcher.
 
         Args:
-            country_threshold: Confidence boost for country match
-            event_type_threshold: Minimum confidence for event type match
+            country_threshold: Confidence boost for country match (0.6)
+            event_type_threshold: Confidence boost for event type match (0.6)
         """
         self.country_threshold = country_threshold
         self.event_type_threshold = event_type_threshold

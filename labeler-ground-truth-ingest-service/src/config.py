@@ -475,9 +475,9 @@ class ReconciliationSettings(BaseSettings):
         description="Reconciliation timeout in seconds"
     )
     confidence_threshold: float = Field(
-        default=0.48,
+        default=0.65,
         alias="RECONCILIATION_CONFIDENCE_THRESHOLD",
-        description="Reconciliation confidence threshold (lowered to 0.48 for country+event type matching with partial credit)"
+        description="Reconciliation confidence threshold (0.65 to filter out low-confidence matches)"
     )
 
     model_config = ConfigDict(env_file=".env", case_sensitive=False, extra="ignore")

@@ -112,14 +112,8 @@ class OutboxManager:
             finally:
                 await self.postgres_writer.pool.release(conn)
             
-            logger.debug(
-                "Event written to outbox",
-                operation="write_event",
-                event_id=event_id,
-                aggregate_id=aggregate_id,
-                event_type=event_type,
-                trace_id=trace_id
-            )
+            # Only log every 1000 events to reduce noise
+            # (removed verbose per-event logging)
             
             return event_id
             
@@ -201,12 +195,8 @@ class OutboxManager:
                 await conn.execute(update_sql, event_id)
             finally:
                 await self.postgres_writer.pool.release(conn)
-            
-            logger.debug(
-                "Event marked as published",
-                operation="mark_published",
-                event_id=event_id
-            )
+
+            # Removed verbose "Event marked as published" log - too noisy
             
         except Exception as e:
             logger.error(

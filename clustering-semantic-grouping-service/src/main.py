@@ -6,10 +6,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, generate_latest
 import time
+import asyncio
 
 from .config import config
 from .scheduler import ClusteringScheduler
 from .migrations import MigrationRunner
+from .semantic_group_initializer import initialize_semantic_groups
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,17 @@ async def lifespan(app: FastAPI):
         migration_runner.reset_migrations()  # Reset for development
         migration_runner.run_all_migrations()
         logger.info("Database migrations completed")
+
+        # Initialize semantic groups at startup (country+event combinations)
+        logger.info("Initializing semantic groups...")
+        await initialize_semantic_groups(
+            db_host=config.postgres.host,
+            db_port=config.postgres.port,
+            db_user=config.postgres.user,
+            db_password=config.postgres.password,
+            db_name=config.postgres.database
+        )
+        logger.info("Semantic groups initialization completed")
 
         # Start scheduler
         scheduler.start()

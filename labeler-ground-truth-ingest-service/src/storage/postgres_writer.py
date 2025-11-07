@@ -121,6 +121,76 @@ class PostgreSQLWriter:
                 )
             """)
 
+            # Create deduplication_cache table for persistent deduplication
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS deduplication_cache (
+                    id SERIAL PRIMARY KEY,
+                    label_hash VARCHAR(64) NOT NULL UNIQUE,
+                    event_id VARCHAR(255) NOT NULL,
+                    event_date VARCHAR(50),
+                    label_source VARCHAR(50) NOT NULL,
+                    label_confidence FLOAT,
+                    label_data JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Create index on label_hash for fast lookups
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_dedup_cache_hash ON deduplication_cache(label_hash)
+            """)
+
+            # Create index on event_id and label_source for deduplication queries
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_dedup_cache_event_source ON deduplication_cache(event_id, label_source)
+            """)
+
+            # Create btc_truth table (Dataset 7: Bitcoin & Financial Prices)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS btc_truth (
+                    id SERIAL PRIMARY KEY,
+                    event_id VARCHAR(255) NOT NULL,
+                    timestamp TIMESTAMP NOT NULL,
+                    open FLOAT,
+                    close FLOAT,
+                    high FLOAT,
+                    low FLOAT,
+                    volume FLOAT,
+                    change_pct_10h FLOAT,
+                    label_spike BOOLEAN,
+                    volatility_score FLOAT,
+                    api_source VARCHAR(100),
+                    api_timestamp TIMESTAMP,
+                    exchange_avg FLOAT,
+                    source_rate_limit_token VARCHAR(255),
+                    label_confidence FLOAT,
+                    label_source VARCHAR(50),
+                    label_source_license VARCHAR(255),
+                    label_source_url TEXT,
+                    last_license_check TIMESTAMP,
+                    last_updated TIMESTAMP,
+                    trace_id VARCHAR(255),
+                    schema_version VARCHAR(50),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(event_id, label_source)
+                )
+            """)
+
+            # Create indexes for btc_truth
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_btc_truth_event_id ON btc_truth(event_id)
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_btc_truth_timestamp ON btc_truth(timestamp)
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_btc_truth_label_source ON btc_truth(label_source)
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_btc_truth_created_at ON btc_truth(created_at)
+            """)
+
             logger.info(
                 "Database tables ensured",
                 operation="_ensure_tables"
@@ -188,14 +258,6 @@ class PostgreSQLWriter:
 
                     total_inserted += len(batch)
 
-                    logger.info(
-                        f"Batch inserted {len(batch)} labels to PostgreSQL",
-                        operation="write_labels_batch",
-                        batch_index=i // batch_size,
-                        batch_size=len(batch),
-                        total_inserted=total_inserted
-                    )
-
             duration_seconds = time.time() - start_time
             metrics.record_storage("postgresql", duration_seconds)
 
@@ -216,6 +278,109 @@ class PostgreSQLWriter:
                 total_inserted=total_inserted
             )
             raise StorageError("postgresql", "write_labels", str(e))
+
+    async def write_crypto_labels(self, labels: List[Dict[str, Any]]) -> bool:
+        """Write crypto labels to btc_truth table (Dataset 7).
+
+        Crypto labels (Binance, CoinGecko) are NOT reconciled with semantic groups.
+        They are stored separately in btc_truth table per Architecture.md.
+        """
+        if not labels:
+            return True
+
+        if not self.pool:
+            raise StorageError("postgresql", "write_crypto_labels", "Connection pool not initialized")
+
+        start_time = time.time()
+        batch_size = 1000
+        total_inserted = 0
+
+        try:
+            async with self.pool.acquire() as conn:
+                # Process labels in batches
+                for i in range(0, len(labels), batch_size):
+                    batch = labels[i:i + batch_size]
+
+                    # Prepare batch data for btc_truth table
+                    batch_data = []
+                    for label in batch:
+                        # Parse timestamp from ISO string to datetime (offset-naive for PostgreSQL)
+                        ts_str = label.get("event_timestamp") or label.get("timestamp")
+                        ts = None
+                        if ts_str:
+                            try:
+                                ts_clean = ts_str.replace("Z", "+00:00")
+                                ts = datetime.fromisoformat(ts_clean)
+                                # Convert to offset-naive (remove timezone info)
+                                if ts.tzinfo is not None:
+                                    ts = ts.replace(tzinfo=None)
+                            except:
+                                ts = None
+
+                        batch_data.append((
+                            label.get("event_id"),
+                            ts,
+                            label.get("open"),
+                            label.get("close"),
+                            label.get("high"),
+                            label.get("low"),
+                            label.get("volume"),
+                            label.get("change_pct_10p"),  # Note: Binance uses change_pct_10p
+                            label.get("label_spike"),
+                            label.get("volatility_score"),
+                            label.get("api_source"),
+                            label.get("api_timestamp"),
+                            label.get("exchange_avg"),
+                            label.get("source_rate_limit_token"),
+                            label.get("label_confidence"),
+                            label.get("label_source"),
+                            label.get("label_source_license"),
+                            label.get("label_source_url"),
+                            label.get("last_license_check"),
+                            label.get("last_updated"),
+                            label.get("trace_id"),
+                            label.get("schema_version")
+                        ))
+
+                    # Use executemany for batch insert
+                    # Deduplication is handled in service.py before calling this method
+                    async with conn.transaction():
+                        await conn.executemany("""
+                            INSERT INTO btc_truth (
+                                event_id, timestamp, open, close, high, low, volume,
+                                change_pct_10h, label_spike, volatility_score, api_source,
+                                api_timestamp, exchange_avg, source_rate_limit_token,
+                                label_confidence, label_source, label_source_license,
+                                label_source_url, last_license_check, last_updated,
+                                trace_id, schema_version
+                            ) VALUES (
+                                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+                                $15, $16, $17, $18, $19, $20, $21, $22
+                            )
+                        """, batch_data)
+
+                    total_inserted += len(batch)
+
+            duration_seconds = time.time() - start_time
+            metrics.record_storage("postgresql_crypto", duration_seconds)
+
+            logger.info(
+                f"Successfully wrote {total_inserted} crypto labels to btc_truth",
+                operation="write_crypto_labels",
+                label_count=total_inserted,
+                duration_seconds=duration_seconds
+            )
+
+            return True
+
+        except Exception as e:
+            logger.error(
+                f"Failed to write crypto labels to btc_truth: {str(e)}",
+                operation="write_crypto_labels",
+                error_type=type(e).__name__,
+                total_inserted=total_inserted
+            )
+            raise StorageError("postgresql", "write_crypto_labels", str(e))
 
     async def write_reconciliation_log(
         self,

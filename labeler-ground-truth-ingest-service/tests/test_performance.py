@@ -44,20 +44,21 @@ def large_label_batch():
 class TestPerformance:
     """Performance tests."""
 
-    def test_deduplication_throughput(self, dedup_engine, large_label_batch):
+    @pytest.mark.asyncio
+    async def test_deduplication_throughput(self, dedup_engine, large_label_batch):
         """Test deduplication throughput."""
         start = time.time()
-        unique, duplicates = dedup_engine.deduplicate_batch(large_label_batch)
+        unique, duplicates = await dedup_engine.deduplicate_batch(large_label_batch)
         duration = time.time() - start
-        
-        # Should process 1000 labels in < 1 second
-        assert duration < 1.0
+
+        # Should process 1000 labels in < 2 seconds (accounting for DB writes)
+        assert duration < 2.0
         assert len(unique) == 1000
-        
+
         # Calculate throughput
         throughput = len(large_label_batch) / duration
         print(f"Deduplication throughput: {throughput:.0f} labels/sec")
-        assert throughput > 1000  # At least 1000 labels/sec
+        assert throughput > 500  # At least 500 labels/sec (reduced due to DB persistence)
 
     def test_drift_detection_throughput(self, drift_detector, large_label_batch):
         """Test drift detection throughput."""
@@ -92,7 +93,8 @@ class TestPerformance:
         print(f"Validation throughput: {throughput:.0f} labels/sec")
         assert throughput > 500  # At least 500 labels/sec
 
-    def test_deduplication_memory_efficiency(self, dedup_engine):
+    @pytest.mark.asyncio
+    async def test_deduplication_memory_efficiency(self, dedup_engine):
         """Test deduplication memory efficiency."""
         # Process multiple batches
         for batch_num in range(10):
@@ -107,10 +109,10 @@ class TestPerformance:
                 }
                 for i in range(100)
             ]
-            
-            unique, duplicates = dedup_engine.deduplicate_batch(batch)
+
+            unique, duplicates = await dedup_engine.deduplicate_batch(batch)
             assert len(unique) == 100
-        
+
         # Cache should contain all unique labels
         stats = dedup_engine.get_cache_stats()
         assert stats["cache_size"] == 1000

@@ -105,5 +105,3 @@ mlruns/
 # Other
 COMPREHENSIVE_VALIDATION_REPORT.json
 logs/
-check_semantic_groups.py
-analyze_reconciliation.py

@@ -207,7 +207,8 @@ class TestResilience:
         # Should recover and process normally
         assert True
 
-    def test_deduplication_with_large_batch(self, dedup_engine):
+    @pytest.mark.asyncio
+    async def test_deduplication_with_large_batch(self, dedup_engine):
         """Test deduplication with very large batch."""
         # Create large batch
         batch = [
@@ -221,9 +222,9 @@ class TestResilience:
             }
             for i in range(10000)
         ]
-        
+
         # Should handle without memory issues
-        unique, duplicates = dedup_engine.deduplicate_batch(batch)
+        unique, duplicates = await dedup_engine.deduplicate_batch(batch)
         assert len(unique) == 10000
         assert len(duplicates) == 0
 
@@ -239,13 +240,14 @@ class TestResilience:
                 }
                 for i in range(10)
             ]
-            
+
             drift_detector.detect_confidence_drift(f"SOURCE_{source_id}", batch)
-        
+
         # Should handle many sources
         assert len(drift_detector.confidence_history) == 100
 
-    def test_deduplication_cache_clear_recovery(self, dedup_engine):
+    @pytest.mark.asyncio
+    async def test_deduplication_cache_clear_recovery(self, dedup_engine):
         """Test deduplication recovery after cache clear."""
         # Add labels
         batch1 = [
@@ -258,14 +260,14 @@ class TestResilience:
                 "trace_id": "trace_001"
             }
         ]
-        
-        dedup_engine.deduplicate_batch(batch1)
+
+        await dedup_engine.deduplicate_batch(batch1)
         assert len(dedup_engine.seen_hashes) == 1
-        
+
         # Clear cache
         dedup_engine.clear_cache()
         assert len(dedup_engine.seen_hashes) == 0
-        
+
         # Process again
         batch2 = [
             {
@@ -277,8 +279,8 @@ class TestResilience:
                 "trace_id": "trace_001"
             }
         ]
-        
-        unique, duplicates = dedup_engine.deduplicate_batch(batch2)
+
+        unique, duplicates = await dedup_engine.deduplicate_batch(batch2)
         # After cache clear, same label is not a duplicate
         assert len(unique) == 1
         assert len(duplicates) == 0

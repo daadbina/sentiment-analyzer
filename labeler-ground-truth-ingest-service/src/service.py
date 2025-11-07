@@ -27,6 +27,9 @@ from src.health import HealthChecker
 logger = get_logger(__name__, config.logging.log_level)
 metrics = get_metrics(config.metrics.prometheus_port)
 
+# TEMP_LIMIT for debugging - set to None to process all labels
+TEMP_LIMIT = None  # Process all labels
+
 
 class LabelerService:
     """Main labeler service."""
@@ -53,7 +56,8 @@ class LabelerService:
         self.validator = LabelValidator()
         self.license_checker = LicenseChecker()
         self.freshness_validator = FreshnessValidator()
-        self.deduplication_engine = DeduplicationEngine()
+        # Deduplication engine will be initialized with db_pool after PostgreSQL connects
+        self.deduplication_engine: Optional[DeduplicationEngine] = None
         self.drift_detector = DriftDetector()
         self.audit_logger = AuditLogger()
 
@@ -84,6 +88,10 @@ class LabelerService:
             # Connect to PostgreSQL
             await self.postgres_writer.connect()
             await self.postgres_writer._ensure_tables()
+
+            # Initialize deduplication engine with database pool for persistence
+            self.deduplication_engine = DeduplicationEngine(db_pool=self.postgres_writer.pool)
+            await self.deduplication_engine.load_cache_from_db()
 
             # Initialize outbox table
             await self.outbox_manager.initialize()
@@ -237,6 +245,103 @@ class LabelerService:
 
         return labels
 
+    def _enrich_label_fields(self, label: Dict[str, Any], source: str) -> Dict[str, Any]:
+        """
+        Enrich label with missing fields per design spec.
+
+        Populates fields that are not provided by API fetchers:
+        - label_source_license: License of the source API
+        - label_source_url: URL to the source
+        - last_license_check: Current timestamp
+        - last_updated: Current timestamp
+        - schema_version: Service version
+        - source_confidence: Confidence from source API
+        - time_window: Default time window for realization
+        - realization_metric: Default metric for realization
+        - threshold: Default threshold for realization
+        """
+        now = datetime.utcnow().isoformat() + "Z"
+
+        # Set source-specific license information
+        license_info = {
+            "gdelt": {
+                "license": "CC BY 4.0",
+                "url": "https://www.gdeltproject.org"
+            },
+            "acled": {
+                "license": "CC BY 4.0",
+                "url": "https://www.acleddata.com"
+            },
+            "binance": {
+                "license": "Proprietary",
+                "url": "https://www.binance.com"
+            },
+            "coingecko": {
+                "license": "CC BY 4.0",
+                "url": "https://www.coingecko.com"
+            },
+            "ccxt": {
+                "license": "MIT",
+                "url": "https://ccxt.trade"
+            }
+        }
+
+        source_lower = source.lower()
+        license_data = license_info.get(source_lower, {
+            "license": "Unknown",
+            "url": label.get("source_url", "")
+        })
+
+        # Enrich label with missing fields
+        enriched = label.copy()
+
+        # Set license information if not already set
+        if not enriched.get("label_source_license"):
+            enriched["label_source_license"] = license_data.get("license")
+
+        if not enriched.get("label_source_url"):
+            enriched["label_source_url"] = license_data.get("url")
+
+        # Set license check timestamp
+        if not enriched.get("last_license_check"):
+            enriched["last_license_check"] = now
+
+        # Set last updated timestamp
+        if not enriched.get("last_updated"):
+            enriched["last_updated"] = now
+
+        # Set schema version
+        if not enriched.get("schema_version"):
+            enriched["schema_version"] = self.service_version
+
+        # Set source confidence (from API if available, otherwise use label_confidence)
+        if not enriched.get("source_confidence"):
+            enriched["source_confidence"] = enriched.get("label_confidence", 0.0)
+
+        # Set time window for realization (default: 30 days)
+        if not enriched.get("time_window"):
+            enriched["time_window"] = "P30D"  # ISO 8601 duration: 30 days
+
+        # Set realization metric based on source
+        if not enriched.get("realization_metric"):
+            if source_lower in ["gdelt", "acled"]:
+                enriched["realization_metric"] = "event_occurrence"
+            elif source_lower in ["binance", "coingecko", "ccxt"]:
+                enriched["realization_metric"] = "price_movement"
+            else:
+                enriched["realization_metric"] = "unknown"
+
+        # Set threshold based on source
+        if not enriched.get("threshold"):
+            if source_lower in ["binance", "coingecko", "ccxt"]:
+                # For crypto: 5% price movement threshold
+                enriched["threshold"] = 5.0
+            else:
+                # For events: confidence threshold
+                enriched["threshold"] = 0.7
+
+        return enriched
+
     async def validate_labels(
         self,
         labels: Dict[str, List[Dict[str, Any]]]
@@ -249,11 +354,14 @@ class LabelerService:
                 with TimedOperation(logger, "validate_labels", source=source) as op:
                     valid, invalid = await self.validator.validate_batch(source_labels, source.upper())
 
-                    # Deduplicate valid labels
-                    unique, duplicates = self.deduplication_engine.deduplicate_batch(valid)
+                    # Enrich valid labels with missing fields
+                    enriched_valid = [self._enrich_label_fields(label, source) for label in valid]
+
+                    # Deduplication happens AFTER validation in process_labels, not here
+                    # This keeps validation and deduplication as separate concerns per architecture
 
                     # Detect drift in label confidence
-                    drift_detected, drift_info = self.drift_detector.detect_confidence_drift(source.upper(), unique)
+                    drift_detected, drift_info = self.drift_detector.detect_confidence_drift(source.upper(), enriched_valid)
                     if drift_detected:
                         logger.warning(
                             f"Drift detected in {source}",
@@ -262,7 +370,7 @@ class LabelerService:
                         )
 
                     # Detect volume drift
-                    vol_drift, vol_info = self.drift_detector.detect_volume_drift(source.upper(), len(unique))
+                    vol_drift, vol_info = self.drift_detector.detect_volume_drift(source.upper(), len(enriched_valid))
                     if vol_drift:
                         logger.warning(
                             f"Volume drift detected in {source}",
@@ -270,15 +378,15 @@ class LabelerService:
                             vol_info=vol_info
                         )
 
-                    results[source] = (unique, invalid + duplicates)
+                    results[source] = (enriched_valid, invalid)
 
                     # Log to audit trail
                     if op.duration_ms is not None:
                         await self.audit_logger.log_validation(
                             source=source.upper(),
                             total_labels=len(source_labels),
-                            valid_labels=len(unique),
-                            invalid_labels=len(invalid) + len(duplicates),
+                            valid_labels=len(enriched_valid),
+                            invalid_labels=len(invalid),
                             duration_ms=op.duration_ms
                         )
 
@@ -375,27 +483,79 @@ class LabelerService:
             # Consume semantic groups from Kafka
             await self.consume_semantic_groups()
 
-            # Clear deduplication cache at start of each cycle
-            # This ensures we only deduplicate within the current batch, not against historical data
-            self.deduplication_engine.clear_cache()
-
             # Fetch labels
             labels = await self.fetch_labels()
 
             # Validate labels
             validation_results = await self.validate_labels(labels)
 
-            # Extract valid labels
+            # Extract valid labels and separate by source
             valid_labels = {}
             all_valid_labels = []
+            crypto_labels = []  # Binance/CoinGecko labels (Dataset 7)
+            event_labels = []   # GDELT/ACLED labels (Dataset 6)
+
             for source, (valid, invalid) in validation_results.items():
                 valid_labels[source] = valid
                 all_valid_labels.extend(valid)
 
-            # Reconcile labels (if semantic groups are available)
+                logger.info(
+                    "Labels validated",
+                    operation="process_labels",
+                    source=source,
+                    valid_count=len(valid),
+                    invalid_count=len(invalid)
+                )
+
+                # Separate crypto labels from event labels
+                # Per Architecture.md: Dataset 6 (ground_truth) vs Dataset 7 (btc_truth)
+                if source in ["binance", "coingecko", "ccxt"]:
+                    crypto_labels.extend(valid)
+                else:
+                    event_labels.extend(valid)
+
+            # Deduplicate ALL labels (both event and crypto) for safety
+            # Per Architecture.md: Deduplication Engine detects duplicates from multiple sources
+            # GDELT data should be unique, but deduplication adds safety layer for production
+            unique_event_labels = []
+            unique_crypto_labels = []
+
+            if event_labels:
+                unique_event_labels, duplicates = await self.deduplication_engine.deduplicate_batch(event_labels)
+                if len(duplicates) > 0:
+                    logger.warning(
+                        "Event labels had duplicates (unexpected for GDELT)",
+                        operation="process_labels",
+                        duplicate_count=len(duplicates),
+                        source="gdelt/acled"
+                    )
+
+            if crypto_labels:
+                unique_crypto_labels, duplicates = await self.deduplication_engine.deduplicate_batch(crypto_labels)
+                if len(duplicates) > 0:
+                    logger.info(
+                        "Crypto labels deduplicated (expected for price data)",
+                        operation="process_labels",
+                        duplicate_count=len(duplicates),
+                        source="binance/coingecko"
+                    )
+
+            # Reconcile ONLY unique event labels (GDELT, ACLED)
+            # Crypto labels are NOT reconciled per Architecture.md
             reconciliation_map = {}
-            if self.semantic_groups:
-                reconciled_labels = await self.reconcile_labels(valid_labels)
+            if unique_event_labels and self.semantic_groups:
+                # Reconcile all labels
+                labels_to_reconcile = unique_event_labels
+
+                # Create a dict with only event labels for reconciliation
+                event_labels_by_source = {}
+                for label in labels_to_reconcile:
+                    source = label.get("label_source")
+                    if source not in event_labels_by_source:
+                        event_labels_by_source[source] = []
+                    event_labels_by_source[source].append(label)
+
+                reconciled_labels = await self.reconcile_labels(event_labels_by_source)
 
                 # Create mapping of event_id -> group_id for reconciled labels
                 for reconciled in reconciled_labels:
@@ -403,48 +563,69 @@ class LabelerService:
                     group_id = reconciled.get("group_id")
                     if event_id and group_id:
                         reconciliation_map[event_id] = group_id
-            else:
+
+                # Log reconciliation summary
+                logger.info(
+                    f"Reconciliation completed",
+                    operation="process_labels",
+                    reconciled_count=len(reconciliation_map),
+                    total_reconciled_results=len(reconciled_labels)
+                )
+            elif unique_event_labels:
                 logger.warning(
                     "No semantic groups available for reconciliation",
                     operation="process_labels",
-                    total_labels=len(all_valid_labels)
+                    event_label_count=len(unique_event_labels)
                 )
 
-            # Enrich all valid labels with reconciliation results
-            # Labels that didn't reconcile will have group_id = None
-            enriched_labels = []
-            for label in all_valid_labels:
+            # Enrich event labels with reconciliation results
+            enriched_event_labels = []
+            for label in unique_event_labels:
                 event_id = label.get("event_id")
-                label["group_id"] = reconciliation_map.get(event_id)  # None if not reconciled
-                enriched_labels.append(label)
+                group_id = reconciliation_map.get(event_id)
+                label["group_id"] = group_id  # None if not reconciled
+                enriched_event_labels.append(label)
 
-            # Write to storage using outbox pattern (all valid labels, not just reconciled ones)
-            if enriched_labels:
+
+
+            # Write event labels to storage using outbox pattern
+            if enriched_event_labels:
                 # Write to Delta Lake
-                await self.delta_lake_writer.write_labels(enriched_labels)
+                await self.delta_lake_writer.write_labels(enriched_event_labels)
 
-                # Write to PostgreSQL
-                await self.postgres_writer.write_labels(enriched_labels)
+                # Write to PostgreSQL ground_truth table
+                await self.postgres_writer.write_labels(enriched_event_labels)
 
                 # Write to outbox for atomic Kafka production
                 outbox_events = []
-                for label in enriched_labels:
+                for label in enriched_event_labels:
                     event_id = label.get("event_id")
                     group_id = label.get("group_id")
                     trace_id = label.get("trace_id")
 
-                    # Write to outbox
-                    await self.outbox_manager.write_event(
+                    # Write to outbox (no logging - too verbose)
+                    # write_event returns the UUID outbox event ID, not the label event_id
+                    outbox_event_id = await self.outbox_manager.write_event(
                         aggregate_id=group_id or event_id,
                         aggregate_type="semantic_group" if group_id else "event",
                         event_type="label_created",
                         payload=label,
                         trace_id=trace_id
                     )
-                    outbox_events.append(event_id)
+                    outbox_events.append(outbox_event_id)
 
-                # Produce to Kafka (use enriched_labels which have the flat structure)
-                await self.kafka_producer.produce_batch(enriched_labels)
+                # Produce event labels to Kafka
+                try:
+                    await self.kafka_producer.produce_batch(enriched_event_labels)
+                except Exception as e:
+                    logger.error(
+                        f"Failed to produce batch to Kafka: {str(e)}",
+                        operation="process_labels",
+                        error_type=type(e).__name__,
+                        label_count=len(enriched_event_labels)
+                    )
+                    # Continue with outbox marking even if Kafka production fails
+                    # This ensures the outbox pattern is maintained
 
                 # Mark outbox events as published
                 for event_id in outbox_events:
@@ -457,10 +638,24 @@ class LabelerService:
                             event_id=event_id
                         )
 
+            # Write crypto labels to btc_truth table (NO reconciliation, NO Kafka)
+            if unique_crypto_labels:
+                logger.info(
+                    "Writing crypto labels to btc_truth table",
+                    operation="process_labels",
+                    label_count=len(unique_crypto_labels)
+                )
+
+                # Per Architecture.md Dataset 7: Crypto labels go ONLY to PostgreSQL btc_truth table
+                # They are NOT written to Delta Lake (different schema) and NOT published to Kafka
+                await self.postgres_writer.write_crypto_labels(unique_crypto_labels)
+
             logger.info(
                 "Label processing pipeline completed",
                 operation="process_labels",
-                total_reconciled=len(reconciled_labels)
+                event_labels=len(enriched_event_labels) if enriched_event_labels else 0,
+                crypto_labels=len(crypto_labels) if crypto_labels else 0,
+                total_labels=len(all_valid_labels)
             )
 
         except Exception as e:

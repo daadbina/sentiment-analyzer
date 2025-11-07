@@ -70,16 +70,17 @@ class KafkaProducerClient:
             # Load schema
             schema_str = self._load_schema()
 
-            # Initialize Avro serializer
+            # Initialize Avro serializer with schema_str as keyword argument
             self.avro_serializer = AvroSerializer(
                 self.schema_registry_client,
-                schema_str
+                schema_str=schema_str
             )
 
             # Initialize key serializer
-            self.key_serializer = StringSerializer()
+            self.key_serializer = StringSerializer("utf_8")
 
             # Initialize Kafka producer with SerializingProducer
+            # Note: SerializingProducer expects serializers as config parameters
             self.producer = SerializingProducer({
                 "bootstrap.servers": self.brokers,
                 "client.id": "labeler-ground-truth-ingest-service",
@@ -89,7 +90,9 @@ class KafkaProducerClient:
                 "max.in.flight.requests.per.connection": 5,
                 "compression.type": "snappy",
                 "key.serializer": self.key_serializer,
-                "value.serializer": self.avro_serializer
+                "value.serializer": self.avro_serializer,
+                "linger.ms": 100,  # Batch messages for better throughput
+                "batch.size": 16384  # 16KB batch size
             })
 
             logger.info(
@@ -126,7 +129,8 @@ class KafkaProducerClient:
         """
         try:
             # Get path to schema file relative to this file
-            schema_path = Path(__file__).parent.parent.parent / "schemas" / "ground_truth.avsc"
+            # Use ground_truth_value.avsc which matches the registered schema in Schema Registry
+            schema_path = Path(__file__).parent.parent.parent / "schemas" / "ground_truth_value.avsc"
 
             logger.debug(
                 "Loading schema from file",
@@ -175,14 +179,60 @@ class KafkaProducerClient:
                 partition=msg.partition(),
                 offset=msg.offset()
             )
-        else:
+        # Removed verbose "Message delivered successfully" log - too noisy for debugging
+
+    def _sanitize_value(self, value: Any, field_type: str) -> Any:
+        """
+        Sanitize a value for Avro serialization.
+
+        Handles None values and type conversions properly to avoid MemoryView errors.
+
+        Args:
+            value: The value to sanitize
+            field_type: The expected field type ('string', 'double', 'boolean', etc.)
+
+        Returns:
+            Properly typed value or None if value is None
+        """
+        if value is None:
+            return None
+
+        try:
+            if field_type == 'string':
+                # Convert to string, but don't convert None to "None"
+                if isinstance(value, str):
+                    return value
+                elif isinstance(value, bytes):
+                    return value.decode('utf-8')
+                else:
+                    return str(value)
+            elif field_type == 'double':
+                # Convert to float
+                if isinstance(value, (int, float)):
+                    return float(value)
+                elif isinstance(value, str):
+                    return float(value)
+                else:
+                    return None
+            elif field_type == 'boolean':
+                # Convert to bool
+                if isinstance(value, bool):
+                    return value
+                elif isinstance(value, str):
+                    return value.lower() in ('true', '1', 'yes')
+                elif isinstance(value, (int, float)):
+                    return bool(value)
+                else:
+                    return None
+            else:
+                return value
+        except (ValueError, TypeError) as e:
             logger.debug(
-                f"Message delivered successfully",
-                operation="delivery_report",
-                topic=msg.topic(),
-                partition=msg.partition(),
-                offset=msg.offset()
+                f"Failed to sanitize value for field type {field_type}: {str(e)}",
+                operation="sanitize_value",
+                value_type=type(value).__name__
             )
+            return None
 
     async def produce_label(self, label: Dict[str, Any]) -> bool:
         """Produce single label to Kafka."""
@@ -196,25 +246,26 @@ class KafkaProducerClient:
             key = label.get("event_id", "")
 
             # Prepare message value - only include fields that match schema
+            # Use sanitize_value to properly handle None and type conversions
             value = {
-                "event_id": label.get("event_id"),
-                "group_id": label.get("group_id"),
-                "description": label.get("description"),
-                "domain": label.get("domain"),
-                "time_window": label.get("time_window"),
-                "realization_metric": label.get("realization_metric"),
-                "threshold": label.get("threshold"),
-                "verified_at": label.get("verified_at"),
-                "label_realized": label.get("label_realized"),
-                "label_confidence": label.get("label_confidence"),
-                "source_confidence": label.get("source_confidence"),
-                "label_source": label.get("label_source"),
-                "label_source_license": label.get("label_source_license"),
-                "label_source_url": label.get("label_source_url"),
-                "last_license_check": label.get("last_license_check"),
-                "last_updated": label.get("last_updated"),
-                "trace_id": label.get("trace_id"),
-                "schema_version": label.get("schema_version")
+                "event_id": self._sanitize_value(label.get("event_id"), 'string') or "",
+                "group_id": self._sanitize_value(label.get("group_id"), 'string'),
+                "description": self._sanitize_value(label.get("description"), 'string'),
+                "domain": self._sanitize_value(label.get("domain"), 'string'),
+                "time_window": self._sanitize_value(label.get("time_window"), 'string'),
+                "realization_metric": self._sanitize_value(label.get("realization_metric"), 'string'),
+                "threshold": self._sanitize_value(label.get("threshold"), 'double'),
+                "verified_at": self._sanitize_value(label.get("verified_at"), 'string'),
+                "label_realized": self._sanitize_value(label.get("label_realized"), 'boolean'),
+                "label_confidence": self._sanitize_value(label.get("label_confidence"), 'double'),
+                "source_confidence": self._sanitize_value(label.get("source_confidence"), 'double'),
+                "label_source": self._sanitize_value(label.get("label_source"), 'string'),
+                "label_source_license": self._sanitize_value(label.get("label_source_license"), 'string'),
+                "label_source_url": self._sanitize_value(label.get("label_source_url"), 'string'),
+                "last_license_check": self._sanitize_value(label.get("last_license_check"), 'string'),
+                "last_updated": self._sanitize_value(label.get("last_updated"), 'string'),
+                "trace_id": self._sanitize_value(label.get("trace_id"), 'string'),
+                "schema_version": self._sanitize_value(label.get("schema_version"), 'string')
             }
 
             # Produce message - SerializingProducer handles serialization

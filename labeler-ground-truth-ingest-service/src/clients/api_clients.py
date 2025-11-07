@@ -628,20 +628,7 @@ class GDELTFetcher(BaseAPIClient):
                 )
                 return labels
 
-            # Log DataFrame columns and first row to understand structure
-            logger.info(
-                f"GDELT DataFrame columns: {list(response.columns)}",
-                operation="gdelt_parse",
-                column_count=len(response.columns),
-                row_count=len(response)
-            )
-
-            if len(response) > 0:
-                first_row = response.iloc[0]
-                logger.info(
-                    f"GDELT first row data: {dict(first_row)}",
-                    operation="gdelt_parse"
-                )
+            # Removed verbose DataFrame columns and first row logging - too noisy for debugging
 
             # Convert DataFrame to list of dicts
             for idx, row in response.iterrows():
@@ -688,19 +675,13 @@ class GDELTFetcher(BaseAPIClient):
 
                     # Extract GDELT event code (EventCode field)
                     event_code = None
-                    event_type_name = "news_event"
+                    event_type_name = None  # Will be set only for conflict events
                     if "EventCode" in row:
                         try:
                             event_code_str = str(row.get("EventCode", "0"))
                             event_code = int(event_code_str) if event_code_str.isdigit() else None
                             if event_code and event_code in self.CONFLICT_EVENT_CODES:
                                 event_type_name = self.CONFLICT_EVENT_CODES[event_code]
-                                # logger.debug(
-                                #     f"Extracted GDELT event code: {event_code} ({event_type_name})",
-                                #     operation="gdelt_parse",
-                                #     event_code=event_code,
-                                #     event_type=event_type_name
-                                # )
                         except (ValueError, TypeError):
                             event_code = None
 
@@ -721,8 +702,19 @@ class GDELTFetcher(BaseAPIClient):
                     label_conflict = 0
                     if event_code and event_code in self.CONFLICT_EVENT_CODES:
                         label_conflict = 1
+                        # event_type_name already set from CONFLICT_EVENT_CODES
                     elif goldstein_scale < -2:  # Negative Goldstein = conflict
                         label_conflict = 1
+                        # Set event type name based on Goldstein scale severity
+                        if goldstein_scale < -5:
+                            event_type_name = "MASS_VIOLENCE"
+                        else:
+                            event_type_name = "ARMED_CONFLICT"
+
+                    # FILTER: Only include conflict events for ground truth labels
+                    # Non-conflict events (label_conflict=0) are not used for model training
+                    if label_conflict == 0:
+                        continue
 
                     # Extract countries from GDELT event data
                     # GDELT provides Actor1CountryCode, Actor2CountryCode, ActionGeo_CountryCode
@@ -742,11 +734,14 @@ class GDELTFetcher(BaseAPIClient):
                     if action_country and action_country != "nan":
                         country_codes.add(action_country)
 
-                    # Convert country codes to country names
-                    countries = []
+                    # Convert country codes to country names and deduplicate
+                    countries_set = set()
                     for code in country_codes:
                         country_name = COUNTRY_CODE_TO_NAME.get(code, code)  # Use code as fallback
-                        countries.append(country_name)
+                        countries_set.add(country_name)
+
+                    # Convert back to list for consistency
+                    countries = list(countries_set)
 
                     # logger.debug(
                     #     f"Extracted {len(countries)} countries from GDELT event",
@@ -773,7 +768,9 @@ class GDELTFetcher(BaseAPIClient):
 
                     # Create description for semantic matching
                     # Combine event type, countries, and title for better semantic matching
-                    description_parts = [event_type_name]
+                    description_parts = []
+                    if event_type_name:
+                        description_parts.append(event_type_name)
                     if countries:
                         description_parts.extend(countries)
                     if title:
@@ -926,7 +923,7 @@ class BinanceFetcher(BaseAPIClient):
                 "low": low_price,
                 "volume": volume,
                 "change_pct_10p": change_pct,
-                "label_spike": 1 if abs(change_pct) > 5.0 else 0,
+                "label_spike": abs(change_pct) > 5.0,  # Boolean for PostgreSQL
                 "volatility_score": min(abs(change_pct) / 10.0, 1.0),
                 "label_confidence": 0.95,  # Confidence for Binance prices (mapped to PostgreSQL column)
                 "label_source": "binance",  # Source identifier for deduplication

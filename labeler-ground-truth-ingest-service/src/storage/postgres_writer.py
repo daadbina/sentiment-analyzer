@@ -274,7 +274,7 @@ class PostgreSQLWriter:
         """Fetch all semantic groups from PostgreSQL.
 
         Returns:
-            List of semantic group dictionaries
+            List of semantic group dictionaries with datetime objects converted to ISO strings
         """
         if not self.pool:
             raise StorageError("postgresql", "fetch_semantic_groups", "Connection pool not initialized")
@@ -295,7 +295,15 @@ class PostgreSQLWriter:
                     ORDER BY created_at DESC
                 """)
 
-            groups = [dict(row) for row in rows]
+            groups = []
+            for row in rows:
+                group_dict = dict(row)
+                # Convert datetime objects to ISO format strings for JSON serialization
+                if group_dict.get("created_at"):
+                    group_dict["created_at"] = group_dict["created_at"].isoformat()
+                if group_dict.get("updated_at"):
+                    group_dict["updated_at"] = group_dict["updated_at"].isoformat()
+                groups.append(group_dict)
 
             logger.info(
                 f"Fetched {len(groups)} semantic groups from PostgreSQL",

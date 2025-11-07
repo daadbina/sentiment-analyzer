@@ -160,16 +160,28 @@ class SemanticGroupConsumer:
 
             # Seek to beginning for each partition
             for partition in partitions:
-                tp = TopicPartition(partition.topic(), partition.partition(), 0)
-                self.consumer.seek(tp)
-                duration_ms = (time.time() - start_time) * 1000
-                logger.info(
-                    f"Seeked to beginning",
-                    operation="seek_to_beginning",
-                    topic=partition.topic(),
-                    partition=partition.partition(),
-                    duration_ms=duration_ms
-                )
+                try:
+                    tp = TopicPartition(partition.topic(), partition.partition())
+                    self.consumer.seek(tp)
+                    duration_ms = (time.time() - start_time) * 1000
+                    logger.info(
+                        f"Seeked to beginning",
+                        operation="seek_to_beginning",
+                        topic=partition.topic(),
+                        partition=partition.partition(),
+                        duration_ms=duration_ms
+                    )
+                except Exception as seek_error:
+                    duration_ms = (time.time() - start_time) * 1000
+                    logger.error(
+                        f"Error seeking partition to beginning: {str(seek_error)}",
+                        operation="seek_to_beginning",
+                        topic=partition.topic(),
+                        partition=partition.partition(),
+                        error_type=type(seek_error).__name__,
+                        duration_ms=duration_ms,
+                        exc_info=True
+                    )
         except Exception as e:
             duration_ms = (time.time() - start_time) * 1000
             logger.error(

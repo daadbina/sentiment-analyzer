@@ -18,6 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2025-11-07
+
+### Fixed
+- **Deduplication Cache JSON Parsing** (src/validation/deduplication.py)
+  - Fixed AttributeError: 'str' object has no attribute 'get' in is_duplicate operation
+  - Added JSON parsing for label_data loaded from database
+  - Ensures label_data is always a dictionary before calling .get() method
+  - Resolves issue where cached labels from database were stored as JSON strings
+  - Service now successfully processes 37,157+ labels without deduplication errors
+  - Deduplication cache persistence working correctly with 1702+ cached entries
+
+---
+
 ## [0.5.0] - 2025-11-07
 
 ### Fixed

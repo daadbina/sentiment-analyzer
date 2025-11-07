@@ -2,8 +2,8 @@
 
 **Service:** `labeler-ground-truth-ingest-service`
 **Purpose:** Ingest ground-truth labels from external APIs (ACLED, GDELT, CoinGecko), reconcile labels with semantic groups, validate label consistency and freshness, write ground-truth data to Delta Lake and PostgreSQL, and publish labels to Kafka.
-**Status:** COMPLETE (All 13 phases + remaining tasks completed)
-**Last Updated:** 2025-11-05
+**Status:** COMPLETE (All 13 phases + compliance fixes + deduplication cache fix completed)
+**Last Updated:** 2025-11-07
 
 ---
 
@@ -360,6 +360,13 @@
   - [x] Allows service to wait for messages from clustering service
   - [x] Implements graceful degradation per design spec
   - [x] Commit: "fix(labeler-service): remove exit condition on poll timeouts"
+
+- [x] **C9** Fix deduplication cache JSON parsing
+  - [x] Fixed AttributeError: 'str' object has no attribute 'get' in is_duplicate operation
+  - [x] Added JSON parsing for label_data loaded from database in load_cache_from_db()
+  - [x] Ensures label_data is always a dictionary before calling .get() method
+  - [x] Service now successfully processes 37,157+ labels without deduplication errors
+  - [x] Commit: "fix: parse JSON label_data from database in deduplication cache"
 
 - [ ] **FI-2** Compare implemented design patterns with actual document
   - **Description:** Verify that all 8 design patterns (Strategy, Factory, Observer, Template Method, Repository, Adapter, Circuit Breaker, Outbox) are correctly implemented and match the specifications in labeler-ground-truth-ingest-service.md.

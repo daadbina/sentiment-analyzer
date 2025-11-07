@@ -161,17 +161,23 @@ class EmbeddingService:
                 # embedded_at represents when the embedding was created (current time)
                 # This is used by clustering service for time window filtering
                 # NOT the article's publication time
+                #
+                # IMPORTANT: Use domain_category (topic category) not domain (URL domain)
+                # domain_category comes from canonicalizer classification (politics, economy, etc.)
+                # domain is the URL domain (e.g., "bbc" from "bbc.com")
+                #
+                # Clustering service requires: domain, source, country, publisher_credibility, published_at
+                # These fields are extracted from news_canonical topic
                 meta = {
                     "article_id": msg.get("article_id", ""),
                     "embedded_at": current_time_timestamp,
                     "published_at": msg.get("published_at", ""),  # Article publication time (ISO format)
-                    "title": msg.get("title", ""),  # Include title for feature extraction
-                    "body": msg.get("body", ""),  # Include body for feature extraction
+                    "language": msg.get("language", "en"),
+                    "domain": msg.get("domain_category", "general"),  # Use domain_category (topic) not domain (URL domain)
                     "publisher_credibility": msg.get("publisher_credibility", 0.5),
                     "publisher_id": msg.get("publisher_id", "unknown"),
                     "source": msg.get("source", "unknown"),
-                    "language": msg.get("language", "en"),
-                    "domain": msg.get("domain", ""),
+                    "country": msg.get("country"),  # Optional country field from canonicalizer
                     "content_type": msg.get("content_type", "article"),
                 }
                 logger.info(f"Extracted metadata for article {msg.get('article_id', 'unknown')}: {meta}")

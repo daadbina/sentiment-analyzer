@@ -1,7 +1,7 @@
 """Cluster validation with quality checks and temporal coherence."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Tuple, Dict
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -167,6 +167,9 @@ class ClusterValidator:
                         if pub_at.endswith('Z'):
                             pub_at = pub_at[:-1] + '+00:00'
                         pub_at = datetime.fromisoformat(pub_at.replace('Z', '+00:00'))
+                        # Ensure timezone-aware for comparison
+                        if pub_at.tzinfo is None:
+                            pub_at = pub_at.replace(tzinfo=timezone.utc)
                     except (ValueError, AttributeError):
                         logger.warning(f"Could not parse published_at: {pub_at}")
                         continue
@@ -176,9 +179,14 @@ class ClusterValidator:
             return True
 
         earliest = min(published_times)
-        if cluster_created_at < earliest:
+        # Ensure cluster_created_at is timezone-aware for comparison
+        cluster_created_at_aware = cluster_created_at
+        if cluster_created_at_aware.tzinfo is None:
+            cluster_created_at_aware = cluster_created_at_aware.replace(tzinfo=timezone.utc)
+
+        if cluster_created_at_aware < earliest:
             logger.error(
-                f"R7 violation: cluster_created_at={cluster_created_at} "
+                f"R7 violation: cluster_created_at={cluster_created_at_aware} "
                 f"< earliest_published_at={earliest}"
             )
             return False
@@ -198,6 +206,9 @@ class ClusterValidator:
                         if pub_at.endswith('Z'):
                             pub_at = pub_at[:-1] + '+00:00'
                         pub_at = datetime.fromisoformat(pub_at.replace('Z', '+00:00'))
+                        # Ensure timezone-aware for comparison
+                        if pub_at.tzinfo is None:
+                            pub_at = pub_at.replace(tzinfo=timezone.utc)
                     except (ValueError, AttributeError):
                         logger.warning(f"Could not parse published_at: {pub_at}")
                         continue

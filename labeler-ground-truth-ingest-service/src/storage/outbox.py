@@ -125,6 +125,75 @@ class OutboxManager:
             )
             raise
 
+    async def write_events_batch(
+        self,
+        events: List[Dict[str, Any]]
+    ) -> List[str]:
+        """Write multiple events to outbox in a single batch operation.
+
+        Args:
+            events: List of event dictionaries with keys:
+                - aggregate_id: ID of aggregate
+                - aggregate_type: Type of aggregate
+                - event_type: Type of event
+                - payload: Event payload
+                - trace_id: Optional distributed trace ID
+
+        Returns:
+            List of event IDs
+        """
+        if not events:
+            return []
+
+        try:
+            event_ids = []
+
+            # Use executemany for batch insert
+            insert_sql = f"""
+            INSERT INTO {self.outbox_table}
+            (id, aggregate_id, aggregate_type, event_type, payload, trace_id)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """
+
+            conn = await self.postgres_writer.pool.acquire()
+            try:
+                # Prepare batch data
+                batch_data = []
+                for event in events:
+                    event_id = str(uuid.uuid4())
+                    event_ids.append(event_id)
+                    batch_data.append((
+                        event_id,
+                        event["aggregate_id"],
+                        event["aggregate_type"],
+                        event["event_type"],
+                        json.dumps(event["payload"]),
+                        event.get("trace_id")
+                    ))
+
+                # Execute batch insert
+                await conn.executemany(insert_sql, batch_data)
+
+                logger.info(
+                    f"Batch wrote {len(event_ids)} events to outbox",
+                    operation="write_events_batch",
+                    event_count=len(event_ids)
+                )
+
+            finally:
+                await self.postgres_writer.pool.release(conn)
+
+            return event_ids
+
+        except Exception as e:
+            logger.error(
+                f"Failed to write batch events to outbox: {str(e)}",
+                operation="write_events_batch",
+                error_type=type(e).__name__,
+                event_count=len(events)
+            )
+            raise
+
     async def get_unpublished_events(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Get unpublished events from outbox.
         

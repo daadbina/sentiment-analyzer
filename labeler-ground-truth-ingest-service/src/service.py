@@ -671,38 +671,31 @@ class LabelerService:
                     label_count=len(enriched_event_labels)
                 )
 
-                # Write to outbox for atomic Kafka production
+                # Write to outbox for atomic Kafka production using batch operation
                 logger.info(
-                    f"About to write {len(enriched_event_labels)} labels to outbox",
+                    f"About to write {len(enriched_event_labels)} labels to outbox (batch)",
                     operation="process_labels",
                     label_count=len(enriched_event_labels)
                 )
-                outbox_events = []
                 outbox_start = time.time()
-                for i, label in enumerate(enriched_event_labels):
+
+                # Prepare batch events for outbox
+                outbox_batch = []
+                for label in enriched_event_labels:
                     event_id = label.get("event_id")
                     group_id = label.get("group_id")
                     trace_id = label.get("trace_id")
 
-                    # Write to outbox (no logging - too verbose)
-                    # write_event returns the UUID outbox event ID, not the label event_id
-                    outbox_event_id = await self.outbox_manager.write_event(
-                        aggregate_id=group_id or event_id,
-                        aggregate_type="semantic_group" if group_id else "event",
-                        event_type="label_created",
-                        payload=label,
-                        trace_id=trace_id
-                    )
-                    outbox_events.append(outbox_event_id)
+                    outbox_batch.append({
+                        "aggregate_id": group_id or event_id,
+                        "aggregate_type": "semantic_group" if group_id else "event",
+                        "event_type": "label_created",
+                        "payload": label,
+                        "trace_id": trace_id
+                    })
 
-                    # Log progress every 1000 labels
-                    if (i + 1) % 1000 == 0:
-                        logger.debug(
-                            f"Outbox write progress: {i + 1}/{len(enriched_event_labels)}",
-                            operation="process_labels",
-                            progress=i + 1,
-                            total=len(enriched_event_labels)
-                        )
+                # Write all events in a single batch operation
+                outbox_events = await self.outbox_manager.write_events_batch(outbox_batch)
 
                 outbox_duration = time.time() - outbox_start
                 logger.info(

@@ -96,6 +96,116 @@ class TemporalMatcher:
             return False, 0.0
 
 
+class CountryEventTypeMatcher:
+    """Match labels to semantic groups by country and event type.
+
+    This matcher is designed for GDELT event data which provides structured
+    country and event type information. It matches based on:
+    1. Country overlap (does the group mention the same country?)
+    2. Event type keywords (does the group mention conflict/violence/etc?)
+    3. Returns confidence based on match strength
+    """
+
+    def __init__(self, country_threshold: float = 0.5, event_type_threshold: float = 0.3):
+        """Initialize country+event type matcher.
+
+        Args:
+            country_threshold: Confidence boost for country match
+            event_type_threshold: Minimum confidence for event type match
+        """
+        self.country_threshold = country_threshold
+        self.event_type_threshold = event_type_threshold
+
+        # Event type keywords for matching
+        self.conflict_keywords = {
+            'conflict', 'violence', 'war', 'battle', 'attack', 'protest',
+            'riot', 'strike', 'demonstration', 'armed', 'military', 'combat',
+            'fighting', 'clash', 'confrontation', 'uprising', 'rebellion',
+            'insurgency', 'terrorism', 'extremism', 'militant', 'guerrilla'
+        }
+
+    def match(
+        self,
+        label_countries: List[str],
+        label_event_type: str,
+        group_description: str
+    ) -> Tuple[bool, float]:
+        """
+        Match label to group by country and event type.
+
+        Args:
+            label_countries: List of countries from label (e.g., ['India', 'Pakistan'])
+            label_event_type: Event type from label (e.g., 'VIOLENCE_AGAINST_CIVILIANS')
+            group_description: Topic label from semantic group
+
+        Returns:
+            Tuple of (matched: bool, confidence: float)
+        """
+        try:
+            if not group_description:
+                return False, 0.0
+
+            group_words = set(w.lower() for w in group_description.split() if len(w) > 2)
+
+            # Check for country match
+            country_confidence = 0.0
+            if label_countries:
+                for country in label_countries:
+                    country_lower = country.lower()
+                    if country_lower in group_words:
+                        country_confidence = self.country_threshold
+                        logger.debug(
+                            f"Country match found",
+                            operation="country_event_match",
+                            country=country,
+                            group_desc=group_description[:50]
+                        )
+                        break
+
+            # Check for event type keywords
+            event_type_confidence = 0.0
+            if label_event_type:
+                event_type_lower = label_event_type.lower()
+                # Check if event type contains conflict keywords
+                if any(keyword in event_type_lower for keyword in self.conflict_keywords):
+                    # Check if group mentions conflict-related keywords
+                    if any(keyword in group_words for keyword in self.conflict_keywords):
+                        event_type_confidence = self.event_type_threshold
+                        logger.debug(
+                            f"Event type match found",
+                            operation="country_event_match",
+                            event_type=label_event_type,
+                            group_desc=group_description[:50]
+                        )
+
+            # Combined confidence: country match is primary, event type is secondary
+            combined_confidence = max(country_confidence, event_type_confidence)
+
+            # Match if we have at least country or event type match
+            matched = combined_confidence > 0.0
+
+            logger.debug(
+                f"Country+EventType matching result",
+                operation="country_event_match",
+                label_countries=label_countries,
+                label_event_type=label_event_type,
+                country_conf=country_confidence,
+                event_type_conf=event_type_confidence,
+                combined_conf=combined_confidence,
+                matched=matched
+            )
+
+            return matched, combined_confidence
+
+        except Exception as e:
+            logger.error(
+                f"Country+EventType matching failed: {str(e)}",
+                operation="country_event_match",
+                error_type=type(e).__name__
+            )
+            return False, 0.0
+
+
 class SemanticMatcher:
     """Semantic matching for labels and semantic groups."""
 
@@ -171,6 +281,10 @@ class LabelReconciler:
         self.semantic_matcher = SemanticMatcher(
             similarity_threshold=config.label.confidence_threshold
         )
+        self.country_event_matcher = CountryEventTypeMatcher(
+            country_threshold=0.6,
+            event_type_threshold=0.4
+        )
 
     async def reconcile(
         self,
@@ -208,61 +322,92 @@ class LabelReconciler:
                 if not temporal_match:
                     continue
 
-                # Semantic matching - try multiple description fields
-                label_description = (
-                    label.get("description") or
-                    label.get("title") or
-                    label.get("event_type") or
-                    ""
-                )
-                # Try multiple fields for group description (topic_label might be null)
+                # Get group description for matching
                 group_description = (
                     group.get("topic_label") or
                     group.get("cluster_metadata", {}).get("topic_label") or
                     ""
                 )
 
-                # Debug: log what we're getting from the group
                 if not group_description:
-                    logger.debug(
-                        f"Group has no topic_label",
-                        operation="reconcile",
-                        group_id=group.get("group_id"),
-                        group_keys=list(group.keys()),
-                        topic_label=group.get("topic_label"),
-                        cluster_metadata=group.get("cluster_metadata")
-                    )
+                    continue  # Skip groups without topic labels
 
-                semantic_match, semantic_conf = self.semantic_matcher.match(
-                    label_description,
+                # Try country+event type matching first (for GDELT event data)
+                label_countries = label.get("countries", [])
+                label_event_type = label.get("event_type", "")
+
+                country_event_match, country_event_conf = self.country_event_matcher.match(
+                    label_countries,
+                    label_event_type,
                     group_description
                 )
 
-                # Combined confidence
-                combined_confidence = (temporal_conf * 0.5) + (semantic_conf * 0.5)
+                # If country+event type match found, use it
+                if country_event_match:
+                    # Combined confidence: temporal (0.4) + country_event (0.6)
+                    combined_confidence = (temporal_conf * 0.4) + (country_event_conf * 0.6)
 
-                # Debug logging for first few matches
-                if best_confidence < 0.1:  # Log first few attempts
                     logger.debug(
-                        f"Reconciliation attempt",
+                        f"Reconciliation match found (country+event type)",
                         operation="reconcile",
                         event_id=label.get("event_id"),
                         group_id=group.get("group_id"),
-                        label_desc=label_description[:100] if label_description else "EMPTY",
-                        group_desc=group_description[:100] if group_description else "EMPTY",
+                        label_countries=label_countries,
+                        label_event_type=label_event_type,
+                        group_desc=group_description[:100],
                         temporal_conf=temporal_conf,
-                        semantic_conf=semantic_conf,
+                        country_event_conf=country_event_conf,
                         combined_conf=combined_confidence
                     )
 
-                if combined_confidence > best_confidence:
-                    best_confidence = combined_confidence
-                    best_match = {
-                        "group_id": group.get("group_id"),
-                        "confidence": combined_confidence,
-                        "temporal_confidence": temporal_conf,
-                        "semantic_confidence": semantic_conf
-                    }
+                    if combined_confidence > best_confidence:
+                        best_confidence = combined_confidence
+                        best_match = {
+                            "group_id": group.get("group_id"),
+                            "confidence": combined_confidence,
+                            "temporal_confidence": temporal_conf,
+                            "semantic_confidence": country_event_conf,
+                            "match_type": "country_event"
+                        }
+                else:
+                    # Fallback to semantic matching if country+event type doesn't match
+                    label_description = (
+                        label.get("description") or
+                        label.get("title") or
+                        label.get("event_type") or
+                        ""
+                    )
+
+                    semantic_match, semantic_conf = self.semantic_matcher.match(
+                        label_description,
+                        group_description
+                    )
+
+                    if semantic_match:
+                        # Combined confidence: temporal (0.5) + semantic (0.5)
+                        combined_confidence = (temporal_conf * 0.5) + (semantic_conf * 0.5)
+
+                        logger.debug(
+                            f"Reconciliation match found (semantic)",
+                            operation="reconcile",
+                            event_id=label.get("event_id"),
+                            group_id=group.get("group_id"),
+                            label_desc=label_description[:100],
+                            group_desc=group_description[:100],
+                            temporal_conf=temporal_conf,
+                            semantic_conf=semantic_conf,
+                            combined_conf=combined_confidence
+                        )
+
+                        if combined_confidence > best_confidence:
+                            best_confidence = combined_confidence
+                            best_match = {
+                                "group_id": group.get("group_id"),
+                                "confidence": combined_confidence,
+                                "temporal_confidence": temporal_conf,
+                                "semantic_confidence": semantic_conf,
+                                "match_type": "semantic"
+                            }
 
             if best_match and best_confidence >= config.reconciliation.confidence_threshold:
                 logger.info(

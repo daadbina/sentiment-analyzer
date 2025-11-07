@@ -585,6 +585,18 @@ class GDELTFetcher(BaseAPIClient):
                     domain = str(row.get("domain", "")) if "domain" in row else ""
                     language = str(row.get("language", "")) if "language" in row else "en"
 
+                    # Log first few articles to see what GDELT returns
+                    if idx < 3:
+                        logger.info(
+                            f"GDELT article {idx}: url={url[:50] if url else 'EMPTY'}, "
+                            f"title={title[:80] if title else 'EMPTY'}, "
+                            f"seendate={seendate}, domain={domain}",
+                            operation="gdelt_parse",
+                            article_idx=idx,
+                            url_len=len(url),
+                            title_len=len(title)
+                        )
+
                     # Extract GDELT event code (if available)
                     event_code = None
                     event_type_name = "news_event"

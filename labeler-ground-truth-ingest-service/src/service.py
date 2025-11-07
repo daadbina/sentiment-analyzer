@@ -650,10 +650,12 @@ class LabelerService:
 
             # Enrich event labels with reconciliation results
             enriched_event_labels = []
+            verification_timestamp = datetime.utcnow().isoformat()
             for label in unique_event_labels:
                 event_id = label.get("event_id")
                 group_id = reconciliation_map.get(event_id)
                 label["group_id"] = group_id  # None if not reconciled
+                label["verified_at"] = verification_timestamp  # Set verification timestamp
                 enriched_event_labels.append(label)
 
 
@@ -768,6 +770,10 @@ class LabelerService:
                     operation="process_labels",
                     label_count=len(unique_crypto_labels)
                 )
+
+                # Add verified_at timestamp to crypto labels
+                for label in unique_crypto_labels:
+                    label["verified_at"] = verification_timestamp
 
                 # Per Architecture.md Dataset 7: Crypto labels go ONLY to PostgreSQL btc_truth table
                 # They are NOT written to Delta Lake (different schema) and NOT published to Kafka

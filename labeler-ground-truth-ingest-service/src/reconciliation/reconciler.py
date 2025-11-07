@@ -222,6 +222,17 @@ class LabelReconciler:
                     ""
                 )
 
+                # Debug: log what we're getting from the group
+                if not group_description:
+                    logger.debug(
+                        f"Group has no topic_label",
+                        operation="reconcile",
+                        group_id=group.get("group_id"),
+                        group_keys=list(group.keys()),
+                        topic_label=group.get("topic_label"),
+                        cluster_metadata=group.get("cluster_metadata")
+                    )
+
                 semantic_match, semantic_conf = self.semantic_matcher.match(
                     label_description,
                     group_description

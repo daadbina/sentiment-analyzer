@@ -18,6 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2025-11-07
+
+### Fixed
+- **Consumer Loop Continuous Operation** (src/clients/kafka_consumer.py)
+  - Removed max_polls limit from while loop condition
+  - Removed exit condition on consecutive timeouts
+  - Consumer now polls indefinitely instead of exiting after 20 polls
+  - Allows service to wait for messages from clustering service
+  - Implements graceful degradation per design spec
+  - Service remains running even during empty polling periods
+
+---
+
 ## [0.4.0] - 2025-11-07
 
 ### Added

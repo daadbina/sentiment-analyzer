@@ -353,6 +353,14 @@
   - **Coverage:** 80-85% of ACLED functionality (missing only fatality data)
   - **Status:** COMPLETE ✅
 
+- [x] **C8** Fix consumer loop to continue polling indefinitely
+  - [x] Remove max_polls limit from while loop condition
+  - [x] Remove exit condition on consecutive timeouts
+  - [x] Continue polling even with empty batches
+  - [x] Allows service to wait for messages from clustering service
+  - [x] Implements graceful degradation per design spec
+  - [x] Commit: "fix(labeler-service): remove exit condition on poll timeouts"
+
 - [ ] **FI-2** Compare implemented design patterns with actual document
   - **Description:** Verify that all 8 design patterns (Strategy, Factory, Observer, Template Method, Repository, Adapter, Circuit Breaker, Outbox) are correctly implemented and match the specifications in labeler-ground-truth-ingest-service.md.
   - **Priority:** Medium

@@ -173,21 +173,14 @@ class LabelerService:
             "binance": []
         }
 
-        try:
-            # Fetch from ACLED
-            with TimedOperation(logger, "fetch_acled", source="ACLED") as op:
-                labels["acled"] = await self.acled_fetcher.fetch()
-            # Record metrics after context manager exits (duration_ms is set in __exit__)
-            if op.duration_ms is not None:
-                metrics.record_fetch("ACLED", len(labels["acled"]), op.duration_ms / 1000)
-
-        except Exception as e:
-            logger.error(
-                f"Failed to fetch from ACLED: {str(e)}",
-                operation="fetch_labels",
-                source="ACLED",
-                error_type=type(e).__name__
-            )
+        # ACLED is skipped due to persistent HTTP 403 "Access Denied" errors
+        # GDELT is used as primary source for conflict events with NER-based country extraction
+        logger.info(
+            "Skipping ACLED source (HTTP 403 Access Denied)",
+            operation="fetch_labels",
+            source="ACLED",
+            reason="ACLED API access denied - using GDELT as primary source"
+        )
 
         try:
             # Fetch from GDELT

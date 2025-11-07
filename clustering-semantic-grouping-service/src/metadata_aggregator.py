@@ -45,9 +45,27 @@ class MetadataAggregator:
         credibility_avg = np.mean(credibilities) if credibilities else 0.5
 
         # Get time span
-        published_times = [
-            a.get("published_at") for a in articles if a.get("published_at")
-        ]
+        from datetime import datetime, timezone
+
+        published_times = []
+        for a in articles:
+            pub_at = a.get("published_at")
+            if pub_at:
+                # Parse ISO format string to datetime if needed
+                if isinstance(pub_at, str):
+                    try:
+                        # Handle ISO format with or without timezone
+                        if pub_at.endswith('Z'):
+                            pub_at = pub_at[:-1] + '+00:00'
+                        pub_at = datetime.fromisoformat(pub_at.replace('Z', '+00:00'))
+                        # Ensure timezone-aware for comparison
+                        if pub_at.tzinfo is None:
+                            pub_at = pub_at.replace(tzinfo=timezone.utc)
+                    except (ValueError, AttributeError):
+                        logger.warning(f"Could not parse published_at: {pub_at}")
+                        continue
+                published_times.append(pub_at)
+
         if published_times:
             earliest = min(published_times)
             latest = max(published_times)

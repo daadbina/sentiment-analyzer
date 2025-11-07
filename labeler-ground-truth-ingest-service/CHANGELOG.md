@@ -18,6 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.7.0] - 2025-11-07
+
+### Fixed
+- **PostgreSQL Datetime Parsing Errors** (src/storage/postgres_writer.py)
+  - Fixed DataError in write_labels: ISO format strings passed as datetime objects
+  - Added parse_iso_timestamp() helper function to convert ISO strings to datetime objects
+  - Applied fix to write_labels() method for ground_truth table (verified_at, last_license_check, last_updated)
+  - Applied fix to write_crypto_labels() method for btc_truth table (timestamp, last_license_check, last_updated)
+  - Converts offset-aware datetimes to offset-naive for PostgreSQL compatibility
+  - Service now successfully writes 3,000+ crypto labels to btc_truth table without errors
+  - Resolves issue where ISO format timestamps like "2025-11-07T20:54:07.269792Z" were not being parsed
+
+---
+
 ## [0.6.0] - 2025-11-07
 
 ### Fixed

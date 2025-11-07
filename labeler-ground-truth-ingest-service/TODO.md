@@ -368,6 +368,16 @@
   - [x] Service now successfully processes 37,157+ labels without deduplication errors
   - [x] Commit: "fix: parse JSON label_data from database in deduplication cache"
 
+- [x] **C10** Fix PostgreSQL datetime parsing errors
+  - [x] Fixed DataError in write_labels: ISO format strings passed as datetime objects
+  - [x] Added parse_iso_timestamp() helper function to convert ISO strings to datetime objects
+  - [x] Applied fix to write_labels() method for ground_truth table (verified_at, last_license_check, last_updated)
+  - [x] Applied fix to write_crypto_labels() method for btc_truth table (timestamp, last_license_check, last_updated)
+  - [x] Converts offset-aware datetimes to offset-naive for PostgreSQL compatibility
+  - [x] Service now successfully writes 3,000+ crypto labels to btc_truth table without errors
+  - [x] Commit: "fix: parse ISO format timestamps to datetime objects for PostgreSQL write_labels"
+  - [x] Commit: "fix: parse ISO format timestamps in write_crypto_labels for PostgreSQL btc_truth table"
+
 - [ ] **FI-2** Compare implemented design patterns with actual document
   - **Description:** Verify that all 8 design patterns (Strategy, Factory, Observer, Template Method, Repository, Adapter, Circuit Breaker, Outbox) are correctly implemented and match the specifications in labeler-ground-truth-ingest-service.md.
   - **Priority:** Medium

@@ -247,6 +247,7 @@ class KafkaProducerClient:
 
             # Prepare message value - only include fields that match schema
             # Use sanitize_value to properly handle None and type conversions
+            # IMPORTANT: Only include fields defined in the Avro schema
             value = {
                 "event_id": self._sanitize_value(label.get("event_id"), 'string') or "",
                 "group_id": self._sanitize_value(label.get("group_id"), 'string'),
@@ -269,6 +270,7 @@ class KafkaProducerClient:
             }
 
             # Validate all values are serializable (no bytes, MemoryView, etc.)
+            # This is critical because Avro serializer will fail on non-string types
             for field_name, field_value in value.items():
                 if field_value is not None:
                     if isinstance(field_value, (bytes, memoryview)):
@@ -289,24 +291,13 @@ class KafkaProducerClient:
                         value[field_name] = str(field_value)
 
             # Produce message - SerializingProducer handles serialization
-            try:
-                self.producer.produce(
-                    topic=self.topic,
-                    key=key,
-                    value=value,
-                    on_delivery=self._delivery_report
-                )
-            except TypeError as te:
-                # Log detailed error info for MemoryView issues
-                logger.error(
-                    f"TypeError during Kafka production: {str(te)}",
-                    operation="produce_label",
-                    event_id=key,
-                    error_type=type(te).__name__,
-                    value_keys=list(value.keys()),
-                    value_types={k: type(v).__name__ for k, v in value.items()}
-                )
-                raise
+            # CRITICAL: Pass ONLY the filtered value dict, not the original label
+            self.producer.produce(
+                topic=self.topic,
+                key=key,
+                value=value,
+                on_delivery=self._delivery_report
+            )
 
             # Poll to trigger delivery reports
             self.producer.poll(0)

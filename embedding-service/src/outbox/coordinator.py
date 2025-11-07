@@ -83,6 +83,9 @@ class OutboxCoordinator:
             # Step 2: Publish to Kafka (event stream)
             try:
                 for i, article_id in enumerate(article_ids):
+                    # Get article metadata if available
+                    article_meta = metadata[i] if metadata and i < len(metadata) else {}
+
                     message = {
                         "article_id": article_id,
                         "embedding_id": f"{article_id}_{i}",
@@ -91,6 +94,15 @@ class OutboxCoordinator:
                         "embedding_dimension": embeddings.shape[1],
                         "timestamp": int(datetime.utcnow().timestamp() * 1000),
                         "processing_time_ms": 0.0,
+                        # Include article content fields for downstream services
+                        "title": article_meta.get("title"),
+                        "content": article_meta.get("body"),  # Note: stored as "body" in metadata
+                        "url": article_meta.get("url"),
+                        "published_at": article_meta.get("published_at"),
+                        "publisher_id": article_meta.get("publisher_id"),
+                        "source": article_meta.get("source"),
+                        "domain": article_meta.get("domain"),
+                        "embedded_at": article_meta.get("embedded_at", int(datetime.utcnow().timestamp() * 1000)),
                     }
 
                     self.kafka_producer.produce_message(
@@ -99,7 +111,7 @@ class OutboxCoordinator:
                     )
 
                 self.kafka_producer.flush()
-                logger.debug(f"Kafka publish successful")
+                logger.debug(f"Kafka publish successful with article content fields")
 
             except Exception as e:
                 logger.error(f"Kafka publish failed: {e}")

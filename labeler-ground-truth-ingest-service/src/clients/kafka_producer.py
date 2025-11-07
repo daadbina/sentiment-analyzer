@@ -242,8 +242,8 @@ class KafkaProducerClient:
         try:
             start_time = time.time()
 
-            # Prepare message key
-            key = label.get("event_id", "")
+            # Prepare message key - ensure it's a string
+            key = str(label.get("event_id", ""))
 
             # Prepare message value - only include fields that match schema
             # Use sanitize_value to properly handle None and type conversions
@@ -267,6 +267,17 @@ class KafkaProducerClient:
                 "trace_id": self._sanitize_value(label.get("trace_id"), 'string'),
                 "schema_version": self._sanitize_value(label.get("schema_version"), 'string')
             }
+
+            # Validate all values are serializable (no bytes, MemoryView, etc.)
+            for field_name, field_value in value.items():
+                if field_value is not None:
+                    if isinstance(field_value, (bytes, memoryview)):
+                        logger.warning(
+                            f"Field {field_name} contains {type(field_value).__name__}, converting to string",
+                            operation="produce_label",
+                            event_id=key
+                        )
+                        value[field_name] = str(field_value)
 
             # Produce message - SerializingProducer handles serialization
             self.producer.produce(
@@ -293,7 +304,8 @@ class KafkaProducerClient:
             logger.error(
                 f"Failed to produce label to Kafka: {str(e)}",
                 operation="produce_label",
-                error_type=type(e).__name__
+                error_type=type(e).__name__,
+                event_id=label.get("event_id")
             )
             raise KafkaError("produce_label", self.topic, str(e))
 

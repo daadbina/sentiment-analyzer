@@ -594,31 +594,53 @@ class GDELTFetcher(BaseAPIClient):
             for idx, row in response.iterrows():
                 try:
                     # Extract event information from row
-                    url = str(row.get("url", "")) if "url" in row else ""
-                    title = str(row.get("title", "")) if "title" in row else ""
-                    seendate = str(row.get("seendate", "")) if "seendate" in row else ""
-                    domain = str(row.get("domain", "")) if "domain" in row else ""
-                    language = str(row.get("language", "")) if "language" in row else "en"
+                    # GDELT 2.0 returns event data, not news articles
+                    # Use SOURCEURL for URL, extract domain from it
+                    url = str(row.get("SOURCEURL", "")) if "SOURCEURL" in row else ""
+
+                    # Extract domain from URL
+                    domain = ""
+                    if url:
+                        try:
+                            from urllib.parse import urlparse
+                            domain = urlparse(url).netloc
+                        except:
+                            domain = ""
+
+                    # GDELT doesn't provide article title, use event description
+                    event_description = str(row.get("CAMEOCodeDescription", "")) if "CAMEOCodeDescription" in row else ""
+                    actor1_name = str(row.get("Actor1Name", "")) if "Actor1Name" in row else ""
+                    actor2_name = str(row.get("Actor2Name", "")) if "Actor2Name" in row else ""
+                    action_geo = str(row.get("ActionGeo_FullName", "")) if "ActionGeo_FullName" in row else ""
+
+                    # Construct title from available fields
+                    title = f"{actor1_name} - {event_description} - {action_geo}".strip()
+
+                    # Use SQLDATE for event date
+                    seendate = str(row.get("SQLDATE", "")) if "SQLDATE" in row else ""
+                    language = "en"  # GDELT is primarily English
 
                     # Log first few articles to see what GDELT returns
                     if idx < 3:
                         logger.info(
-                            f"GDELT article {idx}: url={url[:50] if url else 'EMPTY'}, "
+                            f"GDELT event {idx}: url={url[:50] if url else 'EMPTY'}, "
                             f"title={title[:80] if title else 'EMPTY'}, "
-                            f"seendate={seendate}, domain={domain}",
+                            f"actor1={actor1_name}, actor2={actor2_name}, "
+                            f"sqldate={seendate}",
                             operation="gdelt_parse",
                             article_idx=idx,
                             url_len=len(url),
                             title_len=len(title)
                         )
 
-                    # Extract GDELT event code (if available)
+                    # Extract GDELT event code (EventCode field)
                     event_code = None
                     event_type_name = "news_event"
-                    if "eventcode" in row:
+                    if "EventCode" in row:
                         try:
-                            event_code = int(row.get("eventcode", 0))
-                            if event_code in self.CONFLICT_EVENT_CODES:
+                            event_code_str = str(row.get("EventCode", "0"))
+                            event_code = int(event_code_str) if event_code_str.isdigit() else None
+                            if event_code and event_code in self.CONFLICT_EVENT_CODES:
                                 event_type_name = self.CONFLICT_EVENT_CODES[event_code]
                                 logger.debug(
                                     f"Extracted GDELT event code: {event_code} ({event_type_name})",
@@ -631,9 +653,9 @@ class GDELTFetcher(BaseAPIClient):
 
                     # Extract Goldstein scale (sentiment score: -10 to +10)
                     goldstein_scale = 0.0
-                    if "goldstein_scale" in row:
+                    if "GoldsteinScale" in row:
                         try:
-                            goldstein_scale = float(row.get("goldstein_scale", 0.0))
+                            goldstein_scale = float(row.get("GoldsteinScale", 0.0))
                             logger.debug(
                                 f"Extracted Goldstein scale: {goldstein_scale}",
                                 operation="gdelt_parse",
@@ -649,29 +671,37 @@ class GDELTFetcher(BaseAPIClient):
                     elif goldstein_scale < -2:  # Negative Goldstein = conflict
                         label_conflict = 1
 
-                    # Extract countries using NER (from title + content)
+                    # Extract countries from GDELT event data
+                    # GDELT provides Actor1CountryCode, Actor2CountryCode, ActionGeo_CountryCode
                     countries = []
-                    if self.ner_client:
-                        try:
-                            countries = await self.ner_client.extract_countries_combined(
-                                title=title,
-                                content="",  # GDELT Doc API doesn't provide full content
-                                language=language,
-                                article_id=url or f"gdelt_{idx}"
-                            )
-                            logger.debug(
-                                f"Extracted {len(countries)} countries from GDELT article",
-                                operation="gdelt_parse",
-                                countries=countries,
-                                country_count=len(countries)
-                            )
-                        except Exception as e:
-                            logger.warning(
-                                f"Failed to extract countries using NER: {str(e)}",
-                                operation="gdelt_parse",
-                                error_type=type(e).__name__
-                            )
-                            countries = []
+
+                    # Get country codes from GDELT
+                    actor1_country = str(row.get("Actor1CountryCode", "")) if "Actor1CountryCode" in row else ""
+                    actor2_country = str(row.get("Actor2CountryCode", "")) if "Actor2CountryCode" in row else ""
+                    action_country = str(row.get("ActionGeo_CountryCode", "")) if "ActionGeo_CountryCode" in row else ""
+
+                    # Collect unique country codes
+                    country_codes = set()
+                    if actor1_country and actor1_country != "nan":
+                        country_codes.add(actor1_country)
+                    if actor2_country and actor2_country != "nan":
+                        country_codes.add(actor2_country)
+                    if action_country and action_country != "nan":
+                        country_codes.add(action_country)
+
+                    # Convert country codes to country names (simple mapping)
+                    # For now, use the codes as-is; could enhance with proper mapping
+                    countries = list(country_codes)
+
+                    logger.debug(
+                        f"Extracted {len(countries)} countries from GDELT event",
+                        operation="gdelt_parse",
+                        actor1_country=actor1_country,
+                        actor2_country=actor2_country,
+                        action_country=action_country,
+                        countries=countries,
+                        country_count=len(countries)
+                    )
 
                     # Use first country if available, otherwise empty string
                     country = countries[0] if countries else ""

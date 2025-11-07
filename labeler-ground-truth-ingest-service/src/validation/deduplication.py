@@ -55,6 +55,9 @@ class DeduplicationEngine:
                 for row in rows:
                     label_hash = row['label_hash']
                     label_data = row['label_data']
+                    # Parse JSON if it's a string (from database)
+                    if isinstance(label_data, str):
+                        label_data = json.loads(label_data)
                     self.seen_hashes[label_hash] = label_data
 
                 logger.info(

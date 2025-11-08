@@ -6,7 +6,8 @@ Manages service lifecycle and coordinates all components.
 import asyncio
 import signal
 import time
-from typing import Optional
+import sys
+from typing import Optional, Dict, Any
 import structlog
 
 from ..clients.neo4j_client import neo4j_client
@@ -43,7 +44,10 @@ class ServiceOrchestrator:
         
         try:
             # Initialize service info metrics
-            initialize_service_info()
+            initialize_service_info(
+                version=config.service_version,
+                environment=config.environment
+            )
             
             # Connect to Neo4j
             logger.info("connecting_to_neo4j")
@@ -56,9 +60,10 @@ class ServiceOrchestrator:
             # Connect to Kafka
             logger.info("connecting_to_kafka")
             kafka_consumer.connect()
-            
-            # Register message handler
-            kafka_consumer.register_handler(message_router.route_message)
+
+            # Register message handlers for all topics
+            for topic in kafka_consumer.TOPICS:
+                kafka_consumer.register_handler(topic, message_router.route_message)
             
             # Set running flag
             self.running = True
@@ -89,20 +94,23 @@ class ServiceOrchestrator:
             kafka_consumer.stop()
             
             # Cancel background tasks
+            tasks_to_cancel = []
             if self.consumer_task:
                 self.consumer_task.cancel()
+                tasks_to_cancel.append(self.consumer_task)
             if self.flush_task:
                 self.flush_task.cancel()
+                tasks_to_cancel.append(self.flush_task)
             if self.analytics_task:
                 self.analytics_task.cancel()
-            
+                tasks_to_cancel.append(self.analytics_task)
+
             # Wait for tasks to complete
-            await asyncio.gather(
-                self.consumer_task,
-                self.flush_task,
-                self.analytics_task,
-                return_exceptions=True,
-            )
+            if tasks_to_cancel:
+                await asyncio.gather(
+                    *tasks_to_cancel,
+                    return_exceptions=True,
+                )
             
             # Flush remaining buffers
             logger.info("flushing_remaining_buffers")
@@ -256,22 +264,32 @@ class ServiceOrchestrator:
         """
         Run the service (blocking).
         """
-        # Setup signal handlers
+        # Setup signal handlers (Windows-compatible)
         loop = asyncio.get_event_loop()
-        
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(
-                sig,
-                lambda: asyncio.create_task(self.stop())
-            )
-        
+
+        # On Windows, signal handlers work differently
+        if sys.platform != 'win32':
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(
+                    sig,
+                    lambda: asyncio.create_task(self.stop())
+                )
+        else:
+            # On Windows, use signal.signal instead
+            def signal_handler(signum, frame):
+                logger.info("signal_received", signal=signum)
+                asyncio.create_task(self.stop())
+
+            signal.signal(signal.SIGTERM, signal_handler)
+            signal.signal(signal.SIGINT, signal_handler)
+
         try:
             # Start service
             loop.run_until_complete(self.start())
-            
+
             # Run until stopped
             loop.run_forever()
-            
+
         except KeyboardInterrupt:
             logger.info("keyboard_interrupt_received")
         finally:

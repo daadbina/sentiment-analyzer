@@ -28,9 +28,9 @@ class Entity(BaseModel):
     
     id: str = Field(
         ...,
-        description="Entity ULID identifier",
+        description="Entity identifier (ULID 26 chars or UUID 36 chars)",
         min_length=26,
-        max_length=26,
+        max_length=36,
     )
     
     name: str = Field(

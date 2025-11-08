@@ -41,7 +41,7 @@ def main() -> int:
             "neo4j_loader_graph_service_starting",
             version="1.0.0",
             neo4j_uri=config.neo4j_uri,
-            kafka_bootstrap_servers=config.kafka_bootstrap_servers,
+            kafka_brokers=config.kafka_brokers,
         )
         
         # Run service

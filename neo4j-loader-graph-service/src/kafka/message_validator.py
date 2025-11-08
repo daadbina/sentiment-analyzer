@@ -117,11 +117,11 @@ class MessageValidator:
                 details={"field": "article_ids", "type": type(article_ids).__name__},
             )
 
-        # Validate group_id format (ULID: 26 characters)
+        # Validate group_id format (ULID: 26 characters or UUID: 36 characters)
         group_id = message.get("group_id")
-        if not isinstance(group_id, str) or len(group_id) != 26:
+        if not isinstance(group_id, str) or len(group_id) not in (26, 36):
             raise ValidationError(
-                message=f"group_id must be 26-character ULID, got {group_id}",
+                message=f"group_id must be 26-character ULID or 36-character UUID, got {group_id}",
                 validation_type="field_format",
                 details={"field": "group_id", "value": group_id},
             )
@@ -129,11 +129,11 @@ class MessageValidator:
     @staticmethod
     def _validate_entities_extracted(message: Dict[str, Any]) -> None:
         """Validate entities_extracted message."""
-        # Validate article_id format (ULID: 26 characters)
+        # Validate article_id format (ULID: 26 characters or UUID: 36 characters)
         article_id = message.get("article_id")
-        if not isinstance(article_id, str) or len(article_id) != 26:
+        if not isinstance(article_id, str) or len(article_id) not in (26, 36):
             raise ValidationError(
-                message=f"article_id must be 26-character ULID, got {article_id}",
+                message=f"article_id must be 26-character ULID or 36-character UUID, got {article_id}",
                 validation_type="field_format",
                 details={"field": "article_id", "value": article_id},
             )
@@ -173,11 +173,11 @@ class MessageValidator:
                 details={"field": "prediction_id", "value": prediction_id},
             )
 
-        # Validate group_id format (ULID: 26 characters)
+        # Validate group_id format (ULID: 26 characters or UUID: 36 characters)
         group_id = message.get("group_id")
-        if not isinstance(group_id, str) or len(group_id) != 26:
+        if not isinstance(group_id, str) or len(group_id) not in (26, 36):
             raise ValidationError(
-                message=f"group_id must be 26-character ULID, got {group_id}",
+                message=f"group_id must be 26-character ULID or 36-character UUID, got {group_id}",
                 validation_type="field_format",
                 details={"field": "group_id", "value": group_id},
             )
@@ -213,11 +213,11 @@ class MessageValidator:
     @staticmethod
     def _validate_news_canonical(message: Dict[str, Any]) -> None:
         """Validate news_canonical message."""
-        # Validate article_id format (ULID: 26 characters)
+        # Validate article_id format (ULID: 26 characters or UUID: 36 characters)
         article_id = message.get("article_id")
-        if not isinstance(article_id, str) or len(article_id) != 26:
+        if not isinstance(article_id, str) or len(article_id) not in (26, 36):
             raise ValidationError(
-                message=f"article_id must be 26-character ULID, got {article_id}",
+                message=f"article_id must be 26-character ULID or 36-character UUID, got {article_id}",
                 validation_type="field_format",
                 details={"field": "article_id", "value": article_id},
             )

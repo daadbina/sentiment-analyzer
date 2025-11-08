@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed Avro deserialization by migrating from old AvroConsumer API to new Consumer + AvroDeserializer pattern
+- Updated all ID validation to accept both ULIDs (26 chars) and UUIDs (36 chars) for compatibility with upstream services
+- Fixed Article, Group, and Entity models to accept both ULID and UUID formats
+- Fixed message_validator.py to validate both ULID and UUID formats for article_id and group_id
+- Added debug logging to Kafka consumer for better observability
+- Fixed Windows signal handling for graceful shutdown
+- Fixed missing configuration fields (service_version, environment)
+- Fixed Neo4j connection configuration
+- Fixed message handler registration for all topics
+- Fixed handler signature to pass topic, message, and trace_id
+- Fixed Pydantic v2 protected namespace warning in Prediction model
+- Added missing graph_clusters_detected metric
+
 ### Added
 - Initial project structure and foundation
 - TODO.md with 145+ enumerated tasks

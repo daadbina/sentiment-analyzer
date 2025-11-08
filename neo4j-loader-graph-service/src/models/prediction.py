@@ -5,15 +5,35 @@ Represents predictions about semantic groups.
 
 from datetime import datetime
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class Prediction(BaseModel):
     """
     Prediction node model.
-    
+
     Represents a prediction about the realization of a semantic group.
     """
+
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={
+            "example": {
+                "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                "group_id": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
+                "probability": 0.85,
+                "confidence": 0.92,
+                "model_version": "xgboost-v1.2.0",
+                "domain": "btc",
+                "features": {
+                    "feature_num_sources": 15,
+                    "feature_sentiment_mean": 0.65,
+                    "feature_credibility_mean": 0.88,
+                },
+                "predicted_at": "2025-11-07T12:00:00Z",
+            }
+        }
+    )
     
     id: str = Field(
         ...,
@@ -124,22 +144,5 @@ class Prediction(BaseModel):
             predicted_at=datetime.fromisoformat(message["predicted_at"]),
         )
     
-    class Config:
-        """Pydantic model configuration."""
-        json_schema_extra = {
-            "example": {
-                "id": "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-                "group_id": "01ARZ3NDEKTSV4RRFFQ69G5FAW",
-                "probability": 0.85,
-                "confidence": 0.92,
-                "model_version": "xgboost-v1.2.0",
-                "domain": "btc",
-                "features": {
-                    "feature_num_sources": 15,
-                    "feature_sentiment_mean": 0.65,
-                    "feature_credibility_mean": 0.88,
-                },
-                "predicted_at": "2025-11-07T12:00:00Z",
-            }
-        }
+
 

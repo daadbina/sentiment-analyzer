@@ -32,7 +32,7 @@ class StreamLoader:
         """Initialize stream loader."""
         self.client = neo4j_client
         self.buffer_size = config.stream_buffer_size
-        self.flush_interval = config.stream_flush_interval
+        self.flush_interval = config.stream_flush_timeout
         
         # Buffers for each node type
         self.node_buffers: Dict[str, List[Dict[str, Any]]] = defaultdict(list)

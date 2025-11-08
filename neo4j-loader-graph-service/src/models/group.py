@@ -17,9 +17,9 @@ class Group(BaseModel):
     
     id: str = Field(
         ...,
-        description="Group ULID identifier",
+        description="Group identifier (ULID 26 chars or UUID 36 chars)",
         min_length=26,
-        max_length=26,
+        max_length=36,
     )
     
     topic_label: str = Field(

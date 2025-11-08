@@ -6,6 +6,7 @@ Coordinates all training, evaluation, and registry operations.
 
 import logging
 import asyncio
+import os
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 import pandas as pd
@@ -412,6 +413,7 @@ class TrainerService:
 
                             # Save and register model
                             model_version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                            local_file_path = None
                             try:
                                 # Save to S3
                                 artifact_metadata = self.artifact_manager.save_model_artifact(
@@ -420,11 +422,12 @@ class TrainerService:
                                     version=model_version,
                                 )
                                 logger.info(f"Model artifact saved to S3: {artifact_metadata}")
+                                local_file_path = artifact_metadata.get("file_path")
 
                                 # Log model to MLflow run
                                 self.mlflow_client.log_model(
                                     run_id=run_id,
-                                    model_path=artifact_metadata.get("file_path"),
+                                    model_path=local_file_path,
                                     artifact_path="model",
                                     model_type=model_type,
                                 )
@@ -453,6 +456,14 @@ class TrainerService:
                                 logger.error(f"Failed to save/register artifact: {artifact_error}")
                                 # Continue without artifact registration
                                 pass
+                            finally:
+                                # Clean up local file after logging to MLflow
+                                if local_file_path and os.path.exists(local_file_path):
+                                    try:
+                                        os.remove(local_file_path)
+                                        logger.debug(f"Cleaned up local file: {local_file_path}")
+                                    except Exception as cleanup_error:
+                                        logger.warning(f"Failed to clean up local file: {cleanup_error}")
                     except Exception as e:
                         logger.error(f"Failed to register {model_type} model: {e}", exc_info=True)
                         # Continue with other models

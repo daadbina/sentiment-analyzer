@@ -98,11 +98,8 @@ class ArtifactManager:
                     "metadata": metadata,
                 }
 
-                # Clean up local file
-                if os.path.exists(local_file):
-                    os.remove(local_file)
-
                 logger.info(f"Model artifact saved: {s3_key}")
+                # Return metadata with file_path so caller can use it before cleanup
                 return metadata
 
             except Exception as e:

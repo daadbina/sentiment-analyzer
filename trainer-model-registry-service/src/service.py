@@ -351,10 +351,102 @@ class TrainerService:
                 except Exception as e:
                     logger.warning(f"Target drift detection failed (non-blocking): {e}")
 
+                # Register models in MLflow
+                logger.info("Registering models in MLflow")
+                registered_models = {}
+                for model_type, (model, train_metrics) in models.items():
+                    try:
+                        logger.info(f"Registering {model_type} model")
+
+                        # Create or get MLflow experiment
+                        experiment_name = f"sentiment_analyzer_{model_type}"
+                        experiment_id = self.mlflow_client.get_experiment_by_name(experiment_name)
+                        if not experiment_id:
+                            experiment_id = self.mlflow_client.create_experiment(experiment_name)
+                        logger.info(f"Using experiment: {experiment_name} (ID: {experiment_id})")
+
+                        # Start MLflow run
+                        with self.mlflow_client.start_run(experiment_id):
+                            run_id = mlflow.active_run().info.run_id
+                            logger.info(f"Started MLflow run: {run_id}")
+
+                            # Log training metrics
+                            for metric_name, metric_value in train_metrics.items():
+                                if isinstance(metric_value, (int, float)):
+                                    self.mlflow_client.log_metric(run_id, f"train_{metric_name}", metric_value)
+
+                            # Log evaluation metrics
+                            eval_result = eval_results.get(model_type, {})
+                            for metric_name, metric_value in eval_result.items():
+                                if isinstance(metric_value, (int, float)):
+                                    self.mlflow_client.log_metric(run_id, f"eval_{metric_name}", metric_value)
+
+                            # Log parameters (convert config to dict, filtering out problematic values)
+                            config_dict = {}
+                            if hasattr(model, 'config'):
+                                if isinstance(model.config, dict):
+                                    config_dict = model.config
+                                else:
+                                    # Try to convert to dict
+                                    try:
+                                        config_dict = model.config.__dict__
+                                    except:
+                                        config_dict = {}
+
+                            # Filter config to only include serializable values
+                            filtered_config = {}
+                            for k, v in config_dict.items():
+                                try:
+                                    # Only include basic types
+                                    if isinstance(v, (str, int, float, bool, type(None))):
+                                        filtered_config[k] = v
+                                    else:
+                                        # Convert to string for other types
+                                        filtered_config[k] = str(v)
+                                except Exception as e:
+                                    logger.debug(f"Skipping config parameter {k}: {e}")
+
+                            if filtered_config:
+                                self.mlflow_client.log_params(run_id, filtered_config)
+
+                            # Save and register model
+                            model_version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                            artifact_metadata = self.artifact_manager.save_model_artifact(
+                                model=model,
+                                model_name=f"sentiment_{model_type}",
+                                version=model_version,
+                            )
+                            logger.info(f"Model artifact saved: {artifact_metadata}")
+
+                            # Register in MLflow registry
+                            model_uri = f"runs://{run_id}/model"
+                            registered_version = self.mlflow_client.register_model(
+                                model_uri=model_uri,
+                                model_name=f"sentiment_{model_type}",
+                                tags={
+                                    "model_type": model_type,
+                                    "version": model_version,
+                                    "auc": str(eval_result.get("auc", 0)),
+                                }
+                            )
+                            logger.info(f"Model registered: sentiment_{model_type} (version: {registered_version})")
+
+                            registered_models[model_type] = {
+                                "model_name": f"sentiment_{model_type}",
+                                "version": registered_version,
+                                "run_id": run_id,
+                                "metrics": eval_result,
+                            }
+                    except Exception as e:
+                        logger.error(f"Failed to register {model_type} model: {e}", exc_info=True)
+                        # Continue with other models
+
                 result = {
                     "timestamp": datetime.now().isoformat(),
                     "models_trained": len(models),
+                    "models_registered": len(registered_models),
                     "evaluation_results": eval_results,
+                    "registered_models": registered_models,
                     "feature_drift": feature_drift,
                     "target_drift": target_drift,
                 }

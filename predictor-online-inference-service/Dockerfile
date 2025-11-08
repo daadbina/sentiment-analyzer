@@ -4,9 +4,13 @@ FROM python:3.11-slim as builder
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (including PostgreSQL client libraries)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    gcc \
+    g++ \
+    make \
+    libpq-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -23,8 +27,9 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install runtime dependencies
+# Install runtime dependencies (including PostgreSQL runtime libraries)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 

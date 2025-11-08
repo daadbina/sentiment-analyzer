@@ -176,6 +176,102 @@ class MLflowClientWrapper:
                 details={"run_id": run_id, "model_type": model_type},
             )
 
+    def start_run(self, experiment_id: str):
+        """
+        Start a new MLflow run (context manager).
+
+        Args:
+            experiment_id: MLflow experiment ID
+
+        Returns:
+            Context manager for MLflow run
+
+        Raises:
+            ExternalServiceError: If run creation fails
+        """
+        if not self.client:
+            raise ExternalServiceError(
+                "MLflow client not initialized",
+                service_name="MLflow",
+            )
+
+        try:
+            logger.info(f"Starting MLflow run for experiment {experiment_id}")
+            return mlflow.start_run(experiment_id=experiment_id)
+        except Exception as e:
+            logger.error(f"Failed to start run: {e}")
+            raise ExternalServiceError(
+                f"Failed to start run: {e}",
+                service_name="MLflow",
+                details={"experiment_id": experiment_id},
+            )
+
+    def log_metric(self, run_id: str, key: str, value: float) -> None:
+        """
+        Log a single metric to MLflow.
+
+        Args:
+            run_id: MLflow run ID
+            key: Metric name
+            value: Metric value
+
+        Raises:
+            ExternalServiceError: If logging fails
+        """
+        if not self.client:
+            raise ExternalServiceError(
+                "MLflow client not initialized",
+                service_name="MLflow",
+            )
+
+        try:
+            self.client.log_metric(run_id, key, value)
+            logger.debug(f"Logged metric {key}={value} for run {run_id}")
+        except Exception as e:
+            logger.error(f"Failed to log metric: {e}")
+            raise ExternalServiceError(
+                f"Failed to log metric: {e}",
+                service_name="MLflow",
+                details={"run_id": run_id, "metric_key": key},
+            )
+
+    def log_params(self, run_id: str, params: Dict[str, Any]) -> None:
+        """
+        Log parameters to MLflow.
+
+        Args:
+            run_id: MLflow run ID
+            params: Dictionary of parameter names and values
+
+        Raises:
+            ExternalServiceError: If logging fails
+        """
+        if not self.client:
+            raise ExternalServiceError(
+                "MLflow client not initialized",
+                service_name="MLflow",
+            )
+
+        try:
+            for key, value in params.items():
+                # Convert non-string values to strings
+                str_value = str(value) if not isinstance(value, str) else value
+                # Encode to UTF-8 and decode to handle special characters
+                try:
+                    str_value = str_value.encode('utf-8', errors='replace').decode('utf-8')
+                except Exception:
+                    # If encoding fails, use repr
+                    str_value = repr(value)
+                self.client.log_param(run_id, key, str_value)
+            logger.debug(f"Logged {len(params)} parameters for run {run_id}")
+        except Exception as e:
+            logger.error(f"Failed to log parameters: {e}")
+            raise ExternalServiceError(
+                f"Failed to log parameters: {e}",
+                service_name="MLflow",
+                details={"run_id": run_id, "num_params": len(params)},
+            )
+
     def log_metrics(self, run_id: str, metrics: Dict[str, float]) -> None:
         """
         Log metrics to MLflow.

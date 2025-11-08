@@ -411,6 +411,93 @@ async def health() -> HealthResponse:
 
 
 @router.get(
+    "/ready",
+    response_model=HealthResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Readiness check",
+    description="Check if service is ready to accept requests (all dependencies healthy)",
+)
+async def ready() -> HealthResponse:
+    """
+    Check if service is ready to accept requests.
+
+    Returns 200 only if all dependencies are healthy and initialized.
+    Used by Kubernetes readiness probes.
+
+    Returns:
+        Health response with service and dependency status
+
+    Raises:
+        HTTPException: If service is not ready (503)
+    """
+    dependencies = {}
+
+    # Check all dependencies - must all be healthy for readiness
+    checks = {
+        "mlflow": (_model_manager, lambda: _model_manager.mlflow_client.health_check()),
+        "feast": (_feature_fetcher, lambda: _feature_fetcher.feast_client.health_check()),
+        "redis": (_prediction_cache, lambda: _prediction_cache.redis_client.health_check()),
+        "postgres": (_prediction_logger, lambda: _prediction_logger.postgres_client.health_check()),
+        "kafka": (_prediction_logger, lambda: _prediction_logger.kafka_producer.health_check()),
+    }
+
+    for name, (component, health_check) in checks.items():
+        try:
+            if component:
+                await health_check()
+                dependencies[name] = "healthy"
+            else:
+                dependencies[name] = "not_initialized"
+        except Exception as e:
+            logger.warning(f"{name} readiness check failed: {e}")
+            dependencies[name] = "unhealthy"
+
+    # Service is ready only if all dependencies are healthy
+    all_healthy = all(status == "healthy" for status in dependencies.values())
+
+    if not all_healthy:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "status": "not_ready",
+                "dependencies": dependencies,
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        )
+
+    return HealthResponse(
+        status="ready",
+        version="1.0.0",
+        timestamp=datetime.utcnow().isoformat(),
+        dependencies=dependencies,
+    )
+
+
+@router.get(
+    "/live",
+    status_code=status.HTTP_200_OK,
+    summary="Liveness check",
+    description="Check if service is alive (basic health check)",
+)
+async def live() -> Dict[str, Any]:
+    """
+    Check if service is alive.
+
+    Returns 200 if the service process is running.
+    Used by Kubernetes liveness probes.
+    Does not check dependencies - only checks if the service itself is responsive.
+
+    Returns:
+        Basic liveness status
+    """
+    return {
+        "status": "alive",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0.0",
+    }
+
+
+@router.get(
     "/model/metadata",
     response_model=ModelMetadataResponse,
     status_code=status.HTTP_200_OK,

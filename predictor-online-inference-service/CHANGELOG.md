@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unit tests for FeastClient (20+ tests, ≥90% coverage)
 - Unit tests for BatchPredictor (10+ tests, ≥90% coverage)
 - Unit tests for StreamingPredictor (15+ tests, ≥90% coverage)
+- Integration tests for MLflow (Task 45)
+- Integration tests for Feast (Task 45)
+- Integration tests for Redis (Task 45)
+- Integration tests for Kafka (Task 46)
+- Integration tests for PostgreSQL (Task 46)
 
 ### Changed
 - Enhanced main.py with signal handling and startup checks

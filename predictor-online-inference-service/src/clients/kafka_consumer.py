@@ -91,7 +91,7 @@ class KafkaConsumerClient:
             raise KafkaErrorException(
                 f"Failed to connect to Kafka: {e}",
                 operation="connect",
-            )
+            ) from e
 
     async def disconnect(self) -> None:
         """Disconnect from Kafka and close consumer."""
@@ -139,7 +139,7 @@ class KafkaConsumerClient:
             raise KafkaErrorException(
                 f"Failed to subscribe to topics: {e}",
                 operation="subscribe",
-            )
+            ) from e
 
     async def consume_messages(
         self,
@@ -206,7 +206,7 @@ class KafkaConsumerClient:
                 f"Error during message consumption: {e}",
                 operation="consume",
                 trace_id=trace_id,
-            )
+            ) from e
 
     async def _process_message(
         self,
@@ -270,7 +270,7 @@ class KafkaConsumerClient:
                     topic=topic,
                     operation="deserialize",
                     trace_id=trace_id,
-                )
+                ) from e
             except Exception as e:
                 logger.error(
                     f"Failed to process message: topic={topic}, "

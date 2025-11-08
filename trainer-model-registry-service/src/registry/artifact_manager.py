@@ -6,6 +6,7 @@ Handles model artifact storage and retrieval.
 
 import logging
 import os
+import tempfile
 from typing import Dict, Any, Optional
 from datetime import datetime
 import pickle
@@ -43,7 +44,7 @@ class ArtifactManager:
         model: BaseModel,
         model_name: str,
         version: str,
-        local_path: str = "/tmp",
+        local_path: str = None,
     ) -> Dict[str, Any]:
         """
         Save model artifact to S3 and MLflow.
@@ -66,6 +67,10 @@ class ArtifactManager:
 
             try:
                 logger.info(f"Saving model artifact: {model_name} v{version}")
+
+                # Use system temp directory if local_path not provided
+                if local_path is None:
+                    local_path = tempfile.gettempdir()
 
                 # Create local file
                 local_file = os.path.join(local_path, f"{model_name}_{version}.pkl")
@@ -112,7 +117,7 @@ class ArtifactManager:
         self,
         model_name: str,
         version: str,
-        local_path: str = "/tmp",
+        local_path: str = None,
     ) -> BaseModel:
         """
         Load model artifact from S3.
@@ -131,6 +136,10 @@ class ArtifactManager:
         with tracer.start_as_current_span("load_model_artifact"):
             try:
                 logger.info(f"Loading model artifact: {model_name} v{version}")
+
+                # Use system temp directory if local_path not provided
+                if local_path is None:
+                    local_path = tempfile.gettempdir()
 
                 # Get S3 key
                 s3_key = f"models/{model_name}/{version}/model.pkl"

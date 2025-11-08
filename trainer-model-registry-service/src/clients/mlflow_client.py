@@ -197,7 +197,45 @@ class MLflowClientWrapper:
 
         try:
             logger.info(f"Starting MLflow run for experiment {experiment_id}")
-            return mlflow.start_run(experiment_id=experiment_id)
+            # Suppress MLflow's stdout output to avoid encoding issues on Windows
+            import sys
+            import io
+            from contextlib import redirect_stdout, redirect_stderr
+
+            # Create a custom context manager that suppresses output
+            class SuppressedRun:
+                def __init__(self, exp_id):
+                    self.exp_id = exp_id
+                    self.run_context = None
+
+                def __enter__(self):
+                    # Suppress stdout/stderr during run start
+                    self.stdout_backup = sys.stdout
+                    self.stderr_backup = sys.stderr
+                    sys.stdout = io.StringIO()
+                    sys.stderr = io.StringIO()
+                    try:
+                        self.run_context = mlflow.start_run(experiment_id=self.exp_id)
+                        self.run_context.__enter__()
+                    finally:
+                        sys.stdout = self.stdout_backup
+                        sys.stderr = self.stderr_backup
+                    return self
+
+                def __exit__(self, *args):
+                    # Suppress stdout/stderr during run end
+                    self.stdout_backup = sys.stdout
+                    self.stderr_backup = sys.stderr
+                    sys.stdout = io.StringIO()
+                    sys.stderr = io.StringIO()
+                    try:
+                        if self.run_context:
+                            self.run_context.__exit__(*args)
+                    finally:
+                        sys.stdout = self.stdout_backup
+                        sys.stderr = self.stderr_backup
+
+            return SuppressedRun(experiment_id)
         except Exception as e:
             logger.error(f"Failed to start run: {e}")
             raise ExternalServiceError(

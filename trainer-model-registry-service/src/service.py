@@ -9,6 +9,7 @@ import asyncio
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 import pandas as pd
+import mlflow
 
 from src.config import config
 from src.clients.postgres_client import PostgreSQLClient

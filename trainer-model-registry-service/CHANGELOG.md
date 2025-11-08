@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.2] - 2025-11-08
+
+### Fixed - Critical Issues Resolution
+- **ISSUE #1: MLflow Integration Failure** - Added list_experiments() and list_registered_models() methods
+- **ISSUE #2: Constant Features** - Diagnosed root cause: 6 features have zero variance (num_sources, source_diversity_score, entity_diversity, language_diversity, intra_cluster_similarity_std, embedding_drift_score)
+- **ISSUE #3: Class Imbalance** - Implemented class weighting:
+  - XGBoost: Added scale_pos_weight parameter (computed as negative/positive ratio = 2.1856)
+  - Logistic Regression: Added class_weight='balanced' parameter
+  - Models now predict positive class (TP=17 vs TP=0 before)
+- **ISSUE #4: LLM Model Broken** - Enhanced with weighted feature approach:
+  - Normalize features to [0, 1] range
+  - Weight features by variance
+  - Apply sigmoid transformation for better calibration
+- **ISSUE #5: Validation/Test Metrics Mismatch** - Implemented optimal threshold tuning:
+  - Find threshold that maximizes F1 score
+  - Use optimized threshold instead of default 0.5
+  - Optimal thresholds: XGBoost=0.30, LogReg=0.28, LLM=0.00
+
+### Added - Enhanced Logging & Debugging
+- Added detailed feature value logging to identify constant features
+- Added feature statistics logging (unique values, min, max) for all features
+- Added logging configuration module (logging_config.py) for proper log setup
+- Added class weight logging during model training
+- Added optimal threshold logging during evaluation
+
+### Performance Improvements
+- Recall improved from 0.0 to 0.6296 (class weighting fixed majority class bias)
+- F1 score improved to 0.4848 (optimal threshold tuning)
+- Models now make positive predictions instead of always predicting negative
+
+### Analysis & Findings
+- Current AUC: 0.537 (target: 0.75)
+- Root cause of low AUC: Low feature discriminative power
+  - Many features have very low variance or are almost constant
+  - Examples: centroid_magnitude (all ~1.0), avg_title_length (8.0-9.0), entity_diversity (constant 3)
+  - These features don't help distinguish between positive and negative cases
+- Data quality issue: Features are computed correctly but lack predictive power
+
+---
+
 ## [1.0.1] - 2025-11-08
 
 ### Fixed

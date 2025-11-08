@@ -56,16 +56,31 @@ class SourceExtractor(FeatureExtractor):
             # Extract credibility scores from articles (if available)
             # If not available, use a default credibility value
             credibility_scores = []
+            articles_with_credibility = 0
+            articles_without_credibility = 0
+
             for article in articles:
                 # Try to get credibility from article metadata
                 if hasattr(article, 'credibility_score') and article.credibility_score is not None:
                     credibility_scores.append(article.credibility_score)
+                    articles_with_credibility += 1
                 elif hasattr(article, 'publisher_credibility') and article.publisher_credibility is not None:
                     credibility_scores.append(article.publisher_credibility)
+                    articles_with_credibility += 1
                 else:
                     # Default credibility value if not available
                     # This ensures we have a value for all articles
                     credibility_scores.append(0.5)
+                    articles_without_credibility += 1
+
+            logger.debug(
+                "Credibility scores extraction",
+                group_id=self.get_group_id(group),
+                article_count=len(articles),
+                articles_with_credibility=articles_with_credibility,
+                articles_without_credibility=articles_without_credibility,
+                credibility_scores_sample=credibility_scores[:5] if credibility_scores else [],
+            )
 
             if credibility_scores:
                 features["source_credibility_avg"] = sum(credibility_scores) / len(

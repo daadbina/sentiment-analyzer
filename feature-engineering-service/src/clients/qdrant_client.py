@@ -127,6 +127,21 @@ class QdrantVectorClient:
                 requested=len(article_ids),
                 fetched=len(articles),
             )
+
+            # Log sample article data for debugging
+            if articles:
+                sample_article = articles[0]
+                logger.info(
+                    "Sample article from Qdrant",
+                    article_id=sample_article.get("article_id"),
+                    has_sentiment_score=sample_article.get("sentiment_score") is not None,
+                    sentiment_score=sample_article.get("sentiment_score"),
+                    has_entities=bool(sample_article.get("entities")),
+                    entity_count=len(sample_article.get("entities", [])),
+                    has_title=bool(sample_article.get("title")),
+                    has_body=bool(sample_article.get("body")),
+                )
+
             return articles
 
         except Exception as e:

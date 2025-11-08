@@ -94,10 +94,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Add request logging middleware
+    # Add request logging and metrics middleware
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
-        """Log all requests."""
+        """Log all requests and record metrics."""
+        import time
+
+        start_time = time.time()
+
         with LogContext() as ctx:
             logger.info(
                 f"{request.method} {request.url.path}",
@@ -112,6 +116,9 @@ def create_app() -> FastAPI:
 
             response = await call_next(request)
 
+            # Calculate latency
+            latency_ms = (time.time() - start_time) * 1000
+
             logger.info(
                 f"{request.method} {request.url.path} - {response.status_code}",
                 extra={
@@ -119,8 +126,17 @@ def create_app() -> FastAPI:
                         "method": request.method,
                         "path": request.url.path,
                         "status_code": response.status_code,
+                        "latency_ms": latency_ms,
                     }
                 },
+            )
+
+            # Record metrics
+            metrics_recorder.record_request(
+                endpoint=request.url.path,
+                method=request.method,
+                status=response.status_code,
+                latency_ms=latency_ms,
             )
 
             return response

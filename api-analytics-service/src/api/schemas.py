@@ -13,11 +13,9 @@ from datetime import datetime
 class GroupBase(BaseModel):
     """Base group schema."""
 
-    title: str = Field(..., min_length=1, max_length=500)
-    description: Optional[str] = Field(None, max_length=2000)
-    semantic_vector: Optional[List[float]] = None
+    topic_label: Optional[str] = Field(None, max_length=500)
     article_count: int = Field(default=0, ge=0)
-    entity_count: int = Field(default=0, ge=0)
+    similarity_avg: Optional[float] = Field(None, ge=0.0, le=1.0)
 
 
 class GroupCreate(GroupBase):
@@ -29,14 +27,13 @@ class GroupCreate(GroupBase):
 class GroupUpdate(BaseModel):
     """Update group schema."""
 
-    title: Optional[str] = Field(None, min_length=1, max_length=500)
-    description: Optional[str] = Field(None, max_length=2000)
+    topic_label: Optional[str] = Field(None, max_length=500)
 
 
 class GroupResponse(GroupBase):
     """Group response schema."""
 
-    id: str
+    group_id: str
     created_at: datetime
     updated_at: datetime
 

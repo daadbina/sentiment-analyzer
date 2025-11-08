@@ -50,15 +50,14 @@ async def list_groups(
         HTTPException: If query fails
     """
     try:
-        metrics_recorder.record_request("GET /groups")
 
         # Build query
         builder = SQLBuilder("semantic_groups")
-        builder.select("id", "title", "description", "article_count", "entity_count", "created_at", "updated_at")
+        builder.select("group_id", "topic_label", "article_count", "similarity_avg", "created_at", "updated_at")
 
         if search:
             builder.where(
-                "title ILIKE $1 OR description ILIKE $1",
+                "topic_label ILIKE $1",
                 f"%{search}%",
             )
 
@@ -89,7 +88,6 @@ async def list_groups(
             },
         )
 
-        metrics_recorder.record_success("GET /groups")
 
         return GroupListResponse(
             items=groups,
@@ -122,7 +120,6 @@ async def get_group(
         HTTPException: If group not found or query fails
     """
     try:
-        metrics_recorder.record_request(f"GET /groups/{group_id}")
 
         builder = SQLBuilder("semantic_groups")
         builder.where("id = $1", group_id)
@@ -142,7 +139,6 @@ async def get_group(
             extra={"extra_fields": {"group_id": group_id}},
         )
 
-        metrics_recorder.record_success(f"GET /groups/{group_id}")
 
         return group
 
@@ -170,7 +166,6 @@ async def create_group(
         HTTPException: If creation fails
     """
     try:
-        metrics_recorder.record_request("POST /groups")
 
         # Insert group
         query = """
@@ -197,7 +192,6 @@ async def create_group(
             extra={"extra_fields": {"group_id": created_group.id}},
         )
 
-        metrics_recorder.record_success("POST /groups")
 
         return created_group
 
@@ -227,7 +221,6 @@ async def update_group(
         HTTPException: If group not found or update fails
     """
     try:
-        metrics_recorder.record_request(f"PUT /groups/{group_id}")
 
         # Build update query
         updates = []
@@ -271,7 +264,6 @@ async def update_group(
             extra={"extra_fields": {"group_id": group_id}},
         )
 
-        metrics_recorder.record_success(f"PUT /groups/{group_id}")
 
         return updated_group
 
@@ -299,7 +291,6 @@ async def delete_group(
         HTTPException: If group not found or deletion fails
     """
     try:
-        metrics_recorder.record_request(f"DELETE /groups/{group_id}")
 
         query = "DELETE FROM semantic_groups WHERE id = $1"
         await postgres_client.execute(query, group_id)
@@ -309,7 +300,6 @@ async def delete_group(
             extra={"extra_fields": {"group_id": group_id}},
         )
 
-        metrics_recorder.record_success(f"DELETE /groups/{group_id}")
 
         return {"message": "Group deleted successfully"}
 

@@ -42,7 +42,6 @@ async def export_groups(
         Exported data
     """
     try:
-        metrics_recorder.record_request("GET /export/groups")
 
         query = """
             SELECT id, title, description, article_count, entity_count, created_at, updated_at
@@ -72,7 +71,6 @@ async def export_groups(
                 extra={"extra_fields": {"count": len(rows)}},
             )
 
-            metrics_recorder.record_success("GET /export/groups")
 
             return StreamingResponse(
                 iter([output.getvalue()]),
@@ -114,7 +112,6 @@ async def export_groups(
                 extra={"extra_fields": {"count": len(rows)}},
             )
 
-            metrics_recorder.record_success("GET /export/groups")
 
             return StreamingResponse(
                 iter([output.getvalue()]),
@@ -145,7 +142,6 @@ async def export_predictions(
         Exported data
     """
     try:
-        metrics_recorder.record_request("GET /export/predictions")
 
         query = """
             SELECT id, group_id, sentiment, confidence, model_version, created_at
@@ -173,7 +169,6 @@ async def export_predictions(
                 extra={"extra_fields": {"count": len(rows)}},
             )
 
-            metrics_recorder.record_success("GET /export/predictions")
 
             return StreamingResponse(
                 iter([output.getvalue()]),
@@ -213,7 +208,6 @@ async def export_predictions(
                 extra={"extra_fields": {"count": len(rows)}},
             )
 
-            metrics_recorder.record_success("GET /export/predictions")
 
             return StreamingResponse(
                 iter([output.getvalue()]),
@@ -244,7 +238,6 @@ async def export_entities(
         Exported data
     """
     try:
-        metrics_recorder.record_request("GET /export/entities")
 
         query = """
             SELECT id, name, entity_type, wikidata_id, description, mention_count, created_at
@@ -272,7 +265,6 @@ async def export_entities(
                 extra={"extra_fields": {"count": len(rows)}},
             )
 
-            metrics_recorder.record_success("GET /export/entities")
 
             return StreamingResponse(
                 iter([output.getvalue()]),
@@ -313,7 +305,6 @@ async def export_entities(
                 extra={"extra_fields": {"count": len(rows)}},
             )
 
-            metrics_recorder.record_success("GET /export/entities")
 
             return StreamingResponse(
                 iter([output.getvalue()]),

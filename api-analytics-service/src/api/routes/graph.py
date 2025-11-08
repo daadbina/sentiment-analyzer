@@ -48,7 +48,6 @@ async def get_neighbors(
         Neighboring nodes
     """
     try:
-        metrics_recorder.record_request(f"GET /graph/neighbors/{node_id}")
 
         neighbors = await neo4j_client.get_neighbors(
             node_id,
@@ -76,7 +75,6 @@ async def get_neighbors(
             },
         )
 
-        metrics_recorder.record_success(f"GET /graph/neighbors/{node_id}")
 
         return NeighborsResponse(
             node_id=node_id,
@@ -109,7 +107,6 @@ async def find_paths(
         Paths between nodes
     """
     try:
-        metrics_recorder.record_request(f"GET /graph/paths/{from_id}/{to_id}")
 
         paths = await neo4j_client.find_paths(from_id, to_id, max_length)
 
@@ -139,7 +136,6 @@ async def find_paths(
             },
         )
 
-        metrics_recorder.record_success(f"GET /graph/paths/{from_id}/{to_id}")
 
         return PathResponse(
             from_id=from_id,
@@ -173,7 +169,6 @@ async def get_centrality(
         Centrality metrics
     """
     try:
-        metrics_recorder.record_request("GET /graph/centrality")
 
         if metric_type == "degree":
             query, params = CentralityCalculator.degree_centrality(node_label)
@@ -213,7 +208,6 @@ async def get_centrality(
             },
         )
 
-        metrics_recorder.record_success("GET /graph/centrality")
 
         return CentralityResponse(
             metric_type=metric_type,

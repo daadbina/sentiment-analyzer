@@ -99,9 +99,13 @@ async def perform_startup_checks(config) -> bool:
         try:
             redis_client = RedisClient(config.redis)
             await redis_client.connect()
-            await redis_client.ping()
+            is_healthy = await redis_client.health_check()
             await redis_client.disconnect()
-            logger.info("✓ Redis health check passed")
+            if is_healthy:
+                logger.info("✓ Redis health check passed")
+            else:
+                logger.error("✗ Redis health check failed: unhealthy")
+                return False
         except Exception as e:
             logger.error(f"✗ Redis health check failed: {e}")
             return False

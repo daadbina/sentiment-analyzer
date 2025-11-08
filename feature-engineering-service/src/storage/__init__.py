@@ -3,10 +3,12 @@
 from .feast_writer import FeastWriter
 from .redis_writer import RedisWriter
 from .reconciliation import FeatureReconciliation
+from .delta_writer import DeltaLakeWriter
 
 __all__ = [
     "FeastWriter",
     "RedisWriter",
     "FeatureReconciliation",
+    "DeltaLakeWriter",
 ]
 

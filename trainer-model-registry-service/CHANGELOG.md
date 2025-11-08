@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2025-11-07
+
+### Fixed
+- Added missing `/ready` and `/live` endpoints required by Kubernetes health checks
+- Fixed feature names to match feature-engineering-service output (24 features across 6 categories)
+- Updated entity type from `article_id` to `group_id` for semantic groups
+- Added feature view prefix formatting for Feast queries (`semantic_group_features:feature_name`)
+- Updated feature retriever to use correct entity column name in validation
+
+### Verified
+- `/health` endpoint working correctly (200 OK)
+- `/ready` endpoint returning 200 OK when service is healthy
+- `/live` endpoint returning 200 OK with timestamp
+- Service starts without errors
+- All health check components (postgres, feast, mlflow, s3, kafka) reporting healthy status
+
+---
+
 ## [1.0.0] - 2025-11-05
 
 ### Phase 12: Documentation & Finalization ✅ COMPLETE

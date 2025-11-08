@@ -326,6 +326,16 @@
 - [x] Verify Prometheus metrics available (metrics module initialized)
 - [x] Verify OpenTelemetry traces working (tracing initialized with Jaeger)
 
+### Diagnosis & Fixes ✅ COMPLETE (2025-11-07)
+- [x] Created feature branch: `feature/trainer-service/diagnosis-and-fixes`
+- [x] Identified missing /ready and /live endpoints (required by Kubernetes)
+- [x] Fixed feature names to match feature-engineering-service output (24 features across 6 categories)
+- [x] Updated entity type from article_id to group_id (semantic groups)
+- [x] Added feature view prefix formatting for Feast queries
+- [x] Verified /health, /ready, /live endpoints working
+- [x] Verified service starts without errors
+- [x] Identified deprecation warnings (Jaeger, websockets, evidently)
+
 ### Git Workflow ⏳ PENDING (User requested: "dont merge yet")
 - [ ] Create final commit with all changes
 - [ ] Push to feature branch

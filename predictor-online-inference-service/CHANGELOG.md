@@ -61,11 +61,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added missing deprecated package for opentelemetry-exporter-jaeger (Task 58)
 - Verified main module imports successfully (Task 58)
 
+### Fixed - Exception Classes
+- Added direct attribute access to all exception classes (Task 58)
+- Exception attributes now accessible as properties (e.g., error.group_id, error.model_version)
+- Maintained backward compatibility with context dictionary
+
+### Fixed - Configuration Classes
+- Updated KafkaConfig to use bootstrap_servers, consumer_group_id, input_topic, output_topic (Task 58)
+- Updated MLflowConfig to include model_stage and use predictor_model as default (Task 58)
+- Updated InferenceConfig to use timeout_seconds, enable_streaming, ab_testing_enabled (Task 58)
+- Updated ValidationConfig to include drift_detection_window_hours and min_samples_for_drift (Task 58)
+- Updated FeastConfig to use delta_path parameter (Task 58)
+
 ### Known Issues
-- 51 unit test failures due to test/implementation mismatches (config parameters, exception attributes, method signatures)
-- 97 unit test errors due to config fixture issues
+- Unit test failures reduced but some remain due to method signature mismatches
 - 56 remaining ruff linting issues (mostly B904 raise-without-from, SIM102 collapsible-if)
-- Unit tests need to be updated to match current implementation
+- Need to verify all downstream code uses updated config parameter names
 - TLS configuration for Kafka, Redis, PostgreSQL (Task 53)
 - Prometheus alerting rules with 20+ alerts (Task 55)
 - Dedicated Prometheus metrics server on port 9109 (Task 54)

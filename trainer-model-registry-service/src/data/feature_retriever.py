@@ -63,6 +63,7 @@ class FeatureRetriever:
                     f"Retrieving features for {len(entity_ids)} entities "
                     f"from {start_date} to {end_date}"
                 )
+                logger.debug(f"Entity IDs (first 5): {entity_ids[:5]}")
 
                 # Create entity dataframe with timestamps
                 # Use group_id as entity (semantic groups from feature-engineering-service)
@@ -73,6 +74,10 @@ class FeatureRetriever:
                     }
                 )
 
+                logger.debug(f"Entity dataframe shape: {entity_df.shape}")
+                logger.debug(f"Entity dataframe dtypes:\n{entity_df.dtypes}")
+                logger.debug(f"Entity dataframe sample:\n{entity_df.head()}")
+
                 # Get features from Feast
                 feature_list = features or self._get_default_features()
                 # Format features with feature view prefix for Feast
@@ -80,6 +85,7 @@ class FeatureRetriever:
                     f"semantic_group_features:{feature}" for feature in feature_list
                 ]
 
+                logger.info(f"Requesting {len(formatted_features)} features from Feast")
                 logger.debug(f"Formatted features: {formatted_features}")
 
                 feature_df = self.feast_client.get_features(
@@ -93,11 +99,24 @@ class FeatureRetriever:
                     f"{feature_df.shape[1]} features"
                 )
                 logger.debug(f"Feature columns: {list(feature_df.columns)}")
+                logger.debug(f"Feature dataframe dtypes:\n{feature_df.dtypes}")
+
+                # Check for null values
+                null_counts = feature_df.isnull().sum()
+                if null_counts.sum() > 0:
+                    logger.warning(f"Found null values in features:\n{null_counts[null_counts > 0]}")
+                else:
+                    logger.info("No null values found in features")
+
+                # Log data statistics
+                numeric_cols = feature_df.select_dtypes(include=['number']).columns
+                if len(numeric_cols) > 0:
+                    logger.debug(f"Feature statistics:\n{feature_df[numeric_cols].describe()}")
 
                 return feature_df
 
             except Exception as e:
-                logger.error(f"Feature retrieval failed: {e}")
+                logger.error(f"Feature retrieval failed: {e}", exc_info=True)
                 raise DataPreparationError(
                     f"Feature retrieval failed: {e}",
                     stage="feature_retrieval",

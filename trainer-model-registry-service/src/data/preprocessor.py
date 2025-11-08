@@ -64,21 +64,42 @@ class DataPreprocessor:
                 logger.info(
                     f"Preprocessing {X.shape[0]} rows with {X.shape[1]} features"
                 )
+                logger.debug(f"Input feature columns: {list(X.columns)}")
+                logger.debug(f"Input feature dtypes:\n{X.dtypes}")
+
+                # Check for null values before preprocessing
+                null_before = X.isnull().sum()
+                if null_before.sum() > 0:
+                    logger.warning(f"Null values before preprocessing:\n{null_before[null_before > 0]}")
+                else:
+                    logger.info("No null values in input features")
 
                 # Handle missing values
                 X = self._handle_missing_values(X, fit=fit)
+                logger.debug(f"Shape after handling missing values: {X.shape}")
 
                 # Scale features
                 X = self._scale_features(X, fit=fit)
+                logger.debug(f"Shape after scaling: {X.shape}")
 
                 # Remove constant features
                 X = self._remove_constant_features(X)
+                logger.debug(f"Shape after removing constant features: {X.shape}")
 
+                # Log final statistics
                 logger.info(f"Preprocessing complete: {X.shape}")
+                logger.debug(f"Output feature statistics:\n{X.describe()}")
+
+                # Check for any remaining issues
+                if X.isnull().sum().sum() > 0:
+                    logger.error("Null values still present after preprocessing!")
+                if (X == np.inf).sum().sum() > 0 or (X == -np.inf).sum().sum() > 0:
+                    logger.error("Infinite values found in preprocessed data!")
+
                 return X, y
 
             except Exception as e:
-                logger.error(f"Preprocessing failed: {e}")
+                logger.error(f"Preprocessing failed: {e}", exc_info=True)
                 raise DataPreparationError(
                     f"Preprocessing failed: {e}",
                     stage="preprocessing",

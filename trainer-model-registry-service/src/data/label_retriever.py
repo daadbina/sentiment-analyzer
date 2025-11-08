@@ -62,7 +62,7 @@ class LabelRetriever:
 
                 # Query labels from PostgreSQL
                 query = """
-                    SELECT 
+                    SELECT
                         article_id,
                         sentiment,
                         confidence,
@@ -88,11 +88,29 @@ class LabelRetriever:
                 label_df = pd.DataFrame(rows)
                 logger.info(f"Retrieved {len(label_df)} labels")
                 logger.debug(f"Label columns: {list(label_df.columns)}")
+                logger.debug(f"Label dataframe dtypes:\n{label_df.dtypes}")
+                logger.debug(f"Label dataframe sample:\n{label_df.head()}")
+
+                # Check for null values
+                null_counts = label_df.isnull().sum()
+                if null_counts.sum() > 0:
+                    logger.warning(f"Found null values in labels:\n{null_counts[null_counts > 0]}")
+                else:
+                    logger.info("No null values found in labels")
+
+                # Check sentiment distribution
+                if 'sentiment' in label_df.columns:
+                    sentiment_dist = label_df['sentiment'].value_counts()
+                    logger.info(f"Sentiment distribution:\n{sentiment_dist}")
+
+                # Check confidence statistics
+                if 'confidence' in label_df.columns:
+                    logger.info(f"Confidence statistics:\n{label_df['confidence'].describe()}")
 
                 return label_df
 
             except Exception as e:
-                logger.error(f"Label retrieval failed: {e}")
+                logger.error(f"Label retrieval failed: {e}", exc_info=True)
                 raise DataPreparationError(
                     f"Label retrieval failed: {e}",
                     stage="label_retrieval",

@@ -107,6 +107,7 @@ class EmbeddingService:
             # Close Kafka
             self.kafka_consumer.close()
             self.kafka_producer.close()
+            self.entities_consumer.close()
 
             # Close Qdrant
             self.qdrant_client.disconnect()
@@ -184,15 +185,17 @@ class EmbeddingService:
                     "title": msg.get("title", ""),
                     "body": msg.get("normalized_body", ""),  # Article content for topic label generation
                     "url": msg.get("url", ""),
-                    # NOTE: sentiment_score and entities are NOT in news_canonical topic
-                    # sentiment_score: No sentiment analysis service in pipeline (would need separate service)
-                    # entities: Available in entities_extracted topic, but not consumed by embedding-service
+                    # sentiment_score is now available from canonicalizer
+                    "sentiment_score": msg.get("sentiment_score", 0.0),
                 }
+                article_id = msg.get("article_id", "")
+
                 logger.info(
-                    f"Extracted metadata for article {msg.get('article_id', 'unknown')}: "
+                    f"Extracted metadata for article {article_id}: "
                     f"publisher_credibility={msg.get('publisher_credibility', 0.5)}, "
                     f"domain={msg.get('domain_category', 'general')}, "
                     f"source={msg.get('source', 'unknown')}, "
+                    f"sentiment_score={msg.get('sentiment_score', 0.0):.3f}, "
                     f"has_body={bool(msg.get('normalized_body', ''))}, "
                     f"has_title={bool(msg.get('title', ''))}"
                 )

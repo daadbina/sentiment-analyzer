@@ -55,8 +55,11 @@ class EntityExtractor(FeatureExtractor):
                     articles_with_entities += 1
                     for entity in article.entities:
                         all_entities.append(entity)
-                        if isinstance(entity, dict) and "type" in entity:
-                            entity_types.add(entity["type"])
+                        if isinstance(entity, dict):
+                            # Try different field names for entity type
+                            entity_type = entity.get("entity_type") or entity.get("type")
+                            if entity_type:
+                                entity_types.add(entity_type)
 
             logger.info(
                 f"Entity extraction analysis: group_id={self.get_group_id(group)}, "
@@ -79,8 +82,11 @@ class EntityExtractor(FeatureExtractor):
             # entity_count: Total unique entities mentioned
             unique_entities = set()
             for entity in all_entities:
-                if isinstance(entity, dict) and "name" in entity:
-                    unique_entities.add(entity["name"])
+                if isinstance(entity, dict):
+                    # Try different field names for entity text
+                    entity_text = entity.get("name") or entity.get("text") or entity.get("normalized_text")
+                    if entity_text:
+                        unique_entities.add(entity_text)
                 elif isinstance(entity, str):
                     unique_entities.add(entity)
 
@@ -92,8 +98,11 @@ class EntityExtractor(FeatureExtractor):
             # entity_prominence: Frequency of top entity
             entity_names = []
             for entity in all_entities:
-                if isinstance(entity, dict) and "name" in entity:
-                    entity_names.append(entity["name"])
+                if isinstance(entity, dict):
+                    # Try different field names for entity text
+                    entity_text = entity.get("name") or entity.get("text") or entity.get("normalized_text")
+                    if entity_text:
+                        entity_names.append(entity_text)
                 elif isinstance(entity, str):
                     entity_names.append(entity)
 

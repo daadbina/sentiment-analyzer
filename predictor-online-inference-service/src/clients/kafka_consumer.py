@@ -166,44 +166,73 @@ class KafkaConsumerClient:
 
         try:
             while self._running:
-                # Poll for messages (blocking call in thread pool)
-                msg = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    consumer.poll,
-                    poll_timeout,
-                )
+                try:
+                    # Poll for messages (blocking call in thread pool)
+                    msg = await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        consumer.poll,
+                        poll_timeout,
+                    )
 
-                if msg is None:
-                    # No message received within timeout
+                    if msg is None:
+                        # No message received within timeout
+                        continue
+
+                    if msg.error():
+                        # Handle Kafka errors
+                        if msg.error().code() == KafkaError._PARTITION_EOF:
+                            # End of partition, not an error
+                            logger.debug(f"Reached end of partition: {msg.topic()}[{msg.partition()}]")
+                            continue
+                        # Real error
+                        error_msg = f"Kafka error: {msg.error()}"
+                        logger.error(error_msg)
+                        kafka_errors_total.labels(
+                            topic=msg.topic(),
+                            operation="consume",
+                            error_type=msg.error().name(),
+                        ).inc()
+                        raise KafkaException(msg.error())
+
+                    # Process message
+                    await self._process_message(msg, message_handler, trace_id)
+
+                    # Commit offset after successful processing (exactly-once)
+                    consumer.commit(asynchronous=False)
+
+                except SerializerError as e:
+                    # Handle deserialization errors gracefully - skip invalid messages
+                    logger.warning(
+                        f"Skipping message with deserialization error: {e}",
+                        extra={"trace_id": trace_id},
+                    )
+                    kafka_errors_total.labels(
+                        topic=self.config.input_topic,
+                        operation="deserialize",
+                        error_type="SerializerError",
+                    ).inc()
+                    # Commit offset to skip this message and continue
+                    consumer.commit(asynchronous=False)
                     continue
 
-                if msg.error():
-                    # Handle Kafka errors
-                    if msg.error().code() == KafkaError._PARTITION_EOF:
-                        # End of partition, not an error
-                        logger.debug(f"Reached end of partition: {msg.topic()}[{msg.partition()}]")
-                        continue
-                    # Real error
-                    error_msg = f"Kafka error: {msg.error()}"
-                    logger.error(error_msg)
-                    kafka_errors_total.labels(
-                        topic=msg.topic(),
-                        operation="consume",
-                        error_type=msg.error().name(),
-                    ).inc()
-                    raise KafkaException(msg.error())
+                except KafkaErrorException as e:
+                    # Handle processing errors gracefully - log and continue
+                    logger.warning(
+                        f"Skipping message with processing error: {e}",
+                        extra={"trace_id": trace_id},
+                    )
+                    # Commit offset to skip this message and continue
+                    consumer.commit(asynchronous=False)
+                    continue
 
-                # Process message
-                await self._process_message(msg, message_handler, trace_id)
-
-                # Commit offset after successful processing (exactly-once)
-                consumer.commit(asynchronous=False)
-
+        except KeyboardInterrupt:
+            logger.info("Received interrupt signal, stopping consumer")
+            self._running = False
         except Exception as e:
-            logger.error(f"Error during message consumption: {e}", exc_info=True)
+            logger.error(f"Fatal error during message consumption: {e}", exc_info=True)
             self._running = False
             raise KafkaErrorException(
-                f"Error during message consumption: {e}",
+                f"Fatal error during message consumption: {e}",
                 operation="consume",
                 trace_id=trace_id,
             ) from e

@@ -5,19 +5,17 @@ Provides abstraction over confluent-kafka for producing messages with Avro seria
 Implements exactly-once semantics and delivery guarantees.
 """
 
-import logging
-from typing import Optional, Dict, Any
 import asyncio
+import logging
+from typing import Any
 
-from confluent_kafka import Producer, KafkaError
 from confluent_kafka.avro import AvroProducer
 from confluent_kafka.avro.serializer import SerializerError
 
 from ..config import KafkaConfig
 from ..exceptions import KafkaError as KafkaErrorException
+from ..metrics import kafka_errors_total, kafka_messages_produced_total
 from ..utils.trace import trace_span
-from ..metrics import kafka_messages_produced_total, kafka_errors_total
-
 
 logger = logging.getLogger(__name__)
 
@@ -25,33 +23,33 @@ logger = logging.getLogger(__name__)
 class KafkaProducerClient:
     """
     Client for producing messages to Kafka topics.
-    
+
     Provides methods for publishing predictions with Avro serialization.
     Handles delivery confirmation and error recovery.
     """
-    
+
     def __init__(self, config: KafkaConfig):
         """
         Initialize Kafka producer client.
-        
+
         Args:
             config: Kafka configuration
         """
         self.config = config
-        self._producer: Optional[AvroProducer] = None
-        
+        self._producer: AvroProducer | None = None
+
         logger.info(f"Initializing Kafka producer: brokers={config.brokers}")
-    
+
     async def connect(self) -> None:
         """
         Connect to Kafka and create producer.
-        
+
         Raises:
             KafkaErrorException: If connection fails
         """
         try:
             logger.info(f"Connecting to Kafka producer: {self.config.brokers}")
-            
+
             # Build producer configuration
             producer_config = {
                 "bootstrap.servers": self.config.brokers,
@@ -63,7 +61,7 @@ class KafkaProducerClient:
                 "retry.backoff.ms": 100,
                 "compression.type": "snappy",
             }
-            
+
             # Add TLS configuration if enabled
             if self.config.enable_tls:
                 producer_config.update({
@@ -72,14 +70,14 @@ class KafkaProducerClient:
                     "ssl.certificate.location": self.config.tls_client_cert,
                     "ssl.key.location": self.config.tls_client_key,
                 })
-            
+
             # Create Avro producer
             self._producer = AvroProducer(
                 producer_config,
                 default_key_schema=None,  # No key schema
                 default_value_schema=None,  # Schema provided per message
             )
-            
+
             logger.info(f"Connected to Kafka producer: brokers={self.config.brokers}")
         except Exception as e:
             logger.error(f"Failed to connect to Kafka producer: {e}", exc_info=True)
@@ -87,7 +85,7 @@ class KafkaProducerClient:
                 f"Failed to connect to Kafka producer: {e}",
                 operation="connect",
             )
-    
+
     async def disconnect(self) -> None:
         """Disconnect from Kafka and flush pending messages."""
         if self._producer:
@@ -97,14 +95,14 @@ class KafkaProducerClient:
             if remaining > 0:
                 logger.warning(f"Failed to flush {remaining} messages before disconnect")
             self._producer = None
-    
+
     def _ensure_connected(self) -> AvroProducer:
         """
         Ensure producer is connected.
-        
+
         Returns:
             AvroProducer instance
-        
+
         Raises:
             KafkaErrorException: If not connected
         """
@@ -114,24 +112,24 @@ class KafkaProducerClient:
                 operation="ensure_connected",
             )
         return self._producer
-    
+
     async def produce_prediction(
         self,
-        prediction: Dict[str, Any],
-        value_schema: Dict[str, Any],
-        trace_id: Optional[str] = None,
+        prediction: dict[str, Any],
+        value_schema: dict[str, Any],
+        trace_id: str | None = None,
     ) -> None:
         """
         Produce prediction message to Kafka.
-        
+
         Args:
             prediction: Prediction data to publish
             value_schema: Avro schema for the prediction
             trace_id: Optional trace ID for distributed tracing
-        
+
         Raises:
             KafkaErrorException: If production fails
-        
+
         Example:
             await producer.produce_prediction(
                 prediction={
@@ -147,7 +145,7 @@ class KafkaProducerClient:
         """
         producer = self._ensure_connected()
         topic = self.config.predictions_topic
-        
+
         with trace_span(
             "kafka_produce_prediction",
             attributes={
@@ -159,7 +157,7 @@ class KafkaProducerClient:
             try:
                 # Create delivery callback
                 delivery_future = asyncio.Future()
-                
+
                 def delivery_callback(err, msg):
                     """Callback for delivery confirmation."""
                     if err:
@@ -172,7 +170,7 @@ class KafkaProducerClient:
                         )
                     else:
                         delivery_future.set_result(msg)
-                
+
                 # Produce message with Avro serialization
                 producer.produce(
                     topic=topic,
@@ -180,22 +178,22 @@ class KafkaProducerClient:
                     value_schema=value_schema,
                     callback=delivery_callback,
                 )
-                
+
                 # Poll to trigger callbacks
                 producer.poll(0)
-                
+
                 # Wait for delivery confirmation
                 msg = await delivery_future
-                
+
                 # Record metrics
                 kafka_messages_produced_total.labels(topic=topic).inc()
-                
+
                 logger.debug(
                     f"Produced prediction: topic={topic}, partition={msg.partition()}, "
                     f"offset={msg.offset()}, group_id={prediction.get('group_id')}",
                     extra={"trace_id": trace_id, "group_id": prediction.get("group_id")},
                 )
-                
+
             except SerializerError as e:
                 logger.error(
                     f"Failed to serialize prediction: topic={topic}, error={e}",
@@ -230,22 +228,22 @@ class KafkaProducerClient:
                     operation="produce",
                     trace_id=trace_id,
                 )
-    
+
     async def flush(self, timeout: float = 10.0) -> int:
         """
         Flush pending messages.
-        
+
         Args:
             timeout: Timeout in seconds
-        
+
         Returns:
             Number of messages still pending after timeout
         """
         producer = self._ensure_connected()
-        
+
         try:
             logger.debug(f"Flushing pending messages: timeout={timeout}s")
-            
+
             # Flush in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
             remaining = await loop.run_in_executor(
@@ -253,30 +251,30 @@ class KafkaProducerClient:
                 producer.flush,
                 timeout,
             )
-            
+
             if remaining > 0:
                 logger.warning(f"Failed to flush {remaining} messages within timeout")
             else:
                 logger.debug("All pending messages flushed successfully")
-            
+
             return remaining
-            
+
         except Exception as e:
             logger.error(f"Failed to flush messages: {e}", exc_info=True)
             raise KafkaErrorException(
                 f"Failed to flush messages: {e}",
                 operation="flush",
             )
-    
+
     async def health_check(self) -> bool:
         """
         Check if Kafka producer is healthy.
-        
+
         Returns:
             True if healthy, False otherwise
         """
         try:
-            producer = self._ensure_connected()
+            self._ensure_connected()
             # Producer is healthy if it's connected
             return True
         except Exception as e:

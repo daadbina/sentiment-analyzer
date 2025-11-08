@@ -4,27 +4,24 @@ Main entry point for the predictor-online-inference-service.
 Starts the FastAPI application with Uvicorn and handles graceful shutdown.
 """
 
-import logging
-import sys
-import signal
-import asyncio
 import argparse
-from typing import Optional
-import threading
+import asyncio
+import logging
+import signal
+import sys
 
 import uvicorn
 
 from .config import get_config
-from .utils.logging_config import setup_logging
-from .service import PredictorService
 from .metrics_server import MetricsServer
-
+from .service import PredictorService
+from .utils.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 
 # Global service instance for signal handling
-_service: Optional[PredictorService] = None
-_metrics_server: Optional[MetricsServer] = None
+_service: PredictorService | None = None
+_metrics_server: MetricsServer | None = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,17 +83,17 @@ async def perform_startup_checks(config) -> bool:
     try:
         # Import clients here to avoid circular imports
         from .clients import (
-            MLflowModelClient,
             FeastClient,
-            RedisClient,
-            PostgresClient,
             KafkaProducerClient,
+            MLflowModelClient,
+            PostgresClient,
+            RedisClient,
         )
 
         # Check MLflow connectivity
         logger.info("Checking MLflow connectivity")
         try:
-            mlflow_client = MLflowModelClient(config.mlflow)
+            MLflowModelClient(config.mlflow)
             # Try to list models to verify connectivity
             logger.info("✓ MLflow connectivity verified")
         except Exception as e:
@@ -132,7 +129,7 @@ async def perform_startup_checks(config) -> bool:
             postgres_client = PostgresClient(config.postgres)
             await postgres_client.connect()
             # Verify predictions table exists
-            result = await postgres_client.execute_query(
+            await postgres_client.execute_query(
                 "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'predictions')"
             )
             await postgres_client.disconnect()

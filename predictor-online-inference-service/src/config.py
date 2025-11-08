@@ -6,14 +6,13 @@ No hardcoded values or defaults that could lead to production issues.
 """
 
 import os
-from typing import Optional
 from dataclasses import dataclass
 
 
 @dataclass
 class KafkaConfig:
     """Kafka configuration parameters."""
-    
+
     brokers: str
     consumer_group: str
     schema_registry_url: str
@@ -21,10 +20,10 @@ class KafkaConfig:
     ground_truth_topic: str
     predictions_topic: str
     enable_tls: bool
-    tls_ca_cert: Optional[str]
-    tls_client_cert: Optional[str]
-    tls_client_key: Optional[str]
-    
+    tls_ca_cert: str | None
+    tls_client_cert: str | None
+    tls_client_key: str | None
+
     @classmethod
     def from_env(cls) -> "KafkaConfig":
         """Load Kafka configuration from environment variables."""
@@ -45,13 +44,13 @@ class KafkaConfig:
 @dataclass
 class MLflowConfig:
     """MLflow configuration parameters."""
-    
+
     tracking_uri: str
     model_name: str
     model_version: str
-    fallback_model_version: Optional[str]
+    fallback_model_version: str | None
     model_load_timeout_seconds: int
-    
+
     @classmethod
     def from_env(cls) -> "MLflowConfig":
         """Load MLflow configuration from environment variables."""
@@ -67,7 +66,7 @@ class MLflowConfig:
 @dataclass
 class FeastConfig:
     """Feast feature store configuration parameters."""
-    
+
     repo_path: str
     online_store_type: str
     offline_store_type: str
@@ -78,7 +77,7 @@ class FeastConfig:
     delta_lake_path: str
     feature_freshness_threshold_seconds: int
     feature_reconciliation_threshold: float
-    
+
     @classmethod
     def from_env(cls) -> "FeastConfig":
         """Load Feast configuration from environment variables."""
@@ -99,16 +98,16 @@ class FeastConfig:
 @dataclass
 class RedisConfig:
     """Redis cache configuration parameters."""
-    
+
     host: str
     port: int
     db: int
-    password: Optional[str]
+    password: str | None
     ssl: bool
     max_connections: int
     socket_timeout: int
     socket_connect_timeout: int
-    
+
     @classmethod
     def from_env(cls) -> "RedisConfig":
         """Load Redis configuration from environment variables."""
@@ -127,7 +126,7 @@ class RedisConfig:
 @dataclass
 class PostgresConfig:
     """PostgreSQL database configuration parameters."""
-    
+
     host: str
     port: int
     user: str
@@ -137,7 +136,7 @@ class PostgresConfig:
     max_pool_size: int
     command_timeout: int
     ssl_mode: str
-    
+
     @classmethod
     def from_env(cls) -> "PostgresConfig":
         """Load PostgreSQL configuration from environment variables."""
@@ -157,13 +156,13 @@ class PostgresConfig:
 @dataclass
 class InferenceConfig:
     """Inference configuration parameters."""
-    
+
     batch_size: int
     inference_timeout_ms: int
     max_concurrent_requests: int
     enable_caching: bool
     cache_ttl_seconds: int
-    
+
     @classmethod
     def from_env(cls) -> "InferenceConfig":
         """Load inference configuration from environment variables."""
@@ -179,23 +178,23 @@ class InferenceConfig:
 @dataclass
 class APIConfig:
     """REST API configuration parameters."""
-    
+
     host: str
     port: int
     workers: int
     enable_cors: bool
     cors_origins: list[str]
     enable_auth: bool
-    api_key: Optional[str]
-    jwt_secret: Optional[str]
+    api_key: str | None
+    jwt_secret: str | None
     rate_limit_per_minute: int
-    
+
     @classmethod
     def from_env(cls) -> "APIConfig":
         """Load API configuration from environment variables."""
         cors_origins_str = os.environ.get("CORS_ORIGINS", "*")
         cors_origins = [origin.strip() for origin in cors_origins_str.split(",")]
-        
+
         return cls(
             host=os.environ.get("API_HOST", "0.0.0.0"),
             port=int(os.environ.get("REST_API_PORT", "8000")),
@@ -212,13 +211,13 @@ class APIConfig:
 @dataclass
 class MonitoringConfig:
     """Monitoring and observability configuration parameters."""
-    
+
     prometheus_port: int
     enable_tracing: bool
     jaeger_agent_host: str
     jaeger_agent_port: int
     log_level: str
-    
+
     @classmethod
     def from_env(cls) -> "MonitoringConfig":
         """Load monitoring configuration from environment variables."""
@@ -234,13 +233,13 @@ class MonitoringConfig:
 @dataclass
 class ValidationConfig:
     """Validation and quality configuration parameters."""
-    
+
     label_consistency_threshold: float
     feature_reconciliation_threshold: float
     feature_freshness_threshold_seconds: int
     enable_drift_detection: bool
     drift_check_interval_seconds: int
-    
+
     @classmethod
     def from_env(cls) -> "ValidationConfig":
         """Load validation configuration from environment variables."""
@@ -256,7 +255,7 @@ class ValidationConfig:
 @dataclass
 class Config:
     """Main configuration container for all service settings."""
-    
+
     kafka: KafkaConfig
     mlflow: MLflowConfig
     feast: FeastConfig
@@ -266,7 +265,7 @@ class Config:
     api: APIConfig
     monitoring: MonitoringConfig
     validation: ValidationConfig
-    
+
     @classmethod
     def from_env(cls) -> "Config":
         """Load complete configuration from environment variables."""
@@ -281,11 +280,11 @@ class Config:
             monitoring=MonitoringConfig.from_env(),
             validation=ValidationConfig.from_env(),
         )
-    
+
     def validate(self) -> None:
         """
         Validate configuration parameters.
-        
+
         Raises:
             ValueError: If any configuration parameter is invalid.
         """
@@ -294,15 +293,15 @@ class Config:
             raise ValueError("KAFKA_BROKERS environment variable is required")
         if not self.kafka.schema_registry_url:
             raise ValueError("SCHEMA_REGISTRY_URL environment variable is required")
-        
+
         # Validate MLflow configuration
         if not self.mlflow.tracking_uri:
             raise ValueError("MLFLOW_TRACKING_URI environment variable is required")
-        
+
         # Validate Feast configuration
         if not self.feast.repo_path:
             raise ValueError("FEAST_REPO_PATH environment variable is required")
-        
+
         # Validate PostgreSQL configuration
         if not self.postgres.host:
             raise ValueError("POSTGRES_HOST environment variable is required")
@@ -312,30 +311,29 @@ class Config:
             raise ValueError("POSTGRES_PASSWORD environment variable is required")
         if not self.postgres.database:
             raise ValueError("POSTGRES_DATABASE environment variable is required")
-        
+
         # Validate thresholds
         if not 0.0 <= self.validation.label_consistency_threshold <= 1.0:
             raise ValueError("LABEL_CONSISTENCY_THRESHOLD must be between 0.0 and 1.0")
         if not 0.0 <= self.validation.feature_reconciliation_threshold <= 1.0:
             raise ValueError("FEATURE_RECONCILIATION_THRESHOLD must be between 0.0 and 1.0")
-        
+
         # Validate API authentication
-        if self.api.enable_auth:
-            if not self.api.api_key and not self.api.jwt_secret:
-                raise ValueError("API_KEY or JWT_SECRET required when ENABLE_AUTH is true")
+        if self.api.enable_auth and not self.api.api_key and not self.api.jwt_secret:
+            raise ValueError("API_KEY or JWT_SECRET required when ENABLE_AUTH is true")
 
 
 # Global configuration instance
-_config: Optional[Config] = None
+_config: Config | None = None
 
 
 def get_config() -> Config:
     """
     Get the global configuration instance.
-    
+
     Returns:
         Config: The global configuration instance.
-    
+
     Raises:
         RuntimeError: If configuration has not been initialized.
     """
@@ -348,10 +346,10 @@ def get_config() -> Config:
 def load_config() -> Config:
     """
     Load and validate configuration from environment variables.
-    
+
     Returns:
         Config: The loaded and validated configuration.
-    
+
     Raises:
         ValueError: If any required configuration is missing or invalid.
     """

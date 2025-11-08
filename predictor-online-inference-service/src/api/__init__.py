@@ -2,15 +2,14 @@
 
 from .routes import router, set_dependencies
 from .schemas import (
-    PredictionRequest,
     BatchPredictionRequest,
-    PredictionResponse,
     BatchPredictionResponse,
-    HealthResponse,
     ErrorResponse,
+    HealthResponse,
     ModelMetadataResponse,
+    PredictionRequest,
+    PredictionResponse,
 )
-
 
 __all__ = [
     "router",

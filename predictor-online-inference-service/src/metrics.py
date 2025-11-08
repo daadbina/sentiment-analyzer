@@ -5,9 +5,8 @@ All metrics are exposed on the configured Prometheus port for scraping.
 Metrics follow Prometheus naming conventions and best practices.
 """
 
-from prometheus_client import Counter, Histogram, Gauge, CollectorRegistry
-from typing import Optional
 
+from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
 # Create a custom registry for better control
 REGISTRY = CollectorRegistry()
@@ -260,21 +259,21 @@ service_uptime_seconds = Gauge(
 class MetricsCollector:
     """
     Helper class for collecting and updating metrics.
-    
+
     Provides convenient methods for recording metrics with proper labels.
     """
-    
+
     @staticmethod
     def record_prediction(
         mode: str,
         model_version: str,
         domain: str,
         latency_ms: float,
-        confidence: Optional[float] = None,
+        confidence: float | None = None,
     ) -> None:
         """
         Record a prediction event.
-        
+
         Args:
             mode: Prediction mode (batch/stream/api)
             model_version: Version of the model used
@@ -286,83 +285,83 @@ class MetricsCollector:
         prediction_latency_ms.labels(mode=mode, model_version=model_version).observe(latency_ms)
         if confidence is not None:
             prediction_confidence_avg.labels(model_version=model_version, domain=domain).set(confidence)
-    
+
     @staticmethod
     def record_cache_hit() -> None:
         """Record a cache hit event."""
         prediction_cache_hits_total.inc()
-    
+
     @staticmethod
     def record_cache_miss() -> None:
         """Record a cache miss event."""
         prediction_cache_misses_total.inc()
-    
+
     @staticmethod
     def record_model_load_failure(model_name: str, model_version: str) -> None:
         """
         Record a model load failure.
-        
+
         Args:
             model_name: Name of the model
             model_version: Version of the model
         """
         model_load_failures_total.labels(model_name=model_name, model_version=model_version).inc()
-    
+
     @staticmethod
     def record_feature_fetch_failure(store_type: str, feature_name: str) -> None:
         """
         Record a feature fetch failure.
-        
+
         Args:
             store_type: Type of feature store (online/offline)
             feature_name: Name of the feature
         """
         feature_fetch_failures_total.labels(store_type=store_type, feature_name=feature_name).inc()
-    
+
     @staticmethod
     def record_feature_fetch_latency(store_type: str, latency_ms: float) -> None:
         """
         Record feature fetch latency.
-        
+
         Args:
             store_type: Type of feature store (online/offline)
             latency_ms: Fetch latency in milliseconds
         """
         feature_fetch_latency_ms.labels(store_type=store_type).observe(latency_ms)
-    
+
     @staticmethod
     def record_feature_reconciliation_mismatch(feature_name: str) -> None:
         """
         Record a feature reconciliation mismatch.
-        
+
         Args:
             feature_name: Name of the mismatched feature
         """
         feature_reconciliation_mismatch_total.labels(feature_name=feature_name).inc()
-    
+
     @staticmethod
     def update_label_consistency(domain: str, label_source: str, score: float) -> None:
         """
         Update label consistency score.
-        
+
         Args:
             domain: Domain of the prediction
             label_source: Source of the label
             score: Consistency score (0.0-1.0)
         """
         label_consistency_score.labels(domain=domain, label_source=label_source).set(score)
-    
+
     @staticmethod
     def record_inference_timeout(mode: str, model_version: str) -> None:
         """
         Record an inference timeout.
-        
+
         Args:
             mode: Prediction mode (batch/stream/api)
             model_version: Version of the model
         """
         inference_timeout_total.labels(mode=mode, model_version=model_version).inc()
-    
+
     @staticmethod
     def record_api_request(
         endpoint: str,
@@ -372,7 +371,7 @@ class MetricsCollector:
     ) -> None:
         """
         Record an API request.
-        
+
         Args:
             endpoint: API endpoint path
             method: HTTP method
@@ -381,7 +380,7 @@ class MetricsCollector:
         """
         api_requests_total.labels(endpoint=endpoint, method=method, status_code=str(status_code)).inc()
         api_request_latency_ms.labels(endpoint=endpoint, method=method, status_code=str(status_code)).observe(latency_ms)
-    
+
     @staticmethod
     def update_service_health(component: str, healthy: bool) -> None:
         """

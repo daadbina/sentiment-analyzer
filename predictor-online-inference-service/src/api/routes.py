@@ -5,37 +5,33 @@ Provides REST endpoints for synchronous inference.
 """
 
 import logging
-from typing import Dict, Any
 from datetime import datetime
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, status
 
-from .schemas import (
-    PredictionRequest,
-    BatchPredictionRequest,
-    PredictionResponse,
-    BatchPredictionResponse,
-    HealthResponse,
-    ErrorResponse,
-    ModelMetadataResponse,
-)
-from ..inference.batch_predictor import BatchPredictor
-from ..models.model_manager import ModelManager
-from ..features.feature_fetcher import FeatureFetcher
-from ..features.feature_validator import FeatureValidator
-from ..storage.prediction_cache import PredictionCache
-from ..storage.prediction_logger import PredictionLogger
 from ..exceptions import (
-    PredictionError,
-    ModelLoadError,
     FeatureFetchError,
     FeatureValidationError,
     InferenceError,
 )
-from ..utils.trace import TracingContext, trace_span
+from ..features.feature_fetcher import FeatureFetcher
+from ..features.feature_validator import FeatureValidator
+from ..inference.batch_predictor import BatchPredictor
 from ..metrics import MetricsCollector
-
+from ..models.model_manager import ModelManager
+from ..storage.prediction_cache import PredictionCache
+from ..storage.prediction_logger import PredictionLogger
+from ..utils.trace import TracingContext, trace_span
+from .schemas import (
+    BatchPredictionRequest,
+    BatchPredictionResponse,
+    ErrorResponse,
+    HealthResponse,
+    ModelMetadataResponse,
+    PredictionRequest,
+    PredictionResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +59,7 @@ def set_dependencies(
 ) -> None:
     """
     Set dependencies for API routes.
-    
+
     Args:
         batch_predictor: Batch predictor instance
         model_manager: Model manager instance
@@ -95,18 +91,18 @@ def set_dependencies(
 async def predict(request: PredictionRequest) -> PredictionResponse:
     """
     Make prediction for a single semantic group.
-    
+
     Args:
         request: Prediction request
-    
+
     Returns:
         Prediction response
-    
+
     Raises:
         HTTPException: If prediction fails
     """
     trace_id = TracingContext.generate_trace_id()
-    
+
     with trace_span(
         "api_predict",
         attributes={
@@ -116,31 +112,31 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
         },
     ):
         start_time = datetime.now()
-        
+
         try:
             logger.info(
                 f"API predict request: group_id={request.group_id}, domain={request.domain}",
                 extra={"trace_id": trace_id, "group_id": request.group_id},
             )
-            
+
             # Make batch prediction with single group
             predictions = await _batch_predictor.predict_batch(
                 group_ids=[request.group_id],
                 domain=request.domain,
                 trace_id=trace_id,
             )
-            
+
             if not predictions:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="No prediction returned",
                 )
-            
+
             prediction = predictions[0]
-            
+
             # Calculate API latency
             latency_ms = (datetime.now() - start_time).total_seconds() * 1000
-            
+
             # Record API metrics
             MetricsCollector.record_api_request(
                 endpoint="/predict",
@@ -148,13 +144,13 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
                 status_code=200,
                 latency_ms=latency_ms,
             )
-            
+
             logger.info(
                 f"API predict completed: group_id={request.group_id}, "
                 f"latency_ms={latency_ms:.2f}",
                 extra={"trace_id": trace_id, "latency_ms": latency_ms},
             )
-            
+
             return PredictionResponse(
                 group_id=prediction["group_id"],
                 domain=prediction["domain"],
@@ -164,14 +160,14 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
                 predicted_at=prediction["predicted_at"],
                 trace_id=trace_id,
             )
-            
+
         except (FeatureFetchError, FeatureValidationError, InferenceError) as e:
             logger.error(
                 f"API predict failed: group_id={request.group_id}, error={e}",
                 exc_info=True,
                 extra={"trace_id": trace_id},
             )
-            
+
             # Record API metrics
             latency_ms = (datetime.now() - start_time).total_seconds() * 1000
             MetricsCollector.record_api_request(
@@ -180,7 +176,7 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
                 status_code=500,
                 latency_ms=latency_ms,
             )
-            
+
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
@@ -195,7 +191,7 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
                 exc_info=True,
                 extra={"trace_id": trace_id},
             )
-            
+
             # Record API metrics
             latency_ms = (datetime.now() - start_time).total_seconds() * 1000
             MetricsCollector.record_api_request(
@@ -204,7 +200,7 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
                 status_code=500,
                 latency_ms=latency_ms,
             )
-            
+
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
@@ -229,18 +225,18 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
 async def predict_batch(request: BatchPredictionRequest) -> BatchPredictionResponse:
     """
     Make predictions for multiple semantic groups.
-    
+
     Args:
         request: Batch prediction request
-    
+
     Returns:
         Batch prediction response
-    
+
     Raises:
         HTTPException: If prediction fails
     """
     trace_id = TracingContext.generate_trace_id()
-    
+
     with trace_span(
         "api_predict_batch",
         attributes={
@@ -250,24 +246,24 @@ async def predict_batch(request: BatchPredictionRequest) -> BatchPredictionRespo
         },
     ):
         start_time = datetime.now()
-        
+
         try:
             logger.info(
                 f"API batch predict request: batch_size={len(request.group_ids)}, "
                 f"domain={request.domain}",
                 extra={"trace_id": trace_id},
             )
-            
+
             # Make batch prediction
             predictions = await _batch_predictor.predict_batch(
                 group_ids=request.group_ids,
                 domain=request.domain,
                 trace_id=trace_id,
             )
-            
+
             # Calculate API latency
             latency_ms = (datetime.now() - start_time).total_seconds() * 1000
-            
+
             # Record API metrics
             MetricsCollector.record_api_request(
                 endpoint="/predict/batch",
@@ -275,13 +271,13 @@ async def predict_batch(request: BatchPredictionRequest) -> BatchPredictionRespo
                 status_code=200,
                 latency_ms=latency_ms,
             )
-            
+
             logger.info(
                 f"API batch predict completed: batch_size={len(request.group_ids)}, "
                 f"predictions={len(predictions)}, latency_ms={latency_ms:.2f}",
                 extra={"trace_id": trace_id, "latency_ms": latency_ms},
             )
-            
+
             # Convert to response models
             prediction_responses = [
                 PredictionResponse(
@@ -295,19 +291,19 @@ async def predict_batch(request: BatchPredictionRequest) -> BatchPredictionRespo
                 )
                 for p in predictions
             ]
-            
+
             return BatchPredictionResponse(
                 predictions=prediction_responses,
                 total=len(prediction_responses),
             )
-            
+
         except Exception as e:
             logger.error(
                 f"API batch predict failed: error={e}",
                 exc_info=True,
                 extra={"trace_id": trace_id},
             )
-            
+
             # Record API metrics
             latency_ms = (datetime.now() - start_time).total_seconds() * 1000
             MetricsCollector.record_api_request(
@@ -316,7 +312,7 @@ async def predict_batch(request: BatchPredictionRequest) -> BatchPredictionRespo
                 status_code=500,
                 latency_ms=latency_ms,
             )
-            
+
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail={
@@ -479,7 +475,7 @@ async def ready() -> HealthResponse:
     summary="Liveness check",
     description="Check if service is alive (basic health check)",
 )
-async def live() -> Dict[str, Any]:
+async def live() -> dict[str, Any]:
     """
     Check if service is alive.
 

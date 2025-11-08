@@ -6,14 +6,13 @@ Implements Rule R8 (Ground-Truth Sync) and Rule R10 (Truth Freshness).
 """
 
 import logging
-from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
+from typing import Any
 
 from ..clients import PostgresClient
 from ..exceptions import LabelFetchError
-from ..utils.trace import trace_span
 from ..metrics import MetricsCollector
-
+from ..utils.trace import trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -29,33 +28,33 @@ LABEL_FRESHNESS_THRESHOLDS = {
 class LabelRetriever:
     """
     Retriever for ground-truth labels from Labeler Service.
-    
+
     Fetches labels from PostgreSQL with validation and freshness checks.
     """
-    
+
     def __init__(self, postgres_client: PostgresClient):
         """
         Initialize label retriever.
-        
+
         Args:
             postgres_client: PostgreSQL client instance
         """
         self.postgres_client = postgres_client
-        
+
         logger.info("Initialized label retriever")
-    
+
     async def get_label(
         self,
         group_id: str,
-        trace_id: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+        trace_id: str | None = None,
+    ) -> dict[str, Any] | None:
         """
         Retrieve ground-truth label for a semantic group.
-        
+
         Args:
             group_id: Semantic group ID
             trace_id: Optional trace ID for distributed tracing
-        
+
         Returns:
             Label dictionary or None if not found
             Dictionary contains:
@@ -66,7 +65,7 @@ class LabelRetriever:
                 - label_source: str (ACLED/GDELT/CoinGecko)
                 - labeled_at: datetime
                 - event_timestamp: datetime
-        
+
         Raises:
             LabelFetchError: If retrieval fails
         """
@@ -79,31 +78,31 @@ class LabelRetriever:
                     f"Retrieving label: group_id={group_id}",
                     extra={"trace_id": trace_id, "group_id": group_id},
                 )
-                
+
                 # Fetch label from PostgreSQL
                 label = await self.postgres_client.get_ground_truth_label(
                     group_id=group_id,
                     trace_id=trace_id,
                 )
-                
+
                 if label is None:
                     logger.debug(
                         f"No label found: group_id={group_id}",
                         extra={"trace_id": trace_id, "group_id": group_id},
                     )
                     return None
-                
+
                 # Check label freshness
                 self._check_label_freshness(label, trace_id)
-                
+
                 logger.debug(
                     f"Retrieved label: group_id={group_id}, "
                     f"source={label['label_source']}, value={label['label_value']}",
                     extra={"trace_id": trace_id, "group_id": group_id},
                 )
-                
+
                 return label
-                
+
             except LabelFetchError:
                 # Record failure metric
                 MetricsCollector.record_feature_fetch_failure("postgres", "ground_truth")
@@ -121,27 +120,27 @@ class LabelRetriever:
                     source="postgres",
                     trace_id=trace_id,
                 )
-    
+
     def _check_label_freshness(
         self,
-        label: Dict[str, Any],
-        trace_id: Optional[str] = None,
+        label: dict[str, Any],
+        trace_id: str | None = None,
     ) -> None:
         """
         Check label freshness against Rule R10 thresholds.
-        
+
         Args:
             label: Label dictionary
             trace_id: Optional trace ID for distributed tracing
-        
+
         Logs warning if label is stale but does not raise exception.
         """
         label_source = label.get("label_source")
         labeled_at = label.get("labeled_at")
-        
+
         if not label_source or not labeled_at:
             return
-        
+
         # Get freshness threshold for source
         threshold = LABEL_FRESHNESS_THRESHOLDS.get(label_source)
         if not threshold:
@@ -150,10 +149,10 @@ class LabelRetriever:
                 extra={"trace_id": trace_id},
             )
             return
-        
+
         # Calculate label age
         age = datetime.utcnow() - labeled_at
-        
+
         # Check if label is stale
         if age > threshold:
             logger.warning(
@@ -161,22 +160,22 @@ class LabelRetriever:
                 f"source={label_source}, age={age}, threshold={threshold}",
                 extra={"trace_id": trace_id, "group_id": label["group_id"]},
             )
-    
+
     async def get_labels_batch(
         self,
-        group_ids: List[str],
-        trace_id: Optional[str] = None,
-    ) -> Dict[str, Optional[Dict[str, Any]]]:
+        group_ids: list[str],
+        trace_id: str | None = None,
+    ) -> dict[str, dict[str, Any] | None]:
         """
         Retrieve ground-truth labels for multiple semantic groups.
-        
+
         Args:
             group_ids: List of semantic group IDs
             trace_id: Optional trace ID for distributed tracing
-        
+
         Returns:
             Dictionary mapping group_id to label (or None if not found)
-        
+
         Raises:
             LabelFetchError: If retrieval fails
         """
@@ -188,9 +187,9 @@ class LabelRetriever:
                 f"Retrieving labels batch: count={len(group_ids)}",
                 extra={"trace_id": trace_id},
             )
-            
+
             labels = {}
-            
+
             # Fetch labels for each group
             for group_id in group_ids:
                 try:
@@ -202,30 +201,30 @@ class LabelRetriever:
                         extra={"trace_id": trace_id},
                     )
                     labels[group_id] = None
-            
+
             logger.debug(
                 f"Retrieved labels batch: count={len(group_ids)}, "
                 f"found={sum(1 for l in labels.values() if l is not None)}",
                 extra={"trace_id": trace_id},
             )
-            
+
             return labels
-    
+
     async def get_recent_labels(
         self,
         hours: int = 24,
-        trace_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        trace_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Retrieve recent labels for validation.
-        
+
         Args:
             hours: Number of hours to look back
             trace_id: Optional trace ID for distributed tracing
-        
+
         Returns:
             List of label dictionaries
-        
+
         Raises:
             LabelFetchError: If retrieval fails
         """
@@ -238,13 +237,13 @@ class LabelRetriever:
                     f"Retrieving recent labels: hours={hours}",
                     extra={"trace_id": trace_id},
                 )
-                
+
                 # Get predictions with labels from PostgreSQL
                 predictions = await self.postgres_client.get_predictions_for_validation(
                     limit=1000,
                     trace_id=trace_id,
                 )
-                
+
                 # Filter to only those with labels
                 labels = [
                     {
@@ -261,14 +260,14 @@ class LabelRetriever:
                     for p in predictions
                     if p.get("label_value") is not None
                 ]
-                
+
                 logger.debug(
                     f"Retrieved recent labels: count={len(labels)}",
                     extra={"trace_id": trace_id},
                 )
-                
+
                 return labels
-                
+
             except Exception as e:
                 logger.error(
                     f"Failed to retrieve recent labels: error={e}",

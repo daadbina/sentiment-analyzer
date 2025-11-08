@@ -6,14 +6,13 @@ Handles both online and offline feature retrieval.
 """
 
 import logging
-from typing import Dict, List, Optional, Any
 from datetime import datetime
+from typing import Any
 
 from ..clients import FeastClient
 from ..exceptions import FeatureFetchError
+from ..metrics import feature_freshness_seconds
 from ..utils.trace import trace_span
-from ..metrics import MetricsCollector, feature_freshness_seconds
-
 
 logger = logging.getLogger(__name__)
 
@@ -31,40 +30,40 @@ REQUIRED_FEATURES = [
 class FeatureFetcher:
     """
     High-level interface for fetching features from Feast.
-    
+
     Provides methods for retrieving features with proper error handling
     and metric collection.
     """
-    
+
     def __init__(self, feast_client: FeastClient):
         """
         Initialize feature fetcher.
-        
+
         Args:
             feast_client: Feast client instance
         """
         self.feast_client = feast_client
-        
+
         logger.info("Initialized feature fetcher")
-    
+
     async def fetch_online_features(
         self,
         group_id: str,
-        trace_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        trace_id: str | None = None,
+    ) -> dict[str, Any]:
         """
         Fetch features from online store for a semantic group.
-        
+
         Args:
             group_id: Semantic group ID
             trace_id: Optional trace ID for distributed tracing
-        
+
         Returns:
             Dictionary of feature values
-        
+
         Raises:
             FeatureFetchError: If feature fetch fails
-        
+
         Example:
             features = await fetcher.fetch_online_features("group_123")
             # Returns: {
@@ -85,17 +84,17 @@ class FeatureFetcher:
                     f"Fetching online features: group_id={group_id}",
                     extra={"trace_id": trace_id, "group_id": group_id},
                 )
-                
+
                 # Prepare entity rows
                 entity_rows = [{"group_id": group_id}]
-                
+
                 # Fetch features from Feast online store
                 feature_rows = await self.feast_client.get_online_features(
                     feature_names=REQUIRED_FEATURES,
                     entity_rows=entity_rows,
                     trace_id=trace_id,
                 )
-                
+
                 if not feature_rows:
                     raise FeatureFetchError(
                         f"No features returned for group_id={group_id}",
@@ -103,28 +102,28 @@ class FeatureFetcher:
                         store_type="online",
                         trace_id=trace_id,
                     )
-                
+
                 features = feature_rows[0]
-                
+
                 # Check for feature freshness
                 if "feature_timestamp" in features:
                     feature_timestamp = datetime.fromisoformat(features["feature_timestamp"])
                     age_seconds = (datetime.utcnow() - feature_timestamp).total_seconds()
                     feature_freshness_seconds.labels(group_id=group_id).set(age_seconds)
-                    
+
                     logger.debug(
                         f"Feature freshness: group_id={group_id}, age_seconds={age_seconds:.2f}",
                         extra={"trace_id": trace_id, "group_id": group_id},
                     )
-                
+
                 logger.debug(
                     f"Fetched online features: group_id={group_id}, "
                     f"feature_count={len(features)}",
                     extra={"trace_id": trace_id, "group_id": group_id},
                 )
-                
+
                 return features
-                
+
             except FeatureFetchError:
                 raise
             except Exception as e:
@@ -139,24 +138,24 @@ class FeatureFetcher:
                     store_type="online",
                     trace_id=trace_id,
                 )
-    
+
     async def fetch_historical_features(
         self,
-        group_ids: List[str],
-        timestamps: List[datetime],
-        trace_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        group_ids: list[str],
+        timestamps: list[datetime],
+        trace_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Fetch features from offline store for multiple semantic groups.
-        
+
         Args:
             group_ids: List of semantic group IDs
             timestamps: List of timestamps for point-in-time feature retrieval
             trace_id: Optional trace ID for distributed tracing
-        
+
         Returns:
             List of feature dictionaries, one per group
-        
+
         Raises:
             FeatureFetchError: If feature fetch fails
         """
@@ -172,28 +171,28 @@ class FeatureFetcher:
                     f"Fetching historical features: group_count={len(group_ids)}",
                     extra={"trace_id": trace_id},
                 )
-                
+
                 # Prepare entity dataframe
                 entity_df_dict = {
                     "group_id": group_ids,
                     "event_timestamp": timestamps,
                 }
-                
+
                 # Fetch features from Feast offline store
                 feature_rows = await self.feast_client.get_historical_features(
                     feature_names=REQUIRED_FEATURES,
                     entity_df_dict=entity_df_dict,
                     trace_id=trace_id,
                 )
-                
+
                 logger.debug(
                     f"Fetched historical features: group_count={len(group_ids)}, "
                     f"row_count={len(feature_rows)}",
                     extra={"trace_id": trace_id},
                 )
-                
+
                 return feature_rows
-                
+
             except FeatureFetchError:
                 raise
             except Exception as e:
@@ -207,22 +206,22 @@ class FeatureFetcher:
                     store_type="offline",
                     trace_id=trace_id,
                 )
-    
+
     async def fetch_batch_online_features(
         self,
-        group_ids: List[str],
-        trace_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        group_ids: list[str],
+        trace_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Fetch features from online store for multiple semantic groups.
-        
+
         Args:
             group_ids: List of semantic group IDs
             trace_id: Optional trace ID for distributed tracing
-        
+
         Returns:
             List of feature dictionaries, one per group
-        
+
         Raises:
             FeatureFetchError: If feature fetch fails
         """
@@ -238,25 +237,25 @@ class FeatureFetcher:
                     f"Fetching batch online features: group_count={len(group_ids)}",
                     extra={"trace_id": trace_id},
                 )
-                
+
                 # Prepare entity rows
                 entity_rows = [{"group_id": gid} for gid in group_ids]
-                
+
                 # Fetch features from Feast online store
                 feature_rows = await self.feast_client.get_online_features(
                     feature_names=REQUIRED_FEATURES,
                     entity_rows=entity_rows,
                     trace_id=trace_id,
                 )
-                
+
                 logger.debug(
                     f"Fetched batch online features: group_count={len(group_ids)}, "
                     f"row_count={len(feature_rows)}",
                     extra={"trace_id": trace_id},
                 )
-                
+
                 return feature_rows
-                
+
             except FeatureFetchError:
                 raise
             except Exception as e:
@@ -270,11 +269,11 @@ class FeatureFetcher:
                     store_type="online",
                     trace_id=trace_id,
                 )
-    
-    def get_required_features(self) -> List[str]:
+
+    def get_required_features(self) -> list[str]:
         """
         Get list of required feature names.
-        
+
         Returns:
             List of required feature names
         """

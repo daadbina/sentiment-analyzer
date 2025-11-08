@@ -6,17 +6,20 @@ Handles connection pooling, query execution, and error recovery.
 """
 
 import logging
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from typing import Any
 
 import asyncpg
-from asyncpg import Pool, Connection
+from asyncpg import Pool
 
 from ..config import PostgresConfig
-from ..exceptions import PostgresError, LabelFetchError
+from ..exceptions import LabelFetchError, PostgresError
+from ..metrics import (
+    postgres_connection_pool_size,
+    postgres_errors_total,
+    postgres_query_duration_seconds,
+)
 from ..utils.trace import trace_span
-from ..metrics import postgres_query_duration_seconds, postgres_errors_total, postgres_connection_pool_size
-
 
 logger = logging.getLogger(__name__)
 
@@ -24,30 +27,30 @@ logger = logging.getLogger(__name__)
 class PostgresClient:
     """
     Client for interacting with PostgreSQL database.
-    
+
     Provides methods for storing predictions and retrieving ground-truth labels.
     Handles connection pooling and transaction management.
     """
-    
+
     def __init__(self, config: PostgresConfig):
         """
         Initialize PostgreSQL client.
-        
+
         Args:
             config: PostgreSQL configuration
         """
         self.config = config
-        self._pool: Optional[Pool] = None
-        
+        self._pool: Pool | None = None
+
         logger.info(
             f"Initializing PostgreSQL client: host={config.host}, "
             f"port={config.port}, database={config.database}"
         )
-    
+
     async def connect(self) -> None:
         """
         Connect to PostgreSQL and create connection pool.
-        
+
         Raises:
             PostgresError: If connection fails
         """
@@ -55,7 +58,7 @@ class PostgresClient:
             logger.info(
                 f"Connecting to PostgreSQL: {self.config.host}:{self.config.port}/{self.config.database}"
             )
-            
+
             # Create connection pool
             self._pool = await asyncpg.create_pool(
                 host=self.config.host,
@@ -68,15 +71,15 @@ class PostgresClient:
                 command_timeout=self.config.command_timeout,
                 ssl=self.config.ssl_mode if self.config.ssl_mode != "disable" else None,
             )
-            
+
             # Test connection
             async with self._pool.acquire() as conn:
                 await conn.fetchval("SELECT 1")
-            
+
             # Update pool size metrics
             postgres_connection_pool_size.labels(state="idle").set(self.config.min_pool_size)
             postgres_connection_pool_size.labels(state="max").set(self.config.max_pool_size)
-            
+
             logger.info(
                 f"Connected to PostgreSQL: host={self.config.host}, "
                 f"database={self.config.database}, pool_size={self.config.min_pool_size}-{self.config.max_pool_size}"
@@ -87,21 +90,21 @@ class PostgresClient:
                 f"Failed to connect to PostgreSQL: {e}",
                 operation="connect",
             )
-    
+
     async def disconnect(self) -> None:
         """Disconnect from PostgreSQL and close connection pool."""
         if self._pool:
             logger.info("Disconnecting from PostgreSQL")
             await self._pool.close()
             self._pool = None
-    
+
     def _ensure_connected(self) -> Pool:
         """
         Ensure client is connected.
-        
+
         Returns:
             Connection pool instance
-        
+
         Raises:
             PostgresError: If not connected
         """
@@ -111,7 +114,7 @@ class PostgresClient:
                 operation="ensure_connected",
             )
         return self._pool
-    
+
     async def store_prediction(
         self,
         group_id: str,
@@ -119,12 +122,12 @@ class PostgresClient:
         prediction_probability: float,
         prediction_confidence: float,
         model_version: str,
-        features: Dict[str, Any],
-        trace_id: Optional[str] = None,
+        features: dict[str, Any],
+        trace_id: str | None = None,
     ) -> None:
         """
         Store prediction in database.
-        
+
         Args:
             group_id: Semantic group ID
             domain: Domain of prediction (btc/conflict/geopolitical)
@@ -133,26 +136,26 @@ class PostgresClient:
             model_version: Model version used
             features: Feature values used for prediction
             trace_id: Optional trace ID for distributed tracing
-        
+
         Raises:
             PostgresError: If storage fails
         """
         pool = self._ensure_connected()
-        
+
         with trace_span(
             "postgres_store_prediction",
             attributes={"group_id": group_id, "trace_id": trace_id},
         ):
             try:
                 start_time = datetime.now()
-                
+
                 query = """
                     INSERT INTO predictions (
                         group_id, domain, prediction_probability, prediction_confidence,
                         model_version, features, predicted_at, trace_id
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 """
-                
+
                 async with pool.acquire() as conn:
                     await conn.execute(
                         query,
@@ -165,17 +168,17 @@ class PostgresClient:
                         datetime.utcnow(),
                         trace_id,
                     )
-                
+
                 # Record latency
                 duration_seconds = (datetime.now() - start_time).total_seconds()
                 postgres_query_duration_seconds.labels(operation="insert").observe(duration_seconds)
-                
+
                 logger.debug(
                     f"Stored prediction: group_id={group_id}, domain={domain}, "
                     f"model_version={model_version}, duration_seconds={duration_seconds:.4f}",
                     extra={"trace_id": trace_id, "group_id": group_id},
                 )
-                
+
             except Exception as e:
                 logger.error(
                     f"Failed to store prediction: group_id={group_id}, error={e}",
@@ -189,36 +192,36 @@ class PostgresClient:
                     context={"group_id": group_id},
                     trace_id=trace_id,
                 )
-    
+
     async def get_ground_truth_label(
         self,
         group_id: str,
-        trace_id: Optional[str] = None,
-    ) -> Optional[Dict[str, Any]]:
+        trace_id: str | None = None,
+    ) -> dict[str, Any] | None:
         """
         Retrieve ground-truth label for a semantic group.
-        
+
         Args:
             group_id: Semantic group ID
             trace_id: Optional trace ID for distributed tracing
-        
+
         Returns:
             Dictionary containing label information, or None if not found
-        
+
         Raises:
             LabelFetchError: If retrieval fails
         """
         pool = self._ensure_connected()
-        
+
         with trace_span(
             "postgres_get_ground_truth",
             attributes={"group_id": group_id, "trace_id": trace_id},
         ):
             try:
                 start_time = datetime.now()
-                
+
                 query = """
-                    SELECT 
+                    SELECT
                         group_id, domain, label_value, label_confidence,
                         label_source, labeled_at, event_timestamp
                     FROM ground_truth
@@ -226,21 +229,21 @@ class PostgresClient:
                     ORDER BY labeled_at DESC
                     LIMIT 1
                 """
-                
+
                 async with pool.acquire() as conn:
                     row = await conn.fetchrow(query, group_id)
-                
+
                 # Record latency
                 duration_seconds = (datetime.now() - start_time).total_seconds()
                 postgres_query_duration_seconds.labels(operation="select").observe(duration_seconds)
-                
+
                 if row is None:
                     logger.debug(
                         f"No ground-truth label found: group_id={group_id}",
                         extra={"trace_id": trace_id, "group_id": group_id},
                     )
                     return None
-                
+
                 result = {
                     "group_id": row["group_id"],
                     "domain": row["domain"],
@@ -250,15 +253,15 @@ class PostgresClient:
                     "labeled_at": row["labeled_at"],
                     "event_timestamp": row["event_timestamp"],
                 }
-                
+
                 logger.debug(
                     f"Retrieved ground-truth label: group_id={group_id}, "
                     f"label_source={result['label_source']}, duration_seconds={duration_seconds:.4f}",
                     extra={"trace_id": trace_id, "group_id": group_id},
                 )
-                
+
                 return result
-                
+
             except Exception as e:
                 logger.error(
                     f"Failed to retrieve ground-truth label: group_id={group_id}, error={e}",
@@ -272,36 +275,36 @@ class PostgresClient:
                     source="postgres",
                     trace_id=trace_id,
                 )
-    
+
     async def get_predictions_for_validation(
         self,
         limit: int = 100,
-        trace_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        trace_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Retrieve recent predictions for validation.
-        
+
         Args:
             limit: Maximum number of predictions to retrieve
             trace_id: Optional trace ID for distributed tracing
-        
+
         Returns:
             List of prediction dictionaries
-        
+
         Raises:
             PostgresError: If retrieval fails
         """
         pool = self._ensure_connected()
-        
+
         with trace_span(
             "postgres_get_predictions_for_validation",
             attributes={"limit": limit, "trace_id": trace_id},
         ):
             try:
                 start_time = datetime.now()
-                
+
                 query = """
-                    SELECT 
+                    SELECT
                         p.group_id, p.domain, p.prediction_probability,
                         p.prediction_confidence, p.model_version, p.predicted_at,
                         gt.label_value, gt.label_confidence, gt.label_source
@@ -311,24 +314,24 @@ class PostgresClient:
                     ORDER BY p.predicted_at DESC
                     LIMIT $1
                 """
-                
+
                 async with pool.acquire() as conn:
                     rows = await conn.fetch(query, limit)
-                
+
                 # Record latency
                 duration_seconds = (datetime.now() - start_time).total_seconds()
                 postgres_query_duration_seconds.labels(operation="select").observe(duration_seconds)
-                
+
                 results = [dict(row) for row in rows]
-                
+
                 logger.debug(
                     f"Retrieved predictions for validation: count={len(results)}, "
                     f"duration_seconds={duration_seconds:.4f}",
                     extra={"trace_id": trace_id},
                 )
-                
+
                 return results
-                
+
             except Exception as e:
                 logger.error(
                     f"Failed to retrieve predictions for validation: error={e}",
@@ -341,11 +344,11 @@ class PostgresClient:
                     operation="select",
                     trace_id=trace_id,
                 )
-    
+
     async def health_check(self) -> bool:
         """
         Check if PostgreSQL is healthy.
-        
+
         Returns:
             True if healthy, False otherwise
         """

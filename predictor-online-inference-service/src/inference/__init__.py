@@ -1,9 +1,8 @@
 """Inference package."""
 
 from .batch_predictor import BatchPredictor
-from .streaming_predictor import StreamingPredictor
 from .confidence_scorer import ConfidenceScorer
-
+from .streaming_predictor import StreamingPredictor
 
 __all__ = [
     "BatchPredictor",

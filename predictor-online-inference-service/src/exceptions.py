@@ -5,28 +5,28 @@ All exceptions inherit from PredictionError base class for consistent error hand
 Each exception includes context information for debugging and monitoring.
 """
 
-from typing import Optional, Dict, Any
+from typing import Any
 
 
 class PredictionError(Exception):
     """
     Base exception for all prediction service errors.
-    
+
     Attributes:
         message: Human-readable error message
         context: Additional context information for debugging
         trace_id: Distributed tracing identifier
     """
-    
+
     def __init__(
         self,
         message: str,
-        context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize prediction error.
-        
+
         Args:
             message: Human-readable error message
             context: Additional context information
@@ -36,7 +36,7 @@ class PredictionError(Exception):
         self.message = message
         self.context = context or {}
         self.trace_id = trace_id
-    
+
     def __str__(self) -> str:
         """Return string representation of error."""
         parts = [self.message]
@@ -51,25 +51,25 @@ class PredictionError(Exception):
 class ModelLoadError(PredictionError):
     """
     Exception raised when model loading from MLflow fails.
-    
+
     This includes failures in:
     - Model artifact download
     - Model deserialization
     - Model validation
     - Model version resolution
     """
-    
+
     def __init__(
         self,
         message: str,
-        model_name: Optional[str] = None,
-        model_version: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        model_name: str | None = None,
+        model_version: str | None = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize model load error.
-        
+
         Args:
             message: Human-readable error message
             model_name: Name of the model that failed to load
@@ -88,7 +88,7 @@ class ModelLoadError(PredictionError):
 class FeatureError(PredictionError):
     """
     Base exception for feature-related errors.
-    
+
     This is the parent class for all feature store and feature validation errors.
     """
     pass
@@ -97,26 +97,26 @@ class FeatureError(PredictionError):
 class FeatureFetchError(FeatureError):
     """
     Exception raised when feature retrieval from Feast fails.
-    
+
     This includes failures in:
     - Feast online store connection
     - Feature retrieval queries
     - Feature deserialization
     - Network timeouts
     """
-    
+
     def __init__(
         self,
         message: str,
-        group_id: Optional[str] = None,
-        feature_names: Optional[list[str]] = None,
-        store_type: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        group_id: str | None = None,
+        feature_names: list[str] | None = None,
+        store_type: str | None = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize feature fetch error.
-        
+
         Args:
             message: Human-readable error message
             group_id: ID of the semantic group
@@ -138,26 +138,26 @@ class FeatureFetchError(FeatureError):
 class FeatureValidationError(FeatureError):
     """
     Exception raised when feature validation fails.
-    
+
     This includes failures in:
     - Feature schema validation
     - Feature completeness checks
     - Feature type verification
     - Feature range validation
     """
-    
+
     def __init__(
         self,
         message: str,
-        group_id: Optional[str] = None,
-        missing_features: Optional[list[str]] = None,
-        invalid_features: Optional[Dict[str, str]] = None,
-        context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        group_id: str | None = None,
+        missing_features: list[str] | None = None,
+        invalid_features: dict[str, str] | None = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize feature validation error.
-        
+
         Args:
             message: Human-readable error message
             group_id: ID of the semantic group
@@ -179,25 +179,25 @@ class FeatureValidationError(FeatureError):
 class FeatureReconciliationError(FeatureError):
     """
     Exception raised when feature reconciliation between offline and online stores fails.
-    
+
     This includes:
     - Mismatch between offline and online feature values
     - Reconciliation rate below threshold
     - Feature version inconsistencies
     """
-    
+
     def __init__(
         self,
         message: str,
-        group_id: Optional[str] = None,
-        mismatched_features: Optional[Dict[str, tuple]] = None,
-        reconciliation_rate: Optional[float] = None,
-        context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        group_id: str | None = None,
+        mismatched_features: dict[str, tuple] | None = None,
+        reconciliation_rate: float | None = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize feature reconciliation error.
-        
+
         Args:
             message: Human-readable error message
             group_id: ID of the semantic group
@@ -219,21 +219,21 @@ class FeatureReconciliationError(FeatureError):
 class InferenceError(PredictionError):
     """
     Base exception for inference-related errors.
-    
+
     This includes failures during model prediction execution.
     """
-    
+
     def __init__(
         self,
         message: str,
-        group_id: Optional[str] = None,
-        model_version: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        group_id: str | None = None,
+        model_version: str | None = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize inference error.
-        
+
         Args:
             message: Human-readable error message
             group_id: ID of the semantic group
@@ -252,26 +252,26 @@ class InferenceError(PredictionError):
 class InferenceTimeoutError(InferenceError):
     """
     Exception raised when inference exceeds timeout threshold.
-    
+
     This indicates performance issues that may require:
     - Model optimization
     - Resource scaling
     - Timeout adjustment
     """
-    
+
     def __init__(
         self,
         message: str,
-        group_id: Optional[str] = None,
-        model_version: Optional[str] = None,
-        timeout_ms: Optional[int] = None,
-        elapsed_ms: Optional[int] = None,
-        context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        group_id: str | None = None,
+        model_version: str | None = None,
+        timeout_ms: int | None = None,
+        elapsed_ms: int | None = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize inference timeout error.
-        
+
         Args:
             message: Human-readable error message
             group_id: ID of the semantic group
@@ -292,26 +292,26 @@ class InferenceTimeoutError(InferenceError):
 class LabelValidationError(PredictionError):
     """
     Exception raised when ground-truth label validation fails.
-    
+
     This includes failures in:
     - Label schema validation
     - Label freshness checks
     - Label source license verification
     - Label confidence validation
     """
-    
+
     def __init__(
         self,
         message: str,
-        group_id: Optional[str] = None,
-        label_source: Optional[str] = None,
-        validation_failures: Optional[list[str]] = None,
-        context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        group_id: str | None = None,
+        label_source: str | None = None,
+        validation_failures: list[str] | None = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize label validation error.
-        
+
         Args:
             message: Human-readable error message
             group_id: ID of the semantic group
@@ -333,25 +333,25 @@ class LabelValidationError(PredictionError):
 class LabelFetchError(PredictionError):
     """
     Exception raised when ground-truth label retrieval fails.
-    
+
     This includes failures in:
     - PostgreSQL query execution
     - Kafka message consumption
     - Label deserialization
     - Network timeouts
     """
-    
+
     def __init__(
         self,
         message: str,
-        group_id: Optional[str] = None,
-        source: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        group_id: str | None = None,
+        source: str | None = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize label fetch error.
-        
+
         Args:
             message: Human-readable error message
             group_id: ID of the semantic group
@@ -370,25 +370,25 @@ class LabelFetchError(PredictionError):
 class CacheError(PredictionError):
     """
     Exception raised when Redis cache operations fail.
-    
+
     This includes failures in:
     - Redis connection
     - Cache read/write operations
     - Cache invalidation
     - Serialization/deserialization
     """
-    
+
     def __init__(
         self,
         message: str,
-        operation: Optional[str] = None,
-        key: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        operation: str | None = None,
+        key: str | None = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize cache error.
-        
+
         Args:
             message: Human-readable error message
             operation: Cache operation that failed (get/set/delete)
@@ -407,7 +407,7 @@ class CacheError(PredictionError):
 class KafkaError(PredictionError):
     """
     Exception raised when Kafka operations fail.
-    
+
     This includes failures in:
     - Kafka connection
     - Message consumption
@@ -415,18 +415,18 @@ class KafkaError(PredictionError):
     - Offset management
     - Schema registry operations
     """
-    
+
     def __init__(
         self,
         message: str,
-        topic: Optional[str] = None,
-        operation: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        topic: str | None = None,
+        operation: str | None = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize Kafka error.
-        
+
         Args:
             message: Human-readable error message
             topic: Kafka topic involved in the operation
@@ -456,10 +456,10 @@ class PostgresError(PredictionError):
     def __init__(
         self,
         message: str,
-        operation: Optional[str] = None,
-        query: Optional[str] = None,
-        context: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        operation: str | None = None,
+        query: str | None = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize PostgreSQL error.
@@ -494,8 +494,8 @@ class ServiceError(PredictionError):
     def __init__(
         self,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize service error.
@@ -521,8 +521,8 @@ class ValidationError(PredictionError):
     def __init__(
         self,
         message: str,
-        details: Optional[Dict[str, Any]] = None,
-        trace_id: Optional[str] = None,
+        details: dict[str, Any] | None = None,
+        trace_id: str | None = None,
     ):
         """
         Initialize validation error.

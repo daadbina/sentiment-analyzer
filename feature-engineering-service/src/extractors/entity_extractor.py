@@ -58,20 +58,16 @@ class EntityExtractor(FeatureExtractor):
                         if isinstance(entity, dict) and "type" in entity:
                             entity_types.add(entity["type"])
 
-            logger.debug(
-                "Entity extraction analysis",
-                group_id=self.get_group_id(group),
-                article_count=len(articles),
-                articles_with_entities=articles_with_entities,
-                total_entities=len(all_entities),
-                entity_types=list(entity_types),
+            logger.info(
+                f"Entity extraction analysis: group_id={self.get_group_id(group)}, "
+                f"article_count={len(articles)}, articles_with_entities={articles_with_entities}, "
+                f"total_entities={len(all_entities)}, entity_types={list(entity_types)}"
             )
 
             if not all_entities:
-                logger.debug(
-                    "No entities found in articles (valid case for some groups)",
-                    group_id=self.get_group_id(group),
-                    article_count=len(articles),
+                logger.info(
+                    f"No entities found in {len(articles)} articles for group_id={self.get_group_id(group)} "
+                    f"(articles_with_entities={articles_with_entities})"
                 )
                 return {
                     "entity_count": 0,

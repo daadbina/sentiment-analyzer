@@ -131,15 +131,14 @@ class QdrantVectorClient:
             # Log sample article data for debugging
             if articles:
                 sample_article = articles[0]
+                sentiment_score = sample_article.get("sentiment_score")
+                entities = sample_article.get("entities", [])
                 logger.info(
-                    "Sample article from Qdrant",
-                    article_id=sample_article.get("article_id"),
-                    has_sentiment_score=sample_article.get("sentiment_score") is not None,
-                    sentiment_score=sample_article.get("sentiment_score"),
-                    has_entities=bool(sample_article.get("entities")),
-                    entity_count=len(sample_article.get("entities", [])),
-                    has_title=bool(sample_article.get("title")),
-                    has_body=bool(sample_article.get("body")),
+                    f"Sample article from Qdrant: article_id={sample_article.get('article_id')}, "
+                    f"sentiment_score={sentiment_score}, entity_count={len(entities)}, "
+                    f"has_title={bool(sample_article.get('title'))}, has_body={bool(sample_article.get('body'))}, "
+                    f"publisher_credibility={sample_article.get('publisher_credibility')}, "
+                    f"source={sample_article.get('source')}, domain={sample_article.get('domain')}"
                 )
 
             return articles

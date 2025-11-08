@@ -73,13 +73,12 @@ class SourceExtractor(FeatureExtractor):
                     credibility_scores.append(0.5)
                     articles_without_credibility += 1
 
-            logger.debug(
-                "Credibility scores extraction",
-                group_id=self.get_group_id(group),
-                article_count=len(articles),
-                articles_with_credibility=articles_with_credibility,
-                articles_without_credibility=articles_without_credibility,
-                credibility_scores_sample=credibility_scores[:5] if credibility_scores else [],
+            logger.info(
+                f"Credibility scores extraction: group_id={self.get_group_id(group)}, "
+                f"article_count={len(articles)}, with_credibility={articles_with_credibility}, "
+                f"without_credibility={articles_without_credibility}, "
+                f"scores_sample={credibility_scores[:5] if credibility_scores else []}, "
+                f"avg={sum(credibility_scores) / len(credibility_scores) if credibility_scores else 0}"
             )
 
             if credibility_scores:

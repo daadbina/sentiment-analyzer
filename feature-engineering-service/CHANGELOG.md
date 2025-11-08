@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-11-08
+
+### Added
+- Feast registry management (feast/registry.py) for feature view registration
+- Feast feature definitions (feast/feature_definitions.py) with all 24 features
+- Delta Lake writer (storage/delta_writer.py) for explicit offline feature storage
+- Actual Feast write_features() implementation using pandas DataFrames
+- Actual Feast get_features() implementation with historical retrieval
+- Feature view registration on service startup
+- Health check and feature view validation methods to FeastClient
+- Comprehensive logging for all Feast operations including data types and statistics
+
+### Changed
+- FeastClient.write_features() now writes to Delta Lake via Feast push method
+- FeastClient.get_features() now retrieves from Feast offline store with proper entity handling
+- Service initialization now includes Feast registry setup
+- _write_features() now writes to Delta Lake, Feast, and Redis in sequence
+
+### Fixed
+- Feast feature view not being registered in registry
+- Placeholder implementations in FeastClient replaced with actual Feast operations
+- Missing Delta Lake backend for offline feature storage
+- Feature-engineering-service not actually persisting features to Feast
+
 ## [0.1.0] - 2025-11-04
 
 ### Added

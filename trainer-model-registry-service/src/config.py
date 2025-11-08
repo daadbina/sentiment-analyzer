@@ -391,7 +391,7 @@ class LLMConfig(BaseSettings):
         alias="OPENAI_API_KEY",
         description="OpenAI API key",
     )
-    model: str = Field(
+    model_name: str = Field(
         default="gpt-4", alias="OPENAI_MODEL", description="OpenAI model name"
     )
     temperature: float = Field(

@@ -25,7 +25,7 @@ class LLMBaselineModel(BaseModel):
     def __init__(self):
         """Initialize LLM baseline model."""
         model_config = {
-            "model": config.llm.model_name,
+            "model_name": config.llm.model_name,
             "temperature": config.llm.temperature,
             "max_tokens": config.llm.max_tokens,
             "api_key": config.llm.api_key,

@@ -19,6 +19,7 @@ from .clients import (
     MLflowModelClient,
     PostgresClient,
     RedisClient,
+    S3Client,
 )
 from .config import get_config
 from .features import FeatureFetcher, FeatureReconciliationChecker, FeatureValidator
@@ -52,7 +53,8 @@ async def lifespan(app: FastAPI):
 
     # Initialize clients
     feast_client = FeastClient(config.feast)
-    mlflow_client = MLflowModelClient(config.mlflow)
+    s3_client = S3Client(config.s3)
+    mlflow_client = MLflowModelClient(config.mlflow, s3_client=s3_client)
     redis_client = RedisClient(config.redis)
     postgres_client = PostgresClient(config.postgres)
     kafka_consumer = KafkaConsumerClient(config.kafka)
@@ -60,6 +62,7 @@ async def lifespan(app: FastAPI):
 
     # Connect clients
     await feast_client.connect()
+    await s3_client.connect()
     await mlflow_client.connect()
     await redis_client.connect()
     await postgres_client.connect()

@@ -2,13 +2,18 @@
 MLflow client for model registry and model loading.
 
 Provides abstraction over MLflow for loading models from the registry.
-Supports model versioning, fallback models, and circuit breaker pattern.
+Supports model versioning, fallback models, automatic model selection, and S3-based loading.
 """
 
 import asyncio
 import logging
+import pickle
+import tempfile
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any, Tuple
 
+import joblib
 import mlflow
 from mlflow.pyfunc import PyFuncModel
 from mlflow.tracking import MlflowClient
@@ -25,24 +30,28 @@ class MLflowModelClient:
     """
     Client for interacting with MLflow model registry.
 
-    Provides methods for loading models with version management and fallback.
+    Provides methods for loading models with version management, fallback,
+    automatic model selection, and S3-based loading.
     Implements circuit breaker pattern for resilient model loading.
     """
 
-    def __init__(self, config: MLflowConfig):
+    def __init__(self, config: MLflowConfig, s3_client=None):
         """
         Initialize MLflow client.
 
         Args:
             config: MLflow configuration
+            s3_client: Optional S3 client for model artifact retrieval
         """
         self.config = config
+        self.s3_client = s3_client
         self._client: MlflowClient | None = None
-        self._loaded_models: dict[str, PyFuncModel] = {}
+        self._loaded_models: dict[str, Any] = {}
+        self._selected_model_info: Dict[str, Any] | None = None
 
         logger.info(
             f"Initializing MLflow client: tracking_uri={config.tracking_uri}, "
-            f"model_name={config.model_name}"
+            f"auto_select={config.auto_select_best_model}"
         )
 
     async def connect(self) -> None:
@@ -97,14 +106,133 @@ class MLflowModelClient:
             )
         return self._client
 
+    async def find_best_model(self) -> Tuple[str, str, str]:
+        """
+        Find the best performing model from MLflow registry.
+
+        Returns:
+            Tuple of (model_name, model_version, run_id)
+
+        Raises:
+            ModelLoadError: If no models found or selection fails
+        """
+        self._ensure_connected()
+
+        try:
+            logger.info(f"Searching for best model using metric: {self.config.model_selection_metric}")
+
+            # Search for all registered models with "sentiment_" prefix
+            all_models = self._client.search_registered_models(filter_string="name LIKE 'sentiment_%'")
+
+            if not all_models:
+                raise ModelLoadError("No models found in MLflow registry with 'sentiment_' prefix")
+
+            logger.info(f"Found {len(all_models)} registered models")
+
+            best_model_name = None
+            best_model_version = None
+            best_run_id = None
+            best_metric_value = -float('inf')
+
+            # Iterate through all models and their versions
+            for model in all_models:
+                model_name = model.name
+                logger.debug(f"Evaluating model: {model_name}")
+
+                # Get latest version
+                versions = self._client.search_model_versions(f"name='{model_name}'")
+                if not versions:
+                    logger.debug(f"No versions found for model: {model_name}")
+                    continue
+
+                # Sort by version number (descending) and get the latest
+                latest_version = sorted(versions, key=lambda v: int(v.version), reverse=True)[0]
+                version_number = latest_version.version
+                run_id = latest_version.run_id
+
+                # If run_id is empty, try to extract from source
+                if not run_id or run_id.strip() == "":
+                    source = latest_version.source
+                    if source and source.startswith("runs://"):
+                        # Extract run_id from source: runs://{run_id}/model
+                        run_id = source.split("/")[2]
+                        logger.info(f"Extracted run_id from source for {model_name}: {run_id}")
+
+                logger.info(
+                    f"Latest version for {model_name}: {version_number}, run_id: '{run_id}', "
+                    f"source: {latest_version.source}, status: {latest_version.status}"
+                )
+
+                # Get run metrics
+                try:
+                    if not run_id or run_id.strip() == "":
+                        logger.info(f"Skipping {model_name} v{version_number}: empty run_id")
+                        continue
+
+                    run = self._client.get_run(run_id)
+                    metrics = run.data.metrics
+
+                    # Look for evaluation metric (with eval_ prefix)
+                    metric_key = f"eval_{self.config.model_selection_metric}"
+                    if metric_key not in metrics:
+                        # Try without prefix
+                        metric_key = self.config.model_selection_metric
+                        if metric_key not in metrics:
+                            logger.debug(f"Metric {self.config.model_selection_metric} not found for {model_name}")
+                            continue
+
+                    metric_value = metrics[metric_key]
+                    logger.info(
+                        f"Model {model_name} v{version_number}: {metric_key}={metric_value:.4f}"
+                    )
+
+                    # Update best model if this one is better
+                    if metric_value > best_metric_value:
+                        best_metric_value = metric_value
+                        best_model_name = model_name
+                        best_model_version = version_number
+                        best_run_id = run_id
+
+                except Exception as e:
+                    logger.warning(f"Failed to get metrics for {model_name} v{version_number}: {e}")
+                    continue
+
+            if best_model_name is None:
+                raise ModelLoadError(
+                    f"No models found with metric: {self.config.model_selection_metric}"
+                )
+
+            logger.info(
+                f"Selected best model: {best_model_name} v{best_model_version} "
+                f"with {self.config.model_selection_metric}={best_metric_value:.4f}"
+            )
+
+            # Store selected model info
+            self._selected_model_info = {
+                "model_name": best_model_name,
+                "model_version": best_model_version,
+                "run_id": best_run_id,
+                "metric": self.config.model_selection_metric,
+                "metric_value": best_metric_value,
+            }
+
+            return best_model_name, best_model_version, best_run_id
+
+        except Exception as e:
+            logger.error(f"Failed to find best model: {e}", exc_info=True)
+            raise ModelLoadError(f"Failed to find best model: {e}")
+
     async def load_model(
         self,
         model_version: str | None = None,
         use_fallback: bool = True,
         trace_id: str | None = None,
-    ) -> PyFuncModel:
+    ) -> Any:
         """
-        Load model from MLflow registry.
+        Load model from S3 via MLflow registry.
+
+        If auto_select_best_model is enabled, automatically selects the best model.
+        Otherwise, uses the configured model name and version.
 
         Args:
             model_version: Model version to load (uses config default if None)
@@ -112,33 +240,53 @@ class MLflowModelClient:
             trace_id: Optional trace ID for distributed tracing
 
         Returns:
-            Loaded PyFuncModel instance
+            Loaded model instance
 
         Raises:
             ModelLoadError: If model loading fails and no fallback available
         """
-        version = model_version or self.config.model_version
-        cache_key = f"{self.config.model_name}:{version}"
+        try:
+            start_time = datetime.now()
 
-        # Check if model is already loaded
-        if cache_key in self._loaded_models:
-            logger.debug(f"Using cached model: {cache_key}")
-            return self._loaded_models[cache_key]
+            # Determine which model to load
+            if self.config.auto_select_best_model:
+                logger.info("Auto-selecting best model from MLflow registry")
+                model_name, version, run_id = await self.find_best_model()
+            else:
+                if not self.config.model_name:
+                    raise ModelLoadError("MLFLOW_MODEL_NAME must be set when auto_select is disabled")
+                model_name = self.config.model_name
+                version = model_version or self.config.model_version
+                if not version:
+                    raise ModelLoadError("MLFLOW_MODEL_VERSION must be set when auto_select is disabled")
 
-        with trace_span(
-            "mlflow_load_model",
-            attributes={
-                "model_name": self.config.model_name,
-                "model_version": version,
-                "trace_id": trace_id,
-            },
-        ):
-            try:
-                start_time = datetime.now()
+                # Get run_id for this model version
+                self._ensure_connected()
+                versions = self._client.search_model_versions(f"name='{model_name}'")
+                matching_version = next((v for v in versions if v.version == version), None)
+                if not matching_version:
+                    raise ModelLoadError(f"Model version not found: {model_name} v{version}")
+                run_id = matching_version.run_id
 
+            cache_key = f"{model_name}:{version}"
+
+            # Check if model is already loaded
+            if cache_key in self._loaded_models:
+                logger.debug(f"Using cached model: {cache_key}")
+                return self._loaded_models[cache_key]
+
+            with trace_span(
+                "mlflow_load_model",
+                attributes={
+                    "model_name": model_name,
+                    "model_version": version,
+                    "run_id": run_id,
+                    "trace_id": trace_id,
+                },
+            ):
                 # Load model with timeout
                 model = await asyncio.wait_for(
-                    self._load_model_async(version),
+                    self._load_model_from_s3(model_name, version, run_id),
                     timeout=self.config.model_load_timeout_seconds,
                 )
 
@@ -147,7 +295,7 @@ class MLflowModelClient:
 
                 # Record metrics
                 model_load_duration_seconds.labels(
-                    model_name=self.config.model_name,
+                    model_name=model_name,
                     model_version=version,
                 ).observe(duration_seconds)
 
@@ -155,130 +303,150 @@ class MLflowModelClient:
                 self._loaded_models[cache_key] = model
 
                 logger.info(
-                    f"Model loaded successfully: name={self.config.model_name}, "
+                    f"Model loaded successfully: name={model_name}, "
                     f"version={version}, duration_seconds={duration_seconds:.2f}",
-                    extra={"trace_id": trace_id, "model_version": version},
+                    extra={"trace_id": trace_id, "model_version": version, "run_id": run_id},
                 )
 
                 return model
 
-            except TimeoutError:
-                logger.error(
-                    f"Model load timeout: name={self.config.model_name}, "
-                    f"version={version}, timeout={self.config.model_load_timeout_seconds}s",
-                    extra={"trace_id": trace_id},
-                )
+        except TimeoutError:
+            logger.error(
+                f"Model load timeout: timeout={self.config.model_load_timeout_seconds}s",
+                extra={"trace_id": trace_id},
+            )
 
-                MetricsCollector.record_model_load_failure(self.config.model_name, version)
+            MetricsCollector.record_model_load_failure("unknown", "unknown")
 
-                # Try fallback model
-                if use_fallback and self.config.fallback_model_version:
-                    return await self._load_fallback_model(trace_id)
-
-                raise ModelLoadError(
-                    f"Model load timeout after {self.config.model_load_timeout_seconds}s",
-                    model_name=self.config.model_name,
-                    model_version=version,
-                    trace_id=trace_id,
-                )
-
-            except Exception as e:
-                logger.error(
-                    f"Failed to load model: name={self.config.model_name}, "
-                    f"version={version}, error={e}",
-                    exc_info=True,
-                    extra={"trace_id": trace_id},
-                )
-
-                MetricsCollector.record_model_load_failure(self.config.model_name, version)
-
-                # Try fallback model
-                if use_fallback and self.config.fallback_model_version:
-                    return await self._load_fallback_model(trace_id)
-
-                raise ModelLoadError(
-                    f"Failed to load model: {e}",
-                    model_name=self.config.model_name,
-                    model_version=version,
-                    trace_id=trace_id,
-                )
-
-    async def _load_model_async(self, version: str) -> PyFuncModel:
-        """
-        Load model asynchronously.
-
-        Args:
-            version: Model version to load
-
-        Returns:
-            Loaded PyFuncModel instance
-        """
-        self._ensure_connected()
-
-        # Resolve model URI
-        if version in ["production", "staging", "archived", "none"]:
-            # Load by stage
-            model_uri = f"models:/{self.config.model_name}/{version}"
-        else:
-            # Load by version number
-            model_uri = f"models:/{self.config.model_name}/{version}"
-
-        logger.debug(f"Loading model from URI: {model_uri}")
-
-        # Load model in thread pool to avoid blocking
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None,
-            mlflow.pyfunc.load_model,
-            model_uri,
-        )
-
-    async def _load_fallback_model(self, trace_id: str | None = None) -> PyFuncModel:
-        """
-        Load fallback model.
-
-        Args:
-            trace_id: Optional trace ID for distributed tracing
-
-        Returns:
-            Loaded fallback model
-
-        Raises:
-            ModelLoadError: If fallback model loading fails
-        """
-        fallback_version = self.config.fallback_model_version
-
-        logger.warning(
-            f"Loading fallback model: version={fallback_version}",
-            extra={"trace_id": trace_id},
-        )
-
-        try:
-            # Load fallback model without further fallback
-            return await self.load_model(
-                model_version=fallback_version,
-                use_fallback=False,
+            raise ModelLoadError(
+                f"Model load timeout after {self.config.model_load_timeout_seconds}s",
                 trace_id=trace_id,
             )
+
         except Exception as e:
             logger.error(
-                f"Failed to load fallback model: version={fallback_version}, error={e}",
+                f"Failed to load model: error={e}",
                 exc_info=True,
                 extra={"trace_id": trace_id},
             )
+
+            MetricsCollector.record_model_load_failure("unknown", "unknown")
+
             raise ModelLoadError(
-                f"Failed to load fallback model: {e}",
-                model_name=self.config.model_name,
-                model_version=fallback_version,
+                f"Failed to load model: {e}",
                 trace_id=trace_id,
             )
 
-    async def get_model_metadata(self, model_version: str | None = None) -> dict:
+    async def _load_model_from_s3(self, model_name: str, version: str, run_id: str) -> Any:
         """
-        Get metadata for a model version.
+        Load model from S3 using MLflow metadata.
 
         Args:
-            model_version: Model version (uses config default if None)
+            model_name: Model name
+            version: Model version
+            run_id: MLflow run ID
+
+        Returns:
+            Loaded model instance
+
+        Raises:
+            ModelLoadError: If loading fails
+        """
+        if not self.s3_client:
+            raise ModelLoadError("S3 client not configured")
+
+        try:
+            # Get run to find artifact path
+            run = self._client.get_run(run_id)
+            artifact_uri = run.info.artifact_uri
+            logger.debug(f"Run artifact URI: {artifact_uri}")
+
+            # List artifacts to find model file
+            artifacts = self._client.list_artifacts(run_id, path="model")
+            logger.debug(f"Found {len(artifacts)} artifacts in model directory")
+
+            # Find the .pkl file
+            model_artifact = None
+            for artifact in artifacts:
+                if artifact.path.endswith('.pkl'):
+                    model_artifact = artifact
+                    break
+
+            if not model_artifact:
+                raise ModelLoadError(f"No .pkl file found in model artifacts for run {run_id}")
+
+            # Extract version from artifact filename
+            # Artifact path format: "model/sentiment_voting_ensemble_v20251108_112651.pkl"
+            artifact_path = model_artifact.path
+            artifact_filename = Path(artifact_path).name
+            logger.debug(f"Model artifact filename: {artifact_filename}")
+
+            # Extract version from filename: sentiment_voting_ensemble_v20251108_112651.pkl -> v20251108_112651
+            # Format: {model_name}_v{timestamp}.pkl
+            version_str = artifact_filename.replace(f"{model_name}_", "").replace(".pkl", "")
+            logger.debug(f"Extracted version string: {version_str}")
+
+            # Construct S3 key using trainer's format: models/{model_name}/{version}/model.pkl
+            s3_key = f"models/{model_name}/{version_str}/model.pkl"
+            logger.info(f"Downloading model from S3: s3://{self.s3_client.config.bucket}/{s3_key}")
+
+            # Download model to temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pkl') as tmp_file:
+                tmp_path = tmp_file.name
+
+            try:
+                await self.s3_client.download_file(s3_key, tmp_path)
+
+                # Load model from pickle file
+                logger.debug(f"Loading model from {tmp_path}")
+                loop = asyncio.get_event_loop()
+                model = await loop.run_in_executor(
+                    None,
+                    self._load_pickle_model,
+                    tmp_path,
+                )
+
+                logger.info(f"Model loaded successfully from S3: {model_name} v{version}")
+                return model
+
+            finally:
+                # Clean up temporary file
+                try:
+                    Path(tmp_path).unlink()
+                    logger.debug(f"Cleaned up temporary file: {tmp_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temporary file {tmp_path}: {e}")
+
+        except Exception as e:
+            logger.error(f"Failed to load model from S3: {e}", exc_info=True)
+            raise ModelLoadError(f"Failed to load model from S3: {e}")
+
+    def _load_pickle_model(self, file_path: str) -> Any:
+        """
+        Load model from pickle file using joblib for better numpy compatibility.
+
+        Args:
+            file_path: Path to pickle file
+
+        Returns:
+            Loaded model instance
+        """
+        try:
+            # Try joblib first (better for sklearn models and numpy objects)
+            model = joblib.load(file_path)
+            logger.debug(f"Model loaded successfully using joblib from {file_path}")
+            return model
+        except Exception as e:
+            logger.warning(f"Failed to load with joblib, trying pickle: {e}")
+            # Fallback to pickle
+            with open(file_path, 'rb') as f:
+                model = pickle.load(f)
+            logger.debug(f"Model loaded successfully using pickle from {file_path}")
+            return model
+
+    async def get_model_metadata(self) -> dict:
+        """
+        Get metadata for the currently selected/loaded model.
 
         Returns:
             Dictionary containing model metadata
@@ -286,33 +454,10 @@ class MLflowModelClient:
         Raises:
             ModelLoadError: If metadata retrieval fails
         """
-        client = self._ensure_connected()
-        version = model_version or self.config.model_version
+        if self._selected_model_info:
+            return self._selected_model_info
 
-        try:
-            # Get model version details
-            model_version_details = client.get_model_version(
-                name=self.config.model_name,
-                version=version,
-            )
-
-            return {
-                "name": model_version_details.name,
-                "version": model_version_details.version,
-                "stage": model_version_details.current_stage,
-                "description": model_version_details.description,
-                "run_id": model_version_details.run_id,
-                "status": model_version_details.status,
-                "creation_timestamp": model_version_details.creation_timestamp,
-                "last_updated_timestamp": model_version_details.last_updated_timestamp,
-            }
-        except Exception as e:
-            logger.error(f"Failed to get model metadata: {e}", exc_info=True)
-            raise ModelLoadError(
-                f"Failed to get model metadata: {e}",
-                model_name=self.config.model_name,
-                model_version=version,
-            )
+        raise ModelLoadError("No model has been loaded yet")
 
     async def health_check(self) -> bool:
         """

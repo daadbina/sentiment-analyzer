@@ -152,7 +152,7 @@ async def lifespan(app: FastAPI):
     await feast_client.disconnect()
     await redis_client.disconnect()
     await postgres_client.disconnect()
-    await kafka_producer.close()
+    await kafka_producer.disconnect()
 
     logger.info("Service shutdown complete")
 

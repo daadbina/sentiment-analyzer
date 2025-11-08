@@ -242,7 +242,7 @@ class APIConfig:
 
         return cls(
             host=os.environ.get("API_HOST", "0.0.0.0"),
-            port=int(os.environ.get("REST_API_PORT", "8000")),
+            port=int(os.environ.get("REST_API_PORT", "8010")),
             workers=int(os.environ.get("API_WORKERS", "4")),
             enable_cors=os.environ.get("ENABLE_CORS", "true").lower() == "true",
             cors_origins=cors_origins,

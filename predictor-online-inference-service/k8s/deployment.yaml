@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: predictor-service
+  labels:
+    app: predictor-service
+    version: v1.0.0
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: predictor-service
+  template:
+    metadata:
+      labels:
+        app: predictor-service
+        version: v1.0.0
+    spec:
+      containers:
+      - name: predictor-service
+        image: predictor-online-inference-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        - containerPort: 9090
+          name: metrics
+          protocol: TCP
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: predictor-config
+              key: kafka_bootstrap_servers
+        - name: KAFKA_SCHEMA_REGISTRY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: predictor-config
+              key: kafka_schema_registry_url
+        - name: MLFLOW_TRACKING_URI
+          valueFrom:
+            configMapKeyRef:
+              name: predictor-config
+              key: mlflow_tracking_uri
+        - name: FEAST_REPO_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: predictor-config
+              key: feast_repo_path
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: predictor-config
+              key: redis_host
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: predictor-config
+              key: postgres_host
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: predictor-secrets
+              key: postgres_user
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: predictor-secrets
+              key: postgres_password
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: feast-repo
+          mountPath: /feast
+          readOnly: true
+      volumes:
+      - name: feast-repo
+        persistentVolumeClaim:
+          claimName: feast-repo-pvc
+

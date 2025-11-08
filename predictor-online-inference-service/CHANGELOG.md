@@ -54,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Applied black code formatting to all source files (Task 57, 45 files)
 - Fixed all mypy type errors (Task 57, 24 errors resolved)
 - Completed static analysis with bandit (Task 57, 7 security issues identified)
+
+### Fixed - Dependencies
+- Fixed avro-python3 version constraint (1.10.0 instead of 1.11.0) (Task 58)
+- Upgraded protobuf to 6.33.0 for feast compatibility (Task 58)
+- Added missing deprecated package for opentelemetry-exporter-jaeger (Task 58)
 - TLS configuration for Kafka, Redis, PostgreSQL (Task 53)
 - Prometheus alerting rules with 20+ alerts (Task 55)
 - Dedicated Prometheus metrics server on port 9109 (Task 54)

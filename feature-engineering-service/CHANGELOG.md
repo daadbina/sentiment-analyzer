@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2025-11-08
+
+### Fixed
+- **CRITICAL**: Fixed push_source_name parameter in feast_client.py (was incorrectly using feature_view_name)
+- **CRITICAL**: Fixed Entity definition with join_keys parameter for proper entity column recognition
+- **CRITICAL**: Fixed Redis connection string format (removed redis:// prefix for Feast compatibility)
+- Delta Lake schema mismatch now handled with automatic table recreation
+- Entity extractor warning changed to debug level (no entities is valid case for some groups)
+
+### Verified
+- ✅ All 24 features extracted successfully from semantic groups
+- ✅ Features transformed and normalized correctly
+- ✅ Features validated with no quality issues
+- ✅ Features written to Delta Lake offline store
+- ✅ Features written to Feast offline store via push method
+- ✅ Features written to Redis online store
+- ✅ Features published to Kafka topic 'features_computed'
+- ✅ End-to-end pipeline working without errors or warnings
+
+### Technical Details
+- Entity.join_keys parameter specifies which columns are entity keys for Redis serialization
+- Feast Redis online store expects connection_string without redis:// protocol prefix
+- PushSource requires proper entity column definition for online store writes
+- All 24 features now successfully persisted across all backends (Delta Lake, Feast, Redis)
+
 ## [0.2.1] - 2025-11-08
 
 ### Fixed

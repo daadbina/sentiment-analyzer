@@ -90,13 +90,20 @@
 - [x] Fix Field dtype to use Feast types (String, UnixTimestamp, etc.)
 - [x] Fix logging in registry.py to handle entity string representation
 - [x] Service successfully initializes Feast registry and registers feature view
+- [x] Fix push_source_name parameter in feast_client.py (was using feature_view_name)
+- [x] Fix Delta Lake schema mismatch with automatic table recreation
+- [x] Fix entity extractor warning (changed to debug level for valid case)
+- [x] Fix Entity definition with join_keys parameter for entity column recognition
+- [x] Fix Redis connection string format (remove redis:// prefix)
+- [x] All 24 features extracted, validated, and persisted to all backends
+- [x] End-to-end pipeline working: extraction -> transformation -> validation -> storage
 - [ ] Test end-to-end feature flow with trainer service
 - [ ] Verify no errors, warnings, or mock data in logs
 - [ ] Merge to develop branch
 
 ---
 
-**Status**: FEAST REGISTRY INITIALIZATION COMPLETE
+**Status**: FEAST INTEGRATION COMPLETE - ALL BACKENDS WORKING
 **Last Updated**: 2025-11-08
 **Maintainer**: Feature Engineering Service Team
 

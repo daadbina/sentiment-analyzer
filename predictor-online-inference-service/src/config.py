@@ -13,12 +13,12 @@ from dataclasses import dataclass
 class KafkaConfig:
     """Kafka configuration parameters."""
 
-    brokers: str
-    consumer_group: str
+    bootstrap_servers: str
+    consumer_group_id: str
     schema_registry_url: str
-    semantic_groups_topic: str
+    input_topic: str
+    output_topic: str
     ground_truth_topic: str
-    predictions_topic: str
     enable_tls: bool
     tls_ca_cert: str | None
     tls_client_cert: str | None
@@ -28,12 +28,12 @@ class KafkaConfig:
     def from_env(cls) -> "KafkaConfig":
         """Load Kafka configuration from environment variables."""
         return cls(
-            brokers=os.environ["KAFKA_BROKERS"],
-            consumer_group=os.environ.get("CONSUMER_GROUP", "predictor-group"),
-            schema_registry_url=os.environ["SCHEMA_REGISTRY_URL"],
-            semantic_groups_topic=os.environ.get("SEMANTIC_GROUPS_TOPIC", "semantic_groups"),
-            ground_truth_topic=os.environ.get("GROUND_TRUTH_TOPIC", "ground_truth"),
-            predictions_topic=os.environ.get("PREDICTIONS_TOPIC", "predictions"),
+            bootstrap_servers=os.environ["KAFKA_BOOTSTRAP_SERVERS"],
+            consumer_group_id=os.environ.get("KAFKA_CONSUMER_GROUP_ID", "predictor-service"),
+            schema_registry_url=os.environ["KAFKA_SCHEMA_REGISTRY_URL"],
+            input_topic=os.environ.get("KAFKA_INPUT_TOPIC", "semantic_groups"),
+            output_topic=os.environ.get("KAFKA_OUTPUT_TOPIC", "predictions"),
+            ground_truth_topic=os.environ.get("KAFKA_GROUND_TRUTH_TOPIC", "ground_truth"),
             enable_tls=os.environ.get("KAFKA_TLS_ENABLED", "false").lower() == "true",
             tls_ca_cert=os.environ.get("KAFKA_TLS_CA_CERT"),
             tls_client_cert=os.environ.get("KAFKA_TLS_CLIENT_CERT"),
@@ -48,6 +48,7 @@ class MLflowConfig:
     tracking_uri: str
     model_name: str
     model_version: str
+    model_stage: str
     fallback_model_version: str | None
     model_load_timeout_seconds: int
 
@@ -56,10 +57,11 @@ class MLflowConfig:
         """Load MLflow configuration from environment variables."""
         return cls(
             tracking_uri=os.environ["MLFLOW_TRACKING_URI"],
-            model_name=os.environ.get("MODEL_NAME", "news_prediction_model"),
-            model_version=os.environ.get("MODEL_VERSION", "production"),
-            fallback_model_version=os.environ.get("FALLBACK_MODEL_VERSION"),
-            model_load_timeout_seconds=int(os.environ.get("MODEL_LOAD_TIMEOUT_SECONDS", "5")),
+            model_name=os.environ.get("MLFLOW_MODEL_NAME", "predictor_model"),
+            model_version=os.environ.get("MLFLOW_MODEL_VERSION", "v1.0.0"),
+            model_stage=os.environ.get("MLFLOW_MODEL_STAGE", "Production"),
+            fallback_model_version=os.environ.get("MLFLOW_FALLBACK_MODEL_VERSION"),
+            model_load_timeout_seconds=int(os.environ.get("MLFLOW_MODEL_LOAD_TIMEOUT_SECONDS", "30")),
         )
 
 
@@ -72,11 +74,11 @@ class FeastConfig:
     offline_store_type: str
     redis_host: str
     redis_port: int
-    redis_db: int
-    redis_ssl: bool
-    delta_lake_path: str
-    feature_freshness_threshold_seconds: int
-    feature_reconciliation_threshold: float
+    redis_db: int | None = None
+    redis_ssl: bool | None = None
+    delta_path: str | None = None
+    feature_freshness_threshold_seconds: int | None = None
+    feature_reconciliation_threshold: float | None = None
 
     @classmethod
     def from_env(cls) -> "FeastConfig":
@@ -93,12 +95,12 @@ class FeastConfig:
             ),
             redis_db=int(os.environ.get("FEAST_REDIS_DB", "0")),
             redis_ssl=os.environ.get("FEAST_REDIS_SSL", "false").lower() == "true",
-            delta_lake_path=os.environ.get("FEAST_DELTA_LAKE_PATH", "/data/delta"),
+            delta_path=os.environ.get("FEAST_DELTA_PATH", os.environ.get("FEAST_DELTA_LAKE_PATH", "/data/delta")),
             feature_freshness_threshold_seconds=int(
-                os.environ.get("FEATURE_FRESHNESS_THRESHOLD_SECONDS", "3600")
+                os.environ.get("FEAST_FEATURE_FRESHNESS_THRESHOLD_SECONDS", "3600")
             ),
             feature_reconciliation_threshold=float(
-                os.environ.get("FEATURE_RECONCILIATION_THRESHOLD", "0.99")
+                os.environ.get("FEAST_FEATURE_RECONCILIATION_THRESHOLD", "0.99")
             ),
         )
 
@@ -166,20 +168,20 @@ class InferenceConfig:
     """Inference configuration parameters."""
 
     batch_size: int
-    inference_timeout_ms: int
-    max_concurrent_requests: int
-    enable_caching: bool
+    timeout_seconds: int
     cache_ttl_seconds: int
+    enable_streaming: bool
+    ab_testing_enabled: bool
 
     @classmethod
     def from_env(cls) -> "InferenceConfig":
         """Load inference configuration from environment variables."""
         return cls(
-            batch_size=int(os.environ.get("BATCH_SIZE", "100")),
-            inference_timeout_ms=int(os.environ.get("INFERENCE_TIMEOUT_MS", "5000")),
-            max_concurrent_requests=int(os.environ.get("MAX_CONCURRENT_REQUESTS", "100")),
-            enable_caching=os.environ.get("ENABLE_CACHING", "true").lower() == "true",
-            cache_ttl_seconds=int(os.environ.get("PREDICTION_CACHE_TTL_SECONDS", "3600")),
+            batch_size=int(os.environ.get("INFERENCE_BATCH_SIZE", "100")),
+            timeout_seconds=int(os.environ.get("INFERENCE_TIMEOUT_SECONDS", "30")),
+            cache_ttl_seconds=int(os.environ.get("INFERENCE_CACHE_TTL_SECONDS", "3600")),
+            enable_streaming=os.environ.get("INFERENCE_ENABLE_STREAMING", "true").lower() == "true",
+            ab_testing_enabled=os.environ.get("INFERENCE_AB_TESTING_ENABLED", "false").lower() == "true",
         )
 
 
@@ -246,25 +248,29 @@ class ValidationConfig:
     feature_reconciliation_threshold: float
     feature_freshness_threshold_seconds: int
     enable_drift_detection: bool
-    drift_check_interval_seconds: int
+    drift_detection_window_hours: int
+    min_samples_for_drift: int
 
     @classmethod
     def from_env(cls) -> "ValidationConfig":
         """Load validation configuration from environment variables."""
         return cls(
             label_consistency_threshold=float(
-                os.environ.get("LABEL_CONSISTENCY_THRESHOLD", "0.85")
+                os.environ.get("VALIDATION_LABEL_CONSISTENCY_THRESHOLD", "0.85")
             ),
             feature_reconciliation_threshold=float(
-                os.environ.get("FEATURE_RECONCILIATION_THRESHOLD", "0.99")
+                os.environ.get("VALIDATION_FEATURE_RECONCILIATION_THRESHOLD", "0.99")
             ),
             feature_freshness_threshold_seconds=int(
-                os.environ.get("FEATURE_FRESHNESS_THRESHOLD_SECONDS", "3600")
+                os.environ.get("VALIDATION_FEATURE_FRESHNESS_THRESHOLD_SECONDS", "3600")
             ),
-            enable_drift_detection=os.environ.get("ENABLE_DRIFT_DETECTION", "true").lower()
+            enable_drift_detection=os.environ.get("VALIDATION_ENABLE_DRIFT_DETECTION", "true").lower()
             == "true",
-            drift_check_interval_seconds=int(
-                os.environ.get("DRIFT_CHECK_INTERVAL_SECONDS", "3600")
+            drift_detection_window_hours=int(
+                os.environ.get("VALIDATION_DRIFT_DETECTION_WINDOW_HOURS", "24")
+            ),
+            min_samples_for_drift=int(
+                os.environ.get("VALIDATION_MIN_SAMPLES_FOR_DRIFT", "30")
             ),
         )
 

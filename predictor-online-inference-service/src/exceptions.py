@@ -445,14 +445,14 @@ class KafkaError(PredictionError):
 class PostgresError(PredictionError):
     """
     Exception raised when PostgreSQL operations fail.
-    
+
     This includes failures in:
     - Database connection
     - Query execution
     - Transaction management
     - Connection pool exhaustion
     """
-    
+
     def __init__(
         self,
         message: str,
@@ -463,7 +463,7 @@ class PostgresError(PredictionError):
     ):
         """
         Initialize PostgreSQL error.
-        
+
         Args:
             message: Human-readable error message
             operation: Database operation that failed (query/insert/update)
@@ -478,4 +478,59 @@ class PostgresError(PredictionError):
             # Truncate query for logging (max 200 chars)
             context["query"] = query[:200] + "..." if len(query) > 200 else query
         super().__init__(message, context, trace_id)
+
+
+class ServiceError(PredictionError):
+    """
+    Exception raised when service-level operations fail.
+
+    This includes failures in:
+    - Service initialization
+    - Service startup
+    - Service shutdown
+    - Component coordination
+    """
+
+    def __init__(
+        self,
+        message: str,
+        details: Optional[Dict[str, Any]] = None,
+        trace_id: Optional[str] = None,
+    ):
+        """
+        Initialize service error.
+
+        Args:
+            message: Human-readable error message
+            details: Additional details about the error
+            trace_id: Distributed tracing identifier
+        """
+        super().__init__(message, details, trace_id)
+
+
+class ValidationError(PredictionError):
+    """
+    Exception raised when validation operations fail.
+
+    This includes failures in:
+    - Data validation
+    - Schema validation
+    - Business rule validation
+    """
+
+    def __init__(
+        self,
+        message: str,
+        details: Optional[Dict[str, Any]] = None,
+        trace_id: Optional[str] = None,
+    ):
+        """
+        Initialize validation error.
+
+        Args:
+            message: Human-readable error message
+            details: Additional details about the validation failure
+            trace_id: Distributed tracing identifier
+        """
+        super().__init__(message, details, trace_id)
 

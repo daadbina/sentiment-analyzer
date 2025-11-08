@@ -64,12 +64,14 @@ class KafkaProducerClient:
 
             # Add TLS configuration if enabled
             if self.config.enable_tls:
-                producer_config.update({
-                    "security.protocol": "SSL",
-                    "ssl.ca.location": self.config.tls_ca_cert,
-                    "ssl.certificate.location": self.config.tls_client_cert,
-                    "ssl.key.location": self.config.tls_client_key,
-                })
+                producer_config.update(
+                    {
+                        "security.protocol": "SSL",
+                        "ssl.ca.location": self.config.tls_ca_cert,
+                        "ssl.certificate.location": self.config.tls_client_cert,
+                        "ssl.key.location": self.config.tls_client_key,
+                    }
+                )
 
             # Create Avro producer
             self._producer = AvroProducer(
@@ -304,4 +306,3 @@ PREDICTION_SCHEMA = {
         },
     ],
 }
-

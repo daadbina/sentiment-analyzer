@@ -39,8 +39,7 @@ class RedisClient:
         self._client: Redis | None = None
 
         logger.info(
-            f"Initializing Redis client: host={config.host}, "
-            f"port={config.port}, db={config.db}"
+            f"Initializing Redis client: host={config.host}, " f"port={config.port}, db={config.db}"
         )
 
     async def connect(self) -> None:
@@ -285,7 +284,9 @@ class RedisClient:
 
                 # Record latency
                 duration_seconds = (datetime.now() - start_time).total_seconds()
-                redis_operation_duration_seconds.labels(operation="delete").observe(duration_seconds)
+                redis_operation_duration_seconds.labels(operation="delete").observe(
+                    duration_seconds
+                )
 
                 logger.debug(
                     f"Cache delete: key={key}, deleted={deleted_count > 0}, "
@@ -341,4 +342,3 @@ class RedisClient:
         except Exception as e:
             logger.warning(f"Redis health check failed: {e}")
             return False
-

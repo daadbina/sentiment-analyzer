@@ -70,12 +70,14 @@ class KafkaConsumerClient:
 
             # Add TLS configuration if enabled
             if self.config.enable_tls:
-                consumer_config.update({
-                    "security.protocol": "SSL",
-                    "ssl.ca.location": self.config.tls_ca_cert,
-                    "ssl.certificate.location": self.config.tls_client_cert,
-                    "ssl.key.location": self.config.tls_client_key,
-                })
+                consumer_config.update(
+                    {
+                        "security.protocol": "SSL",
+                        "ssl.ca.location": self.config.tls_ca_cert,
+                        "ssl.certificate.location": self.config.tls_client_cert,
+                        "ssl.key.location": self.config.tls_client_key,
+                    }
+                )
 
             # Create Avro consumer
             self._consumer = AvroConsumer(consumer_config)
@@ -238,8 +240,7 @@ class KafkaConsumerClient:
                 message_value = msg.value()
 
                 logger.debug(
-                    f"Received message: topic={topic}, partition={partition}, "
-                    f"offset={offset}",
+                    f"Received message: topic={topic}, partition={partition}, " f"offset={offset}",
                     extra={"trace_id": trace_id},
                 )
 
@@ -354,4 +355,3 @@ class KafkaConsumerClient:
         except Exception as e:
             logger.warning(f"Kafka consumer health check failed: {e}")
             return False
-

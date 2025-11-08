@@ -233,7 +233,6 @@ class MLflowModelClient:
             model_uri,
         )
 
-
     async def _load_fallback_model(self, trace_id: str | None = None) -> PyFuncModel:
         """
         Load fallback model.
@@ -330,4 +329,3 @@ class MLflowModelClient:
         except Exception as e:
             logger.warning(f"MLflow health check failed: {e}")
             return False
-

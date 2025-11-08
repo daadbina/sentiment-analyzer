@@ -25,9 +25,7 @@ class FeatureQualityMonitor:
     """
 
     def __init__(
-        self,
-        metrics: MetricsCollector,
-        freshness_threshold_seconds: int = 3600  # 1 hour
+        self, metrics: MetricsCollector, freshness_threshold_seconds: int = 3600  # 1 hour
     ):
         """
         Initialize feature quality monitor.
@@ -44,7 +42,7 @@ class FeatureQualityMonitor:
 
         logger.info(
             "Initialized FeatureQualityMonitor",
-            extra={"freshness_threshold_seconds": freshness_threshold_seconds}
+            extra={"freshness_threshold_seconds": freshness_threshold_seconds},
         )
 
     @trace_span("feature_quality_monitor.track_feature_fetch")
@@ -53,7 +51,7 @@ class FeatureQualityMonitor:
         group_id: str,
         features: dict[str, Any],
         feature_timestamp: datetime | None = None,
-        trace_id: str | None = None
+        trace_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Track a feature fetch operation.
@@ -84,12 +82,11 @@ class FeatureQualityMonitor:
                 "feature_sentiment_mean",
                 "feature_credibility_mean",
                 "feature_entities",
-                "feature_time_density"
+                "feature_time_density",
             ]
 
             missing_features = [
-                f for f in expected_features
-                if f not in features or features[f] is None
+                f for f in expected_features if f not in features or features[f] is None
             ]
 
             # Record fetch
@@ -101,7 +98,7 @@ class FeatureQualityMonitor:
                 "is_fresh": is_fresh,
                 "missing_features": missing_features,
                 "feature_count": len(features),
-                "trace_id": trace_id
+                "trace_id": trace_id,
             }
 
             self._feature_fetch_history.append(fetch_record)
@@ -121,8 +118,8 @@ class FeatureQualityMonitor:
                         "group_id": group_id,
                         "age_seconds": age_seconds,
                         "threshold_seconds": self.freshness_threshold_seconds,
-                        "trace_id": trace_id
-                    }
+                        "trace_id": trace_id,
+                    },
                 )
 
                 self.metrics.increment_stale_features_total()
@@ -134,8 +131,8 @@ class FeatureQualityMonitor:
                     extra={
                         "group_id": group_id,
                         "missing_features": missing_features,
-                        "trace_id": trace_id
-                    }
+                        "trace_id": trace_id,
+                    },
                 )
 
                 self.metrics.increment_missing_features_total(len(missing_features))
@@ -150,8 +147,8 @@ class FeatureQualityMonitor:
                     "group_id": group_id,
                     "is_fresh": is_fresh,
                     "missing_count": len(missing_features),
-                    "trace_id": trace_id
-                }
+                    "trace_id": trace_id,
+                },
             )
 
             return {
@@ -160,31 +157,24 @@ class FeatureQualityMonitor:
                 "missing_features": missing_features,
                 "quality_score": self._calculate_quality_score(
                     is_fresh, len(missing_features), len(expected_features)
-                )
+                ),
             }
 
         except Exception as e:
             logger.error(
                 "Failed to track feature fetch",
-                extra={
-                    "group_id": group_id,
-                    "error": str(e),
-                    "trace_id": trace_id
-                },
-                exc_info=True
+                extra={"group_id": group_id, "error": str(e), "trace_id": trace_id},
+                exc_info=True,
             )
             return {
                 "is_fresh": False,
                 "age_seconds": None,
                 "missing_features": [],
-                "quality_score": 0.0
+                "quality_score": 0.0,
             }
 
     def _calculate_quality_score(
-        self,
-        is_fresh: bool,
-        missing_count: int,
-        total_features: int
+        self, is_fresh: bool, missing_count: int, total_features: int
     ) -> float:
         """
         Calculate feature quality score.
@@ -206,11 +196,8 @@ class FeatureQualityMonitor:
         # Combined score
         return 0.5 * freshness_score + 0.5 * completeness_score
 
-
     def get_feature_freshness_rate(
-        self,
-        time_window_hours: int | None = None,
-        trace_id: str | None = None
+        self, time_window_hours: int | None = None, trace_id: str | None = None
     ) -> float:
         """
         Get feature freshness rate over time window.
@@ -227,7 +214,8 @@ class FeatureQualityMonitor:
             if time_window_hours:
                 cutoff_time = datetime.now() - timedelta(hours=time_window_hours)
                 relevant_fetches = [
-                    f for f in self._feature_fetch_history
+                    f
+                    for f in self._feature_fetch_history
                     if datetime.fromisoformat(f["fetch_time"]) >= cutoff_time
                 ]
             else:
@@ -246,8 +234,8 @@ class FeatureQualityMonitor:
                     "fresh_count": fresh_count,
                     "total_count": len(relevant_fetches),
                     "time_window_hours": time_window_hours,
-                    "trace_id": trace_id
-                }
+                    "trace_id": trace_id,
+                },
             )
 
             return freshness_rate
@@ -258,16 +246,13 @@ class FeatureQualityMonitor:
                 extra={
                     "time_window_hours": time_window_hours,
                     "error": str(e),
-                    "trace_id": trace_id
+                    "trace_id": trace_id,
                 },
-                exc_info=True
+                exc_info=True,
             )
             return 0.0
 
-    def get_feature_reconciliation_rate(
-        self,
-        trace_id: str | None = None
-    ) -> float:
+    def get_feature_reconciliation_rate(self, trace_id: str | None = None) -> float:
         """
         Get feature reconciliation rate.
 
@@ -283,17 +268,12 @@ class FeatureQualityMonitor:
         # TODO: Implement actual reconciliation logic
         # This requires comparing offline and online feature values
 
-        logger.debug(
-            "Feature reconciliation rate requested",
-            extra={"trace_id": trace_id}
-        )
+        logger.debug("Feature reconciliation rate requested", extra={"trace_id": trace_id})
 
         return 0.99  # Placeholder
 
     def generate_quality_report(
-        self,
-        time_window_hours: int = 24,
-        trace_id: str | None = None
+        self, time_window_hours: int = 24, trace_id: str | None = None
     ) -> dict[str, Any]:
         """
         Generate feature quality report.
@@ -308,7 +288,8 @@ class FeatureQualityMonitor:
         try:
             cutoff_time = datetime.now() - timedelta(hours=time_window_hours)
             relevant_fetches = [
-                f for f in self._feature_fetch_history
+                f
+                for f in self._feature_fetch_history
                 if datetime.fromisoformat(f["fetch_time"]) >= cutoff_time
             ]
 
@@ -318,7 +299,7 @@ class FeatureQualityMonitor:
                     "total_fetches": 0,
                     "freshness_rate": 0.0,
                     "missing_features_by_name": {},
-                    "stale_features_count": 0
+                    "stale_features_count": 0,
                 }
 
             # Calculate metrics
@@ -342,13 +323,10 @@ class FeatureQualityMonitor:
                 "freshness_rate": freshness_rate,
                 "missing_features_by_name": dict(missing_by_name),
                 "total_missing_features": sum(missing_by_name.values()),
-                "generated_at": datetime.now().isoformat()
+                "generated_at": datetime.now().isoformat(),
             }
 
-            logger.info(
-                "Generated feature quality report",
-                extra={**report, "trace_id": trace_id}
-            )
+            logger.info("Generated feature quality report", extra={**report, "trace_id": trace_id})
 
             return report
 
@@ -358,14 +336,11 @@ class FeatureQualityMonitor:
                 extra={
                     "time_window_hours": time_window_hours,
                     "error": str(e),
-                    "trace_id": trace_id
+                    "trace_id": trace_id,
                 },
-                exc_info=True
+                exc_info=True,
             )
-            return {
-                "time_window_hours": time_window_hours,
-                "error": str(e)
-            }
+            return {"time_window_hours": time_window_hours, "error": str(e)}
 
     def clear_history(self, older_than_hours: int | None = None) -> int:
         """
@@ -389,7 +364,8 @@ class FeatureQualityMonitor:
         original_count = len(self._feature_fetch_history)
 
         self._feature_fetch_history = [
-            f for f in self._feature_fetch_history
+            f
+            for f in self._feature_fetch_history
             if datetime.fromisoformat(f["fetch_time"]) >= cutoff_time
         ]
 
@@ -400,9 +376,8 @@ class FeatureQualityMonitor:
             extra={
                 "cleared_count": cleared_count,
                 "remaining_count": len(self._feature_fetch_history),
-                "older_than_hours": older_than_hours
-            }
+                "older_than_hours": older_than_hours,
+            },
         )
 
         return cleared_count
-

@@ -531,4 +531,3 @@ async def get_model_metadata() -> ModelMetadataResponse:
                 "message": str(e),
             },
         )
-

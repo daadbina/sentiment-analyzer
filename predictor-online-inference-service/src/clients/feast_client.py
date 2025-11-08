@@ -289,4 +289,3 @@ class FeastClient:
         except Exception as e:
             logger.warning(f"Feast health check failed: {e}")
             return False
-

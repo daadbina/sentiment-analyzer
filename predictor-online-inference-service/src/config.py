@@ -85,13 +85,21 @@ class FeastConfig:
             repo_path=os.environ["FEAST_REPO_PATH"],
             online_store_type=os.environ.get("FEAST_ONLINE_STORE_TYPE", "redis"),
             offline_store_type=os.environ.get("FEAST_OFFLINE_STORE_TYPE", "file"),
-            redis_host=os.environ.get("FEAST_REDIS_HOST", os.environ.get("REDIS_HOST", "localhost")),
-            redis_port=int(os.environ.get("FEAST_REDIS_PORT", os.environ.get("REDIS_PORT", "6379"))),
+            redis_host=os.environ.get(
+                "FEAST_REDIS_HOST", os.environ.get("REDIS_HOST", "localhost")
+            ),
+            redis_port=int(
+                os.environ.get("FEAST_REDIS_PORT", os.environ.get("REDIS_PORT", "6379"))
+            ),
             redis_db=int(os.environ.get("FEAST_REDIS_DB", "0")),
             redis_ssl=os.environ.get("FEAST_REDIS_SSL", "false").lower() == "true",
             delta_lake_path=os.environ.get("FEAST_DELTA_LAKE_PATH", "/data/delta"),
-            feature_freshness_threshold_seconds=int(os.environ.get("FEATURE_FRESHNESS_THRESHOLD_SECONDS", "3600")),
-            feature_reconciliation_threshold=float(os.environ.get("FEATURE_RECONCILIATION_THRESHOLD", "0.99")),
+            feature_freshness_threshold_seconds=int(
+                os.environ.get("FEATURE_FRESHNESS_THRESHOLD_SECONDS", "3600")
+            ),
+            feature_reconciliation_threshold=float(
+                os.environ.get("FEATURE_RECONCILIATION_THRESHOLD", "0.99")
+            ),
         )
 
 
@@ -244,11 +252,20 @@ class ValidationConfig:
     def from_env(cls) -> "ValidationConfig":
         """Load validation configuration from environment variables."""
         return cls(
-            label_consistency_threshold=float(os.environ.get("LABEL_CONSISTENCY_THRESHOLD", "0.85")),
-            feature_reconciliation_threshold=float(os.environ.get("FEATURE_RECONCILIATION_THRESHOLD", "0.99")),
-            feature_freshness_threshold_seconds=int(os.environ.get("FEATURE_FRESHNESS_THRESHOLD_SECONDS", "3600")),
-            enable_drift_detection=os.environ.get("ENABLE_DRIFT_DETECTION", "true").lower() == "true",
-            drift_check_interval_seconds=int(os.environ.get("DRIFT_CHECK_INTERVAL_SECONDS", "3600")),
+            label_consistency_threshold=float(
+                os.environ.get("LABEL_CONSISTENCY_THRESHOLD", "0.85")
+            ),
+            feature_reconciliation_threshold=float(
+                os.environ.get("FEATURE_RECONCILIATION_THRESHOLD", "0.99")
+            ),
+            feature_freshness_threshold_seconds=int(
+                os.environ.get("FEATURE_FRESHNESS_THRESHOLD_SECONDS", "3600")
+            ),
+            enable_drift_detection=os.environ.get("ENABLE_DRIFT_DETECTION", "true").lower()
+            == "true",
+            drift_check_interval_seconds=int(
+                os.environ.get("DRIFT_CHECK_INTERVAL_SECONDS", "3600")
+            ),
         )
 
 
@@ -357,4 +374,3 @@ def load_config() -> Config:
     _config = Config.from_env()
     _config.validate()
     return _config
-

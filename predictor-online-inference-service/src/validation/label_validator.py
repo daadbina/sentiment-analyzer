@@ -180,4 +180,3 @@ class LabelValidator:
                 group_id=label["group_id"],
                 trace_id=trace_id,
             )
-

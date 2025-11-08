@@ -360,4 +360,3 @@ class PostgresClient:
         except Exception as e:
             logger.warning(f"PostgreSQL health check failed: {e}")
             return False
-

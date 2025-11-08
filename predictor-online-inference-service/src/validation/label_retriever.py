@@ -279,4 +279,3 @@ class LabelRetriever:
                     source="postgres",
                     trace_id=trace_id,
                 )
-

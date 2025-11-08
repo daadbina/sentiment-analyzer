@@ -220,7 +220,11 @@ class ModelManager:
             float(features.get("feature_num_sources", 0)),
             float(features.get("feature_sentiment_mean", 0)),
             float(features.get("feature_credibility_mean", 0)),
-            float(len(features.get("feature_entities", [])) if isinstance(features.get("feature_entities"), list) else 0),
+            float(
+                len(features.get("feature_entities", []))
+                if isinstance(features.get("feature_entities"), list)
+                else 0
+            ),
             float(features.get("feature_time_density", 0)),
         ]
 
@@ -250,4 +254,3 @@ class ModelManager:
             List of model version identifiers
         """
         return list(self._models.keys())
-

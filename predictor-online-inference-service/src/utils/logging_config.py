@@ -29,7 +29,9 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
         super().__init__(*args, **kwargs)
         self.service_name = service_name
 
-    def add_fields(self, log_record: dict[str, Any], record: logging.LogRecord, message_dict: dict[str, Any]) -> None:
+    def add_fields(
+        self, log_record: dict[str, Any], record: logging.LogRecord, message_dict: dict[str, Any]
+    ) -> None:
         """
         Add custom fields to log record.
 
@@ -70,10 +72,28 @@ class CustomJsonFormatter(jsonlogger.JsonFormatter):
 
         # Add any other custom fields from extra
         for key, value in record.__dict__.items():
-            if key not in ["name", "msg", "args", "created", "filename", "funcName",
-                          "levelname", "levelno", "lineno", "module", "msecs",
-                          "pathname", "process", "processName", "relativeCreated",
-                          "thread", "threadName", "exc_info", "exc_text", "stack_info"]:
+            if key not in [
+                "name",
+                "msg",
+                "args",
+                "created",
+                "filename",
+                "funcName",
+                "levelname",
+                "levelno",
+                "lineno",
+                "module",
+                "msecs",
+                "pathname",
+                "process",
+                "processName",
+                "relativeCreated",
+                "thread",
+                "threadName",
+                "exc_info",
+                "exc_text",
+                "stack_info",
+            ]:
                 if key not in log_record:
                     log_record[key] = value
 
@@ -237,8 +257,11 @@ class ContextLogger:
             trace_id=merged_context.get("trace_id"),
             group_id=merged_context.get("group_id"),
             model_version=merged_context.get("model_version"),
-            **{k: v for k, v in merged_context.items()
-               if k not in ["trace_id", "group_id", "model_version"]},
+            **{
+                k: v
+                for k, v in merged_context.items()
+                if k not in ["trace_id", "group_id", "model_version"]
+            },
         )
 
 
@@ -274,4 +297,3 @@ def get_logger(
         model_version=model_version,
         **extra_context,
     )
-

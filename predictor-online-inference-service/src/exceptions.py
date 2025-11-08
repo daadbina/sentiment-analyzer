@@ -91,6 +91,7 @@ class FeatureError(PredictionError):
 
     This is the parent class for all feature store and feature validation errors.
     """
+
     pass
 
 
@@ -533,4 +534,3 @@ class ValidationError(PredictionError):
             trace_id: Distributed tracing identifier
         """
         super().__init__(message, details, trace_id)
-

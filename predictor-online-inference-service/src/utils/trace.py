@@ -48,9 +48,7 @@ def initialize_tracing(
 
     try:
         # Create resource with service name
-        resource = Resource(attributes={
-            SERVICE_NAME: service_name
-        })
+        resource = Resource(attributes={SERVICE_NAME: service_name})
 
         # Create tracer provider
         provider = TracerProvider(resource=resource)
@@ -163,6 +161,7 @@ def trace_function(name: str | None = None):
         def predict(features):
             return model.predict(features)
     """
+
     def decorator(func):
         span_name = name or func.__name__
 
@@ -320,4 +319,3 @@ class TracingContext:
             exception: Exception to record
         """
         record_span_exception(self._span, exception)
-

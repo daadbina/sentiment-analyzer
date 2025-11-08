@@ -238,4 +238,3 @@ class StreamingPredictor:
             True if running, False otherwise
         """
         return self._running
-

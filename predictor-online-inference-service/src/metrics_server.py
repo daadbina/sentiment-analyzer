@@ -107,9 +107,7 @@ class MetricsServer:
 
             self._running = True
 
-            logger.info(
-                f"Metrics server started successfully on http://{self.host}:{self.port}"
-            )
+            logger.info(f"Metrics server started successfully on http://{self.host}:{self.port}")
             logger.info(f"Metrics endpoint: http://{self.host}:{self.port}/metrics")
 
         except Exception as e:
@@ -188,4 +186,3 @@ if __name__ == "__main__":
     )
 
     asyncio.run(run_metrics_server())
-

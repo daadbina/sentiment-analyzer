@@ -48,17 +48,12 @@ class ModelLoader:
 
         logger.info(
             "Initialized ModelLoader",
-            extra={
-                "tracking_uri": config.tracking_uri,
-                "model_name": config.model_name
-            }
+            extra={"tracking_uri": config.tracking_uri, "model_name": config.model_name},
         )
 
     @trace_span("model_loader.lazy_load_model")
     async def lazy_load_model(
-        self,
-        model_version: str | None = None,
-        trace_id: str | None = None
+        self, model_version: str | None = None, trace_id: str | None = None
     ) -> Any:
         """
         Lazy load model from MLflow.
@@ -80,10 +75,7 @@ class ModelLoader:
             if self._model and self._model_version == model_version:
                 logger.debug(
                     "Model already loaded",
-                    extra={
-                        "model_version": model_version,
-                        "trace_id": trace_id
-                    }
+                    extra={"model_version": model_version, "trace_id": trace_id},
                 )
                 return self._model
 
@@ -94,8 +86,8 @@ class ModelLoader:
                 extra={
                     "model_name": self.config.model_name,
                     "model_version": model_version,
-                    "trace_id": trace_id
-                }
+                    "trace_id": trace_id,
+                },
             )
 
             # Set MLflow tracking URI
@@ -114,14 +106,13 @@ class ModelLoader:
             client = MlflowClient(tracking_uri=self.config.tracking_uri)
             if model_version:
                 model_metadata = client.get_model_version(
-                    name=self.config.model_name,
-                    version=model_version
+                    name=self.config.model_name, version=model_version
                 )
                 self._model_metadata = {
                     "version": model_metadata.version,
                     "run_id": model_metadata.run_id,
                     "status": model_metadata.status,
-                    "creation_timestamp": model_metadata.creation_timestamp
+                    "creation_timestamp": model_metadata.creation_timestamp,
                 }
 
             # Calculate load time
@@ -144,8 +135,8 @@ class ModelLoader:
                     "model_version": self._model_version,
                     "load_time_ms": load_time_ms,
                     "metadata": self._model_metadata,
-                    "trace_id": trace_id
-                }
+                    "trace_id": trace_id,
+                },
             )
 
             return self._model
@@ -157,9 +148,9 @@ class ModelLoader:
                     "model_name": self.config.model_name,
                     "model_version": model_version,
                     "error": str(e),
-                    "trace_id": trace_id
+                    "trace_id": trace_id,
                 },
-                exc_info=True
+                exc_info=True,
             )
 
             self.metrics.increment_model_load_failures()
@@ -168,10 +159,7 @@ class ModelLoader:
             return await self.fallback_to_baseline_model(trace_id=trace_id)
 
     @trace_span("model_loader.validate_model")
-    async def validate_model(
-        self,
-        trace_id: str | None = None
-    ) -> bool:
+    async def validate_model(self, trace_id: str | None = None) -> bool:
         """
         Validate loaded model.
 
@@ -186,32 +174,25 @@ class ModelLoader:
         """
         if not self._model:
             raise ModelLoadError(
-                message="No model loaded to validate",
-                details={"operation": "validate_model"}
+                message="No model loaded to validate", details={"operation": "validate_model"}
             )
 
         try:
             logger.debug(
                 "Validating model",
-                extra={
-                    "model_version": self._model_version,
-                    "trace_id": trace_id
-                }
+                extra={"model_version": self._model_version, "trace_id": trace_id},
             )
 
             # Check if model has predict method
-            if not hasattr(self._model, 'predict'):
+            if not hasattr(self._model, "predict"):
                 raise ModelLoadError(
                     message="Model does not have predict method",
-                    details={"model_version": self._model_version}
+                    details={"model_version": self._model_version},
                 )
 
             logger.info(
                 "Model validation successful",
-                extra={
-                    "model_version": self._model_version,
-                    "trace_id": trace_id
-                }
+                extra={"model_version": self._model_version, "trace_id": trace_id},
             )
 
             return True
@@ -219,23 +200,16 @@ class ModelLoader:
         except Exception as e:
             logger.error(
                 "Model validation failed",
-                extra={
-                    "model_version": self._model_version,
-                    "error": str(e),
-                    "trace_id": trace_id
-                },
-                exc_info=True
+                extra={"model_version": self._model_version, "error": str(e), "trace_id": trace_id},
+                exc_info=True,
             )
             raise ModelLoadError(
                 message=f"Model validation failed: {str(e)}",
-                details={"model_version": self._model_version}
+                details={"model_version": self._model_version},
             ) from e
 
     @trace_span("model_loader.warmup_model")
-    async def warmup_model(
-        self,
-        trace_id: str | None = None
-    ) -> None:
+    async def warmup_model(self, trace_id: str | None = None) -> None:
         """
         Warmup model with dummy prediction.
 
@@ -243,10 +217,7 @@ class ModelLoader:
             trace_id: Trace ID for correlation
         """
         if not self._model:
-            logger.warning(
-                "No model loaded to warmup",
-                extra={"trace_id": trace_id}
-            )
+            logger.warning("No model loaded to warmup", extra={"trace_id": trace_id})
             return
 
         try:
@@ -254,47 +225,36 @@ class ModelLoader:
 
             logger.debug(
                 "Warming up model",
-                extra={
-                    "model_version": self._model_version,
-                    "trace_id": trace_id
-                }
+                extra={"model_version": self._model_version, "trace_id": trace_id},
             )
 
             # Create dummy input with expected features
-            dummy_input = pd.DataFrame({
-                "feature_num_sources": [5],
-                "feature_sentiment_mean": [0.5],
-                "feature_credibility_mean": [0.7],
-                "feature_time_density": [0.3],
-                "feature_entities_count": [3]
-            })
+            dummy_input = pd.DataFrame(
+                {
+                    "feature_num_sources": [5],
+                    "feature_sentiment_mean": [0.5],
+                    "feature_credibility_mean": [0.7],
+                    "feature_time_density": [0.3],
+                    "feature_entities_count": [3],
+                }
+            )
 
             # Make dummy prediction
             _ = self._model.predict(dummy_input)
 
             logger.info(
                 "Model warmup successful",
-                extra={
-                    "model_version": self._model_version,
-                    "trace_id": trace_id
-                }
+                extra={"model_version": self._model_version, "trace_id": trace_id},
             )
 
         except Exception as e:
             logger.warning(
                 "Model warmup failed (non-critical)",
-                extra={
-                    "model_version": self._model_version,
-                    "error": str(e),
-                    "trace_id": trace_id
-                }
+                extra={"model_version": self._model_version, "error": str(e), "trace_id": trace_id},
             )
 
     @trace_span("model_loader.fallback_to_baseline_model")
-    async def fallback_to_baseline_model(
-        self,
-        trace_id: str | None = None
-    ) -> Any:
+    async def fallback_to_baseline_model(self, trace_id: str | None = None) -> Any:
         """
         Fallback to baseline model.
 
@@ -308,10 +268,7 @@ class ModelLoader:
             ModelLoadError: If baseline model loading fails
         """
         try:
-            logger.warning(
-                "Falling back to baseline model",
-                extra={"trace_id": trace_id}
-            )
+            logger.warning("Falling back to baseline model", extra={"trace_id": trace_id})
 
             # Check if baseline already loaded
             if self._baseline_model:
@@ -326,10 +283,10 @@ class ModelLoader:
             if not os.path.exists(baseline_path):
                 raise ModelLoadError(
                     message=f"Baseline model not found: {baseline_path}",
-                    details={"baseline_path": baseline_path}
+                    details={"baseline_path": baseline_path},
                 )
 
-            with open(baseline_path, 'rb') as f:
+            with open(baseline_path, "rb") as f:
                 self._baseline_model = pickle.load(f)
 
             self._model = self._baseline_model
@@ -338,10 +295,7 @@ class ModelLoader:
 
             logger.info(
                 "Baseline model loaded",
-                extra={
-                    "baseline_path": baseline_path,
-                    "trace_id": trace_id
-                }
+                extra={"baseline_path": baseline_path, "trace_id": trace_id},
             )
 
             return self._baseline_model
@@ -349,15 +303,11 @@ class ModelLoader:
         except Exception as e:
             logger.error(
                 "Failed to load baseline model",
-                extra={
-                    "error": str(e),
-                    "trace_id": trace_id
-                },
-                exc_info=True
+                extra={"error": str(e), "trace_id": trace_id},
+                exc_info=True,
             )
             raise ModelLoadError(
-                message=f"Failed to load baseline model: {str(e)}",
-                details={}
+                message=f"Failed to load baseline model: {str(e)}", details={}
             ) from e
 
     def get_model(self) -> Any | None:
@@ -375,4 +325,3 @@ class ModelLoader:
     def is_using_baseline(self) -> bool:
         """Check if using baseline model."""
         return self._is_using_baseline
-

@@ -97,7 +97,7 @@ class BatchPredictor:
                 # Split into smaller batches if needed
                 predictions = []
                 for i in range(0, len(group_ids), self.batch_size):
-                    batch = group_ids[i:i + self.batch_size]
+                    batch = group_ids[i : i + self.batch_size]
                     batch_predictions = await self._predict_batch_chunk(
                         batch,
                         domain,
@@ -148,10 +148,7 @@ class BatchPredictor:
         cached_predictions = await self._get_cached_predictions(group_ids, trace_id)
 
         # Identify groups needing prediction
-        groups_to_predict = [
-            gid for gid in group_ids
-            if gid not in cached_predictions
-        ]
+        groups_to_predict = [gid for gid in group_ids if gid not in cached_predictions]
 
         if not groups_to_predict:
             logger.debug(
@@ -193,7 +190,6 @@ class BatchPredictor:
 
         # Combine cached and new predictions
         return list(cached_predictions.values()) + new_predictions
-
 
     async def _predict_single(
         self,
@@ -290,10 +286,7 @@ class BatchPredictor:
         cached = {}
 
         # Fetch cached predictions concurrently
-        tasks = [
-            self.prediction_cache.get_cached_prediction(gid, trace_id)
-            for gid in group_ids
-        ]
+        tasks = [self.prediction_cache.get_cached_prediction(gid, trace_id) for gid in group_ids]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for group_id, result in zip(group_ids, results, strict=False):
@@ -311,4 +304,3 @@ class BatchPredictor:
                 MetricsCollector.record_cache_miss()
 
         return cached
-

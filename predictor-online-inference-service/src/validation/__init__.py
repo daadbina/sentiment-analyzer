@@ -16,4 +16,3 @@ __all__ = [
     "DriftDetector",
     "LABEL_FRESHNESS_THRESHOLDS",
 ]
-

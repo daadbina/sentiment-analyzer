@@ -12,8 +12,9 @@ logger = StructuredLogger(__name__)
 
 def setup_logging():
     """Setup logging configuration."""
+    log_level = getattr(logging, config.monitoring.log_level.upper(), logging.INFO)
     logging.basicConfig(
-        level=logging.INFO,
+        level=log_level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 

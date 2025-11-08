@@ -45,10 +45,10 @@ class FeastRegistry:
 
     def register_feature_view(self, feature_view: FeatureView) -> bool:
         """Register a feature view in Feast.
-        
+
         Args:
             feature_view: Feature view to register
-            
+
         Returns:
             True if registration successful
         """
@@ -56,9 +56,18 @@ class FeastRegistry:
             raise FeastWriteError("Not connected to Feast registry")
 
         try:
+            logger.debug(
+                "Registering feature view",
+                feature_view_name=feature_view.name,
+                num_features=len(feature_view.schema) if hasattr(feature_view, 'schema') else 0,
+                entities=str(feature_view.entities),
+            )
+
             # Apply feature view to registry
+            logger.debug("Calling fs.apply() with feature view")
             self.fs.apply([feature_view])
-            
+            logger.debug("fs.apply() completed successfully")
+
             logger.info(
                 "Feature view registered",
                 feature_view_name=feature_view.name,
@@ -70,6 +79,8 @@ class FeastRegistry:
                 "Failed to register feature view",
                 feature_view_name=feature_view.name,
                 error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
             )
             raise FeastWriteError(f"Failed to register feature view: {str(e)}")
 

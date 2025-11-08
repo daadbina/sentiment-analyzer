@@ -103,13 +103,21 @@ class FeatureEngineeringService:
             logger.info("Initializing Feast registry")
 
             # Connect to Feast registry
+            logger.debug("Connecting to Feast registry")
             self.feast_registry.connect()
+            logger.debug("Feast registry connected")
 
             # Create and register feature view
+            logger.debug("Creating semantic group feature view")
             feature_view = create_semantic_group_feature_view()
+            logger.debug("Feature view created", feature_view_name=feature_view.name)
+
+            logger.debug("Registering feature view in Feast")
             self.feast_registry.register_feature_view(feature_view)
+            logger.debug("Feature view registered")
 
             # Verify feature view is registered
+            logger.debug("Verifying feature view registration")
             fv = self.feast_registry.get_feature_view("semantic_group_features")
             if fv:
                 logger.info(
@@ -125,6 +133,7 @@ class FeatureEngineeringService:
                 "Error initializing Feast registry",
                 error=str(e),
                 error_type=type(e).__name__,
+                exc_info=True,
             )
             # Don't fail startup, just warn
             logger.warning("Continuing without Feast registry initialization")

@@ -45,14 +45,14 @@ class FeastClient:
         self,
         group_id: str,
         features: Dict[str, Any],
-        feature_view_name: str = "semantic_group_features",
+        push_source_name: str = "semantic_group_features_push",
     ) -> bool:
         """Write features to Feast offline store (Delta Lake).
 
         Args:
             group_id: Semantic group ID
             features: Feature dictionary
-            feature_view_name: Name of feature view
+            push_source_name: Name of push source (not feature view name)
 
         Returns:
             True if successful
@@ -78,12 +78,14 @@ class FeastClient:
                 feature_count=len(features),
                 columns=list(df.columns),
                 dtypes={col: str(dtype) for col, dtype in df.dtypes.items()},
+                push_source_name=push_source_name,
             )
 
             # Write to Feast offline store using push method
             # This writes to the configured offline store (Delta Lake)
+            # NOTE: Must use push_source_name, not feature_view_name
             self.fs.push(
-                push_source_name=feature_view_name,
+                push_source_name=push_source_name,
                 df=df,
             )
 

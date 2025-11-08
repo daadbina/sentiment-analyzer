@@ -18,6 +18,7 @@ def create_semantic_group_entity() -> Entity:
     """
     return Entity(
         name="group_id",
+        join_keys=["group_id"],  # Specify the join key column name
         value_type=ValueType.STRING,
         description="Semantic group ID from clustering service",
     )
@@ -116,6 +117,9 @@ def create_semantic_group_feature_view(
         entities=[group_id],
         ttl=timedelta(days=ttl_days),
         schema=[
+            # Entity key (required for Feast to serialize entity keys)
+            # The entity column name must match the join_keys in the Entity definition
+            Field(name="group_id", dtype=String),
             # Source features (4)
             Field(name="num_sources", dtype=Int32),
             Field(name="source_credibility_avg", dtype=Float32),

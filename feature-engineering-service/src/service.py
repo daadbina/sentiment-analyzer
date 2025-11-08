@@ -243,6 +243,7 @@ class FeatureEngineeringService:
                     published_at=article_dict.get("published_at", ""),
                     sentiment_score=float(article_dict.get("sentiment_score", 0.0)),
                     entities=article_dict.get("entities", []),
+                    publisher_credibility=article_dict.get("publisher_credibility"),
                 )
                 articles.append(article)
             except Exception as e:

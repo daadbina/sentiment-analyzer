@@ -189,13 +189,12 @@ class EmbeddingService:
                     # entities: Available in entities_extracted topic, but not consumed by embedding-service
                 }
                 logger.info(
-                    f"Extracted metadata for article {msg.get('article_id', 'unknown')}",
-                    article_id=msg.get("article_id", ""),
-                    publisher_credibility=msg.get("publisher_credibility", 0.5),
-                    domain=msg.get("domain_category", "general"),
-                    source=msg.get("source", "unknown"),
-                    has_body=bool(msg.get("normalized_body", "")),
-                    has_title=bool(msg.get("title", "")),
+                    f"Extracted metadata for article {msg.get('article_id', 'unknown')}: "
+                    f"publisher_credibility={msg.get('publisher_credibility', 0.5)}, "
+                    f"domain={msg.get('domain_category', 'general')}, "
+                    f"source={msg.get('source', 'unknown')}, "
+                    f"has_body={bool(msg.get('normalized_body', ''))}, "
+                    f"has_title={bool(msg.get('title', ''))}"
                 )
                 metadata.append(meta)
 

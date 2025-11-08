@@ -82,6 +82,7 @@ class QdrantVectorClient:
                                 point.payload.get("sentiment_score", 0.0)
                             ),
                             "entities": point.payload.get("entities", []),
+                            "publisher_credibility": point.payload.get("publisher_credibility"),
                         }
                         articles.append(article_data)
 
@@ -111,6 +112,7 @@ class QdrantVectorClient:
                                         point.payload.get("sentiment_score", 0.0)
                                     ),
                                     "entities": point.payload.get("entities", []),
+                                    "publisher_credibility": point.payload.get("publisher_credibility"),
                                 }
                                 articles.append(article_data)
                                 break

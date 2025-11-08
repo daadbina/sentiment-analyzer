@@ -190,6 +190,13 @@ class FeastClient:
                     try:
                         features_dict = json.loads(value)
                         logger.debug(f"Found features for {entity_id}: {list(features_dict.keys())[:5]}...")
+
+                        # Log sample feature values for debugging
+                        if i == 0:  # Log details for first entity only
+                            logger.info(f"Sample feature values from Redis for {entity_id}:")
+                            for feat_name in list(features_dict.keys())[:10]:
+                                logger.info(f"  {feat_name}: {features_dict[feat_name]}")
+
                         # Extract requested features
                         for feature in features:
                             # Feature name format: semantic_group_features:feature_name
@@ -221,6 +228,16 @@ class FeastClient:
         logger.info(f"Retrieved {len(feature_df)} rows from online store")
         logger.info(f"Feature columns: {list(feature_df.columns)}")
         logger.info(f"Feature dtypes:\n{feature_df.dtypes}")
+
+        # Log feature statistics to identify constant features
+        numeric_cols = feature_df.select_dtypes(include=['number']).columns
+        if len(numeric_cols) > 0:
+            logger.info("Feature statistics from Redis:")
+            for col in numeric_cols:
+                unique_vals = feature_df[col].nunique()
+                min_val = feature_df[col].min()
+                max_val = feature_df[col].max()
+                logger.info(f"  {col}: unique={unique_vals}, min={min_val}, max={max_val}")
 
         return feature_df
 

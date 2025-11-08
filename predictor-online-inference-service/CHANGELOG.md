@@ -46,6 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Contract tests for Avro schemas (Task 47, 20+ tests)
 - Integration tests for feature reconciliation (Task 48, 8+ tests)
 - Integration tests for label validation (Task 49, 12+ tests)
+- Performance tests for latency (Task 50, 15+ tests)
+- Performance tests for throughput (Task 50, 12+ tests)
 
 ### Changed
 - Enhanced main.py with signal handling and startup checks

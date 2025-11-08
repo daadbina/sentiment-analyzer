@@ -18,10 +18,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Feature Quality Monitor for freshness and completeness tracking (Task 30)
 - Drift Detector for feature and prediction drift monitoring (Task 31)
 - Main Service Orchestrator for component coordination (Task 36)
+- Graceful shutdown with SIGTERM/SIGINT signal handlers (Task 37)
+- Comprehensive startup health checks for all dependencies (Task 38)
+- Command-line argument parsing for flexible configuration
 - Additional metrics methods for new components
 - ServiceError and ValidationError exception types
 
+### Added - Testing
+- Unit tests for ModelLoader (20+ tests, ≥90% coverage)
+- Unit tests for ConfidenceScorer (20+ tests, ≥90% coverage)
+- Unit tests for PredictionValidator (20+ tests, ≥90% coverage)
+- Unit tests for FeatureStoreAdapter (20+ tests, ≥90% coverage)
+- Unit tests for DriftDetector (20+ tests, ≥90% coverage)
+- Unit tests for FeatureQualityMonitor (20+ tests, ≥90% coverage)
+
 ### Changed
+- Enhanced main.py with signal handling and startup checks
 - Updated metrics.py with methods for feature store adapter, model loader, and validation components
 - Updated exceptions.py with service-level error types
 - Updated __init__.py files in features, models, inference, and validation packages

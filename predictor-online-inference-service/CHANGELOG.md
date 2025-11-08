@@ -72,11 +72,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated InferenceConfig to use timeout_seconds, enable_streaming, ab_testing_enabled (Task 58)
 - Updated ValidationConfig to include drift_detection_window_hours and min_samples_for_drift (Task 58)
 - Updated FeastConfig to use delta_path parameter (Task 58)
+- Updated PostgresConfig to have defaults for user, password, database (Task 58)
+- Updated kafka_consumer.py and kafka_producer.py to use new config attribute names (Task 58)
+- Updated config.validate() to use bootstrap_servers instead of brokers (Task 58)
+
+### Test Results
+- Unit tests: 82 passed, 36 failed, 81 errors (improved from 51 passed, 51 failed, 97 errors)
+- Config tests: 7/8 passing
+- Fixed 15 test failures and 16 test errors through config updates
 
 ### Known Issues
-- Unit test failures reduced but some remain due to method signature mismatches
+- 36 unit test failures remain (mostly in confidence_scorer, streaming_predictor, exceptions)
+- 81 unit test errors remain (mostly in drift_detector, feature_quality_monitor, feature_store_adapter, model_loader, prediction_validator)
 - 56 remaining ruff linting issues (mostly B904 raise-without-from, SIM102 collapsible-if)
-- Need to verify all downstream code uses updated config parameter names
+- 1 config test failure (test_validate_failure_missing_kafka needs environment variable cleanup)
 - TLS configuration for Kafka, Redis, PostgreSQL (Task 53)
 - Prometheus alerting rules with 20+ alerts (Task 55)
 - Dedicated Prometheus metrics server on port 9109 (Task 54)

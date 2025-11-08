@@ -42,7 +42,7 @@ class FeatureRetriever:
         Retrieve features for entities in time range.
 
         Args:
-            entity_ids: List of entity IDs (article IDs)
+            entity_ids: List of entity IDs (group IDs from semantic groups)
             start_date: Start date for feature retrieval
             end_date: End date for feature retrieval
             features: Optional list of specific features to retrieve
@@ -65,17 +65,26 @@ class FeatureRetriever:
                 )
 
                 # Create entity dataframe with timestamps
+                # Use group_id as entity (semantic groups from feature-engineering-service)
                 entity_df = pd.DataFrame(
                     {
-                        "article_id": entity_ids,
+                        "group_id": entity_ids,
                         "timestamp": [end_date] * len(entity_ids),
                     }
                 )
 
                 # Get features from Feast
+                feature_list = features or self._get_default_features()
+                # Format features with feature view prefix for Feast
+                formatted_features = [
+                    f"semantic_group_features:{feature}" for feature in feature_list
+                ]
+
+                logger.debug(f"Formatted features: {formatted_features}")
+
                 feature_df = self.feast_client.get_features(
                     entity_df=entity_df,
-                    features=features or self._get_default_features(),
+                    features=formatted_features,
                     timestamp_column="timestamp",
                 )
 
@@ -104,20 +113,41 @@ class FeatureRetriever:
         Get default feature list.
 
         Returns:
-            List of feature names
+            List of feature names from feature-engineering-service
         """
-        # These should match features defined in Feast registry
+        # These features are computed by feature-engineering-service
+        # and stored in Feast offline store
         return [
-            "article_features__word_count",
-            "article_features__sentence_count",
-            "article_features__avg_word_length",
-            "article_features__language_confidence",
-            "article_features__source_credibility",
-            "article_features__publication_frequency",
-            "temporal_features__hour_of_day",
-            "temporal_features__day_of_week",
-            "temporal_features__month_of_year",
-            "temporal_features__days_since_publication",
+            # Source features (4)
+            "num_sources",
+            "source_credibility_avg",
+            "source_credibility_std",
+            "source_diversity_score",
+            # Temporal features (4)
+            "time_span_hours",
+            "publication_velocity",
+            "temporal_concentration",
+            "days_since_first_article",
+            # Sentiment features (4)
+            "sentiment_mean",
+            "sentiment_std",
+            "sentiment_polarity_ratio",
+            "sentiment_volatility",
+            # Entity features (4)
+            "entity_count",
+            "entity_diversity",
+            "entity_prominence",
+            "entity_concentration",
+            # Content features (4)
+            "avg_word_count",
+            "avg_title_length",
+            "language_diversity",
+            "domain_diversity",
+            # Embedding features (4)
+            "centroid_magnitude",
+            "intra_cluster_similarity_mean",
+            "intra_cluster_similarity_std",
+            "embedding_drift_score",
         ]
 
     def validate_features(self, feature_df: pd.DataFrame) -> bool:
@@ -136,7 +166,8 @@ class FeatureRetriever:
         with tracer.start_as_current_span("validate_features"):
             try:
                 # Check for required columns
-                required_cols = ["article_id", "timestamp"]
+                # group_id is the entity from semantic groups
+                required_cols = ["group_id", "timestamp"]
                 missing_cols = [c for c in required_cols if c not in feature_df.columns]
 
                 if missing_cols:

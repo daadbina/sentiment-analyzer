@@ -8,6 +8,7 @@ import logging
 import asyncio
 import signal
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
@@ -72,6 +73,54 @@ async def health_check():
         return JSONResponse(
             status_code=503,
             content={"error": str(e)},
+        )
+
+
+@app.get("/ready")
+async def readiness_check():
+    """
+    Readiness check endpoint for Kubernetes.
+
+    Returns:
+        Readiness status
+    """
+    try:
+        status = await service.health_check()
+        # Service is ready if all components are healthy
+        if status.get("status") == "healthy":
+            return JSONResponse(status_code=200, content={"ready": True})
+        else:
+            return JSONResponse(
+                status_code=503,
+                content={"ready": False, "details": status},
+            )
+    except Exception as e:
+        logger.error(f"Readiness check failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"ready": False, "error": str(e)},
+        )
+
+
+@app.get("/live")
+async def liveness_check():
+    """
+    Liveness check endpoint for Kubernetes.
+
+    Returns:
+        Liveness status
+    """
+    try:
+        # Service is alive if it can respond
+        return JSONResponse(
+            status_code=200,
+            content={"alive": True, "timestamp": datetime.now().isoformat()},
+        )
+    except Exception as e:
+        logger.error(f"Liveness check failed: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={"alive": False, "error": str(e)},
         )
 
 

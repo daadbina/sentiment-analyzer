@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.3] - 2025-11-08
+
+### Fixed - MLflow Model Registration & S3 Integration
+- **S3 Bucket Creation** - Auto-create bucket if not exists:
+  - Added ensure_bucket_exists() method to S3 client
+  - Automatically creates bucket during health check
+  - Handles NoSuchBucket errors gracefully
+- **Model Registration Flow** - Complete end-to-end registration:
+  - Save models to S3 via artifact_manager
+  - Log models to MLflow runs
+  - Register models in MLflow registry with versioning
+  - Handle existing models by creating new versions
+- **File Lifecycle Management** - Fixed file cleanup issues:
+  - Keep local files until MLflow logging completes
+  - Clean up files after registration in finally block
+  - Prevents "No such file or directory" errors
+- **MLflow Client Methods** - Use proper MLflow API:
+  - Use client.create_registered_model() for new models
+  - Use client.create_model_version() for versioning
+  - Properly handle model creation and versioning
+
+### Verified - End-to-End Model Registration
+- ✅ 3 models trained successfully (XGBoost, Logistic Regression, LLM)
+- ✅ 3 models registered in MLflow (version 1 each)
+- ✅ 3 models uploaded to S3 with checksums
+- ✅ All models visible in MLflow UI (http://localhost:5000)
+- ✅ Models stored in S3 at s3://sentiment-analyzer-models/models/{model_name}/{version}/
+
+---
+
 ## [1.0.2] - 2025-11-08
 
 ### Fixed - Critical Issues Resolution

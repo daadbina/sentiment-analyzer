@@ -10,18 +10,21 @@ import signal
 import asyncio
 import argparse
 from typing import Optional
+import threading
 
 import uvicorn
 
 from .config import get_config
 from .utils.logging_config import setup_logging
 from .service import PredictorService
+from .metrics_server import MetricsServer
 
 
 logger = logging.getLogger(__name__)
 
 # Global service instance for signal handling
 _service: Optional[PredictorService] = None
+_metrics_server: Optional[MetricsServer] = None
 
 
 def parse_args() -> argparse.Namespace:
@@ -165,33 +168,56 @@ def handle_signal(signum, frame):
         signum: Signal number
         frame: Current stack frame
     """
-    global _service
+    global _service, _metrics_server
 
     signal_name = signal.Signals(signum).name
     logger.info(f"Received signal {signal_name}, initiating graceful shutdown")
 
-    if _service and _service.is_running():
-        # Create event loop if needed
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+    # Create event loop if needed
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-        # Stop service
+    # Stop metrics server
+    if _metrics_server and _metrics_server.is_running():
+        loop.run_until_complete(_metrics_server.stop())
+        logger.info("Metrics server stopped gracefully")
+
+    # Stop service
+    if _service and _service.is_running():
         loop.run_until_complete(_service.stop())
         logger.info("Service stopped gracefully")
 
     sys.exit(0)
 
 
+async def start_metrics_server(config) -> MetricsServer:
+    """
+    Start the metrics server in the background.
+
+    Args:
+        config: Service configuration
+
+    Returns:
+        MetricsServer instance
+    """
+    metrics_server = MetricsServer(
+        host=config.monitoring.prometheus_host,
+        port=config.monitoring.prometheus_port,
+    )
+    await metrics_server.start()
+    return metrics_server
+
+
 def main() -> None:
     """
     Main entry point.
 
-    Starts the FastAPI application with Uvicorn.
+    Starts the FastAPI application with Uvicorn and metrics server.
     """
-    global _service
+    global _service, _metrics_server
 
     try:
         # Parse command-line arguments
@@ -226,6 +252,11 @@ def main() -> None:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             checks_passed = loop.run_until_complete(perform_startup_checks(config))
+
+            # Start metrics server
+            logger.info("Starting metrics server")
+            _metrics_server = loop.run_until_complete(start_metrics_server(config))
+
             loop.close()
 
             if not checks_passed:
@@ -233,6 +264,13 @@ def main() -> None:
                 sys.exit(1)
         else:
             logger.warning("Skipping startup checks (--skip-startup-checks flag set)")
+
+            # Start metrics server
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            logger.info("Starting metrics server")
+            _metrics_server = loop.run_until_complete(start_metrics_server(config))
+            loop.close()
 
         # Register signal handlers for graceful shutdown
         signal.signal(signal.SIGTERM, handle_signal)
@@ -253,9 +291,22 @@ def main() -> None:
 
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt, shutting down")
-        if _service and _service.is_running():
+
+        # Create event loop if needed
+        try:
             loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        # Stop metrics server
+        if _metrics_server and _metrics_server.is_running():
+            loop.run_until_complete(_metrics_server.stop())
+
+        # Stop service
+        if _service and _service.is_running():
             loop.run_until_complete(_service.stop())
+
         sys.exit(0)
     except Exception as e:
         logger.error(f"Failed to start service: {e}", exc_info=True)

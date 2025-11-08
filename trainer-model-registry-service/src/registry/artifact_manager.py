@@ -85,10 +85,9 @@ class ArtifactManager:
 
                 # Generate metadata
                 metadata = generate_model_metadata(
+                    model_path=local_file,
                     model_name=model_name,
-                    version=version,
-                    model_type=model.model_type,
-                    checksum=checksum,
+                    model_version=version,
                 )
 
                 # Store in registry

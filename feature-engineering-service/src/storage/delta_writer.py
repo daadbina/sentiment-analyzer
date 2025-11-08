@@ -64,16 +64,53 @@ class DeltaLakeWriter:
                 group_id=group_id,
                 feature_count=len(features),
                 columns=list(df.columns),
+                dtypes={col: str(dtype) for col, dtype in df.dtypes.items()},
             )
 
             # Write to Delta Lake
-            # Use mode='append' to add to existing table or create new one
-            write_deltalake(
-                table_or_uri=str(self.delta_path),
-                data=df,
-                mode="append",
-                engine="rust",
+            # Use mode='overwrite' on first write, then 'append' for subsequent writes
+            # This ensures schema consistency across all writes
+            from pathlib import Path as PathlibPath
+            import shutil
+
+            table_exists = PathlibPath(self.delta_path).exists() and len(list(PathlibPath(self.delta_path).glob("*.parquet"))) > 0
+            write_mode = "append" if table_exists else "overwrite"
+
+            logger.debug(
+                "Delta Lake write parameters",
+                table_exists=table_exists,
+                write_mode=write_mode,
+                delta_path=self.delta_path,
             )
+
+            try:
+                write_deltalake(
+                    table_or_uri=str(self.delta_path),
+                    data=df,
+                    mode=write_mode,
+                    engine="rust",
+                )
+            except Exception as write_error:
+                # If schema mismatch on append, delete table and recreate with overwrite
+                if "Schema of data does not match table schema" in str(write_error) and write_mode == "append":
+                    logger.warning(
+                        "Schema mismatch detected, recreating Delta Lake table",
+                        delta_path=self.delta_path,
+                        error=str(write_error),
+                    )
+                    # Delete existing table
+                    if PathlibPath(self.delta_path).exists():
+                        shutil.rmtree(self.delta_path)
+                    # Recreate with overwrite
+                    write_deltalake(
+                        table_or_uri=str(self.delta_path),
+                        data=df,
+                        mode="overwrite",
+                        engine="rust",
+                    )
+                    logger.info("Delta Lake table recreated successfully")
+                else:
+                    raise
 
             logger.info(
                 "Features written to Delta Lake",

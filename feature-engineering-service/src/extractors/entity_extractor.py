@@ -57,7 +57,11 @@ class EntityExtractor(FeatureExtractor):
                             entity_types.add(entity["type"])
 
             if not all_entities:
-                logger.warning("No entities found", group_id=self.get_group_id(group))
+                logger.debug(
+                    "No entities found in articles (valid case for some groups)",
+                    group_id=self.get_group_id(group),
+                    article_count=len(articles),
+                )
                 return {
                     "entity_count": 0,
                     "entity_diversity": 0,

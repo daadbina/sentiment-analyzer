@@ -63,6 +63,8 @@ class GroupListResponse(BaseModel):
 class PredictionBase(BaseModel):
     """Base prediction schema."""
 
+    model_config = {"protected_namespaces": ()}
+
     group_id: str
     sentiment: str = Field(..., pattern="^(positive|negative|neutral)$")
     confidence: float = Field(..., ge=0.0, le=1.0)

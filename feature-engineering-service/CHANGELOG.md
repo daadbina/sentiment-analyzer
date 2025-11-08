@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2025-11-08
+
+### Fixed
+- PushSource batch_source now uses FileSource with minimal parquet file (Feast 0.37.1 compatibility)
+- FeatureView schema parameter changed from 'features' to 'schema' (Feast 0.37.1 API)
+- Field dtype now uses correct Feast types (String, UnixTimestamp, Int32, Float32)
+- Registry logging fixed to handle entity string representation
+- Feast registry initialization now completes successfully without errors
+- Service successfully registers semantic_group_features view on startup
+
+### Technical Details
+- Created minimal parquet file with all 24 feature columns for FileSource batch_source
+- Feast 0.37.1 requires explicit schema definition in FeatureView
+- PushSource requires valid DataSource for batch_source (cannot be None)
+- Entity mismatch warning is expected for PushSource-based feature views
+
 ## [0.2.0] - 2025-11-08
 
 ### Added

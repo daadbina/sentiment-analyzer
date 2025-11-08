@@ -40,6 +40,8 @@ class KafkaConsumerClient:
         self.config = config
         self._consumer: AvroConsumer | None = None
         self._running = False
+        self._skipped_messages_count = 0
+        self._last_skipped_log_count = 0
 
         logger.info(
             f"Initializing Kafka consumer: brokers={config.bootstrap_servers}, "
@@ -202,10 +204,17 @@ class KafkaConsumerClient:
 
                 except SerializerError as e:
                     # Handle deserialization errors gracefully - skip invalid messages
-                    logger.warning(
-                        f"Skipping message with deserialization error: {e}",
-                        extra={"trace_id": trace_id},
-                    )
+                    self._skipped_messages_count += 1
+
+                    # Only log every 100 skipped messages to reduce log noise
+                    if self._skipped_messages_count - self._last_skipped_log_count >= 100:
+                        logger.warning(
+                            f"Skipped {self._skipped_messages_count} messages with deserialization errors "
+                            f"(last error: {e})",
+                            extra={"trace_id": trace_id},
+                        )
+                        self._last_skipped_log_count = self._skipped_messages_count
+
                     kafka_errors_total.labels(
                         topic=self.config.input_topic,
                         operation="deserialize",

@@ -67,6 +67,15 @@ class DataPreprocessor:
                 logger.debug(f"Input feature columns: {list(X.columns)}")
                 logger.debug(f"Input feature dtypes:\n{X.dtypes}")
 
+                # Filter to only numeric columns (exclude entity IDs and other non-numeric columns)
+                numeric_cols = X.select_dtypes(include=['number']).columns.tolist()
+                if len(numeric_cols) < X.shape[1]:
+                    non_numeric_cols = [col for col in X.columns if col not in numeric_cols]
+                    logger.info(f"Excluding non-numeric columns: {non_numeric_cols}")
+                    X = X[numeric_cols]
+
+                logger.info(f"Using {len(numeric_cols)} numeric features for training")
+
                 # Check for null values before preprocessing
                 null_before = X.isnull().sum()
                 if null_before.sum() > 0:

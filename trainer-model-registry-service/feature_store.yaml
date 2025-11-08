@@ -1,0 +1,13 @@
+project: sentiment_analyzer
+registry: registry.db
+provider: local
+offline_store:
+  type: delta
+  path: /data/delta
+online_store:
+  type: redis
+  host: localhost
+  port: 6379
+  db: 0
+entity_key_serialization_version: 2
+

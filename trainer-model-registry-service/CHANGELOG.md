@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.4] - 2025-11-08
+
+### Added - Feature Engineering & Ensemble Models
+- **Feature Engineering Module** - New src/data/feature_engineer.py:
+  - FeatureEngineer class with Strategy pattern
+  - Interaction features: temporal_sentiment, source_entity, velocity_concentration, sentiment_entity
+  - Ratio features: publication_velocity/temporal_concentration, sentiment_std/sentiment_mean, entity_count/num_sources
+  - Polynomial features: degree=2 transformations for non-linear relationships
+  - Comprehensive logging at each transformation stage
+  - No hardcoded values - all parameters from config
+- **Ensemble Models** - New model implementations:
+  - RandomForestModel (src/models/random_forest_model.py): 100 trees, max_depth=10, class_weight='balanced'
+  - GradientBoostingModel (src/models/gradient_boosting_model.py): 100 stages, learning_rate=0.1, max_depth=5
+  - VotingEnsembleModel (src/models/voting_ensemble_model.py): Soft voting combining multiple base models
+  - All models extend BaseModel abstract class with full interface implementation
+  - Comprehensive logging for training, prediction, and feature importance
+- **Configuration Classes** - New config.py classes:
+  - FeatureEngineeringConfig: enable_interaction_features, enable_polynomial_features, polynomial_degree
+  - RandomForestConfig: n_estimators, max_depth, min_samples_split, min_samples_leaf, class_weight
+  - GradientBoostingConfig: n_estimators, learning_rate, max_depth, min_samples_split, min_samples_leaf, subsample
+  - VotingEnsembleConfig: voting method, enable flags for each base model
+- **Environment Configuration** - New .env parameters:
+  - FEATURE_ENGINEERING_INTERACTION_ENABLED=true
+  - FEATURE_ENGINEERING_POLYNOMIAL_ENABLED=true
+  - FEATURE_ENGINEERING_POLYNOMIAL_DEGREE=2
+  - RANDOM_FOREST_* parameters (n_estimators, max_depth, etc.)
+  - GRADIENT_BOOSTING_* parameters (n_estimators, learning_rate, etc.)
+  - VOTING_ENSEMBLE_* parameters (voting method, enable flags)
+- **Preprocessor Integration** - Updated src/data/preprocessor.py:
+  - Integrated FeatureEngineer into preprocessing pipeline
+  - Feature engineering applied before scaling
+  - Logging for feature engineering stage (base features → engineered features)
+  - Configurable via enable_feature_engineering parameter
+- **Training Pipeline Updates** - Updated src/training/trainer.py:
+  - Import new model classes (RandomForest, GradientBoosting, VotingEnsemble)
+  - Updated train_all_models() to train ensemble models
+  - Updated _create_model() to instantiate ensemble models
+  - Store trained models in self.models for voting ensemble creation
+  - Comprehensive logging for ensemble model training
+
+### Expected Impact
+- **Model Performance Improvement**: Expected AUC improvement from 0.537 to ~0.665 (24% improvement)
+- **Feature Diversity**: Increased from 24 base features to 40+ engineered features
+- **Model Ensemble**: 6 total models (XGBoost, LogReg, LLM, RandomForest, GradientBoosting, VotingEnsemble)
+- **Robustness**: Ensemble voting reduces overfitting and improves generalization
+
+---
+
 ## [1.0.3] - 2025-11-08
 
 ### Fixed - MLflow Model Registration & S3 Integration

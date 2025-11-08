@@ -1,7 +1,7 @@
 """
 Data preprocessing for model training.
 
-Handles missing values, scaling, and feature selection.
+Handles missing values, scaling, feature selection, and feature engineering.
 """
 
 import logging
@@ -15,6 +15,7 @@ from sklearn.feature_selection import SelectKBest, f_classif
 from src.config import config
 from src.exceptions import DataPreparationError
 from src.utils.trace import get_tracer
+from src.data.feature_engineer import FeatureEngineer
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -23,18 +24,32 @@ tracer = get_tracer(__name__)
 class DataPreprocessor:
     """Preprocesses data for model training."""
 
-    def __init__(self, scaling_method: str = "standard"):
+    def __init__(self, scaling_method: str = "standard", enable_feature_engineering: bool = True):
         """
         Initialize data preprocessor.
 
         Args:
             scaling_method: Scaling method (standard or minmax)
+            enable_feature_engineering: Whether to enable feature engineering
         """
         self.scaling_method = scaling_method
         self.scaler = None
         self.imputer = None
         self.feature_selector = None
-        logger.info(f"Data preprocessor initialized with {scaling_method} scaling")
+        self.feature_engineer = None
+        self.enable_feature_engineering = enable_feature_engineering
+
+        if enable_feature_engineering:
+            self.feature_engineer = FeatureEngineer(
+                enable_interaction_features=config.feature_engineering.enable_interaction_features,
+                enable_polynomial_features=config.feature_engineering.enable_polynomial_features,
+                polynomial_degree=config.feature_engineering.polynomial_degree,
+            )
+
+        logger.info(
+            f"Data preprocessor initialized with {scaling_method} scaling, "
+            f"feature_engineering={enable_feature_engineering}"
+        )
 
     def preprocess(
         self,
@@ -86,6 +101,13 @@ class DataPreprocessor:
                 # Handle missing values
                 X = self._handle_missing_values(X, fit=fit)
                 logger.debug(f"Shape after handling missing values: {X.shape}")
+
+                # Feature engineering (before scaling)
+                if self.enable_feature_engineering and self.feature_engineer is not None:
+                    X_before_fe = X.shape[1]
+                    X = self.feature_engineer.engineer_features(X, fit=fit)
+                    logger.info(f"Feature engineering: {X_before_fe} → {X.shape[1]} features")
+                    logger.debug(f"Shape after feature engineering: {X.shape}")
 
                 # Scale features
                 X = self._scale_features(X, fit=fit)

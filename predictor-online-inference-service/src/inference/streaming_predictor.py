@@ -84,7 +84,7 @@ class StreamingPredictor:
         self._running = False
 
         # Close Kafka consumer
-        await self.kafka_consumer.close()
+        await self.kafka_consumer.disconnect()
 
     async def _handle_message(self, message: dict[str, Any]) -> None:
         """

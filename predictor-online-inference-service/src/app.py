@@ -60,8 +60,10 @@ async def lifespan(app: FastAPI):
 
     # Connect clients
     await feast_client.connect()
+    await mlflow_client.connect()
     await redis_client.connect()
     await postgres_client.connect()
+    await kafka_consumer.connect()
     await kafka_producer.connect()
 
     logger.info("All clients connected")

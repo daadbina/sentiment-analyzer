@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Graceful shutdown with SIGTERM/SIGINT signal handlers (Task 37)
 - Comprehensive startup health checks for all dependencies (Task 38)
 - Command-line argument parsing for flexible configuration
+- Health check endpoints: /health, /ready, /live (Task 52)
+- Enhanced Dockerfile with PostgreSQL libraries (Task 51)
 - Additional metrics methods for new components
 - ServiceError and ValidationError exception types
 
@@ -31,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unit tests for FeatureStoreAdapter (20+ tests, ≥90% coverage)
 - Unit tests for DriftDetector (20+ tests, ≥90% coverage)
 - Unit tests for FeatureQualityMonitor (20+ tests, ≥90% coverage)
+- Unit tests for FeastClient (20+ tests, ≥90% coverage)
+- Unit tests for BatchPredictor (10+ tests, ≥90% coverage)
+- Unit tests for StreamingPredictor (15+ tests, ≥90% coverage)
 
 ### Changed
 - Enhanced main.py with signal handling and startup checks

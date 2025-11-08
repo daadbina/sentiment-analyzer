@@ -12,7 +12,7 @@ import sys
 
 import uvicorn
 
-from .config import get_config
+from .config import load_config
 from .metrics_server import MetricsServer
 from .service import PredictorService
 from .utils.logging_config import setup_logging
@@ -184,10 +184,11 @@ async def start_metrics_server(config) -> MetricsServer:
         MetricsServer instance
     """
     metrics_server = MetricsServer(
-        host=config.monitoring.prometheus_host,
+        host="0.0.0.0",  # Bind to all interfaces
         port=config.monitoring.prometheus_port,
     )
     await metrics_server.start()
+    logger.info(f"Metrics server started on port {config.monitoring.prometheus_port}")
     return metrics_server
 
 
@@ -204,7 +205,8 @@ def main() -> None:
         args = parse_args()
 
         # Load configuration
-        config = get_config()
+        config = load_config()
+        logger.info("Configuration loaded successfully")
 
         # Override config with command-line arguments
         if args.host:

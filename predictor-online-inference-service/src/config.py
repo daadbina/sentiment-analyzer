@@ -7,6 +7,15 @@ No hardcoded values or defaults that could lead to production issues.
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load .env file from the service root directory
+env_path = Path(__file__).parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+    print(f"Loaded environment variables from {env_path}")
 
 
 @dataclass

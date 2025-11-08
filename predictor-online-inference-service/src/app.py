@@ -164,8 +164,9 @@ def create_app() -> FastAPI:
     # Initialize tracing
     initialize_tracing(
         service_name="predictor-online-inference-service",
-        jaeger_host=config.monitoring.jaeger_host,
-        jaeger_port=config.monitoring.jaeger_port,
+        jaeger_agent_host=config.monitoring.jaeger_agent_host,
+        jaeger_agent_port=config.monitoring.jaeger_agent_port,
+        enable_tracing=config.monitoring.enable_tracing,
     )
 
     # Create FastAPI app

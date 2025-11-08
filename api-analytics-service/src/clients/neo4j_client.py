@@ -1,6 +1,6 @@
 """Neo4j graph database client."""
 
-from neo4j import AsyncDriver, AsyncSession, async_driver
+from neo4j import AsyncGraphDatabase, AsyncDriver, AsyncSession
 from typing import Optional, List, Dict, Any
 import logging
 
@@ -28,11 +28,11 @@ class Neo4jClient:
         try:
             logger.info("Connecting to Neo4j...")
 
-            self.driver = async_driver(
+            self.driver = AsyncGraphDatabase.driver(
                 self.config.uri,
                 auth=(self.config.user, self.config.password),
                 connection_timeout=self.config.connection_timeout,
-                max_pool_size=self.config.pool_size,
+                max_connection_pool_size=self.config.pool_size,
             )
 
             # Test connection

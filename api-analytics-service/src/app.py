@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
         # Initialize rate limiter
         init_rate_limiter(
             redis_client,
-            config.rate_limit.requests_per_window,
+            config.rate_limit.requests,
             config.rate_limit.window_seconds,
         )
 

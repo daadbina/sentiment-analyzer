@@ -74,14 +74,14 @@ class CacheManager:
                     "Cache hit",
                     extra={"extra_fields": {"namespace": namespace}},
                 )
-                metrics_recorder.record_cache_hit()
+                metrics_recorder.record_cache_hit(namespace)
                 return value
 
             logger.debug(
                 "Cache miss",
                 extra={"extra_fields": {"namespace": namespace}},
             )
-            metrics_recorder.record_cache_miss()
+            metrics_recorder.record_cache_miss(namespace)
             return None
 
         except CacheError:

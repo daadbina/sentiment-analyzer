@@ -1,0 +1,259 @@
+groups:
+  - name: predictor_service_alerts
+    interval: 30s
+    rules:
+      # API Latency Alerts
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m])) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "High API latency detected"
+          description: "API p95 latency is {{ $value }}s, exceeding 300ms threshold for {{ $labels.endpoint }}"
+      
+      - alert: CriticalAPILatency
+        expr: histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m])) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Critical API latency detected"
+          description: "API p95 latency is {{ $value }}s, significantly exceeding threshold for {{ $labels.endpoint }}"
+      
+      # Streaming Latency Alerts
+      - alert: HighStreamingLatency
+        expr: histogram_quantile(0.95, rate(streaming_prediction_latency_seconds_bucket[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "High streaming latency detected"
+          description: "Streaming p95 latency is {{ $value }}s, exceeding 200ms threshold"
+      
+      # Feature Fetch Latency Alerts
+      - alert: HighFeatureFetchLatency
+        expr: histogram_quantile(0.95, rate(feature_fetch_latency_ms_bucket[5m])) > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "High feature fetch latency detected"
+          description: "Feature fetch p95 latency is {{ $value }}ms, exceeding 50ms threshold"
+      
+      # Feature Freshness Alerts
+      - alert: StaleFeatures
+        expr: feature_freshness_seconds > 3600
+        for: 10m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Stale features detected"
+          description: "Features for group {{ $labels.group_id }} are {{ $value }}s old, exceeding 1h threshold"
+      
+      - alert: CriticalStaleFeatures
+        expr: feature_freshness_seconds > 7200
+        for: 5m
+        labels:
+          severity: critical
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Critical stale features detected"
+          description: "Features for group {{ $labels.group_id }} are {{ $value }}s old, exceeding 2h threshold"
+      
+      # Feature Reconciliation Alerts
+      - alert: FeatureReconciliationMismatch
+        expr: rate(feature_reconciliation_mismatch_total[5m]) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Feature reconciliation mismatches detected"
+          description: "Feature reconciliation mismatch rate is {{ $value }}, exceeding 1% threshold for {{ $labels.feature_name }}"
+      
+      - alert: CriticalFeatureReconciliationMismatch
+        expr: rate(feature_reconciliation_mismatch_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Critical feature reconciliation mismatches detected"
+          description: "Feature reconciliation mismatch rate is {{ $value }}, exceeding 5% threshold for {{ $labels.feature_name }}"
+      
+      # Label Consistency Alerts
+      - alert: LowLabelConsistency
+        expr: label_consistency_score < 0.85
+        for: 30m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Low label consistency detected"
+          description: "Label consistency score is {{ $value }}, below 0.85 target for domain {{ $labels.domain }}"
+      
+      - alert: CriticalLowLabelConsistency
+        expr: label_consistency_score < 0.75
+        for: 15m
+        labels:
+          severity: critical
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Critical low label consistency detected"
+          description: "Label consistency score is {{ $value }}, significantly below target for domain {{ $labels.domain }}"
+      
+      # Cache Hit Rate Alerts
+      - alert: LowCacheHitRate
+        expr: rate(prediction_cache_hits_total[5m]) / (rate(prediction_cache_hits_total[5m]) + rate(prediction_cache_misses_total[5m])) < 0.5
+        for: 15m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Low cache hit rate detected"
+          description: "Cache hit rate is {{ $value }}, below 50% target"
+      
+      # Throughput Alerts
+      - alert: LowThroughput
+        expr: rate(predictions_total[5m]) < 1000
+        for: 10m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Low prediction throughput detected"
+          description: "Prediction throughput is {{ $value }} predictions/sec, below 1000/sec target"
+      
+      # Error Rate Alerts
+      - alert: HighPredictionErrorRate
+        expr: rate(prediction_errors_total[5m]) / rate(predictions_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "High prediction error rate detected"
+          description: "Prediction error rate is {{ $value }}, exceeding 1% threshold"
+      
+      - alert: CriticalPredictionErrorRate
+        expr: rate(prediction_errors_total[5m]) / rate(predictions_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Critical prediction error rate detected"
+          description: "Prediction error rate is {{ $value }}, exceeding 5% threshold"
+      
+      # Model Loading Alerts
+      - alert: ModelLoadFailure
+        expr: increase(model_load_errors_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Model load failure detected"
+          description: "Model loading failed {{ $value }} times in the last 5 minutes"
+      
+      # Feature Fetch Errors
+      - alert: HighFeatureFetchErrorRate
+        expr: rate(feature_fetch_errors_total[5m]) / rate(feature_fetch_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "High feature fetch error rate detected"
+          description: "Feature fetch error rate is {{ $value }}, exceeding 1% threshold"
+      
+      # Label Query Errors
+      - alert: HighLabelQueryErrorRate
+        expr: rate(label_query_errors_total[5m]) / rate(label_queries_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "High label query error rate detected"
+          description: "Label query error rate is {{ $value }}, exceeding 1% threshold"
+      
+      # Service Health Alerts
+      - alert: ServiceDown
+        expr: up{job="predictor-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Predictor service is down"
+          description: "Predictor service has been down for more than 1 minute"
+      
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 / 1024 > 1.5
+        for: 10m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}GB, exceeding 1.5GB threshold"
+      
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }} cores, exceeding 1.5 cores threshold"
+      
+      # Drift Detection Alerts
+      - alert: FeatureDriftDetected
+        expr: feature_drift_detected > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Feature drift detected"
+          description: "Feature drift detected for {{ $labels.feature_name }} with p-value {{ $value }}"
+      
+      - alert: PredictionDriftDetected
+        expr: prediction_drift_detected > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Prediction drift detected"
+          description: "Prediction drift detected with p-value {{ $value }}"
+      
+      # Kafka Consumer Lag Alerts
+      - alert: HighKafkaConsumerLag
+        expr: kafka_consumer_lag > 1000
+        for: 10m
+        labels:
+          severity: warning
+          service: predictor-online-inference-service
+        annotations:
+          summary: "High Kafka consumer lag detected"
+          description: "Kafka consumer lag is {{ $value }} messages, exceeding 1000 threshold"
+      
+      - alert: CriticalKafkaConsumerLag
+        expr: kafka_consumer_lag > 10000
+        for: 5m
+        labels:
+          severity: critical
+          service: predictor-online-inference-service
+        annotations:
+          summary: "Critical Kafka consumer lag detected"
+          description: "Kafka consumer lag is {{ $value }} messages, exceeding 10000 threshold"
+

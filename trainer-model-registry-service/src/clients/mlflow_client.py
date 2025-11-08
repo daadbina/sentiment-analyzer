@@ -366,10 +366,25 @@ class MLflowClientWrapper:
             )
 
         try:
-            model_version = mlflow.register_model(model_uri, model_name)
-            logger.info(
-                f"Registered model: {model_name} (version: {model_version.version})"
-            )
+            try:
+                # Try to register new model
+                model_version = mlflow.register_model(model_uri, model_name)
+                logger.info(
+                    f"Registered model: {model_name} (version: {model_version.version})"
+                )
+            except Exception as register_error:
+                # If model already exists, create a new version
+                if "already exists" in str(register_error):
+                    logger.info(f"Model {model_name} already exists, creating new version")
+                    model_version = self.client.create_model_version(
+                        model_uri=model_uri,
+                        name=model_name,
+                    )
+                    logger.info(
+                        f"Created new version for model: {model_name} (version: {model_version.version})"
+                    )
+                else:
+                    raise
 
             if tags:
                 self.client.set_model_version_tag(

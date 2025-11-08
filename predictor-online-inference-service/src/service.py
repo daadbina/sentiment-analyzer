@@ -175,7 +175,11 @@ class PredictorService:
         logger.info("Initializing components")
 
         # Initialize A/B testing strategy
-        ab_testing_strategy = create_ab_testing_strategy(self.config.inference)
+        ab_testing_strategy = create_ab_testing_strategy(
+            enable_ab_testing=self.config.inference.ab_testing_enabled,
+            default_version=self.config.mlflow.model_version,
+            variants=None,  # No variants configured yet
+        )
 
         # Initialize new components
         self.feature_store_adapter = FeatureStoreAdapter(

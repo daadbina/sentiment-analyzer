@@ -67,7 +67,11 @@ async def lifespan(app: FastAPI):
     logger.info("All clients connected")
 
     # Initialize A/B testing strategy
-    ab_testing_strategy = create_ab_testing_strategy(config.inference)
+    ab_testing_strategy = create_ab_testing_strategy(
+        enable_ab_testing=config.inference.ab_testing_enabled,
+        default_version=config.mlflow.model_version,
+        variants=None,  # No variants configured yet
+    )
 
     # Initialize components
     feature_fetcher = FeatureFetcher(feast_client)

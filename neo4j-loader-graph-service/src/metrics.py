@@ -189,7 +189,7 @@ kafka_message_processing_duration_seconds = Histogram(
 kafka_messages_produced_total = Counter(
     "kafka_messages_produced_total",
     "Total number of Kafka messages produced",
-    labelnames=["topic", "status"],
+    labelnames=["topic"],
 )
 
 # Neo4j Connection Metrics
@@ -230,14 +230,42 @@ postgres_query_duration_seconds = Histogram(
 # Circuit Breaker Metrics
 circuit_breaker_state = Gauge(
     "circuit_breaker_state",
-    "Circuit breaker state (0=closed, 1=open, 2=half-open)",
-    labelnames=["service"],
+    "Circuit breaker state (1=active for current state)",
+    labelnames=["circuit_name", "state"],
 )
 
 circuit_breaker_failures_total = Counter(
     "circuit_breaker_failures_total",
     "Total number of circuit breaker failures",
-    labelnames=["service"],
+    labelnames=["circuit_name"],
+)
+
+# Rate Limiter Metrics
+rate_limiter_queue_size = Gauge(
+    "rate_limiter_queue_size",
+    "Current size of rate limiter queue",
+    labelnames=["limiter_name"],
+)
+
+rate_limiter_wait_time_seconds = Histogram(
+    "rate_limiter_wait_time_seconds",
+    "Time spent waiting for rate limiter tokens in seconds",
+    labelnames=["limiter_name"],
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+)
+
+# Kafka Producer Metrics (additional)
+kafka_produce_duration_seconds = Histogram(
+    "kafka_produce_duration_seconds",
+    "Duration of Kafka message production in seconds",
+    labelnames=["topic"],
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
+)
+
+kafka_produce_failures_total = Counter(
+    "kafka_produce_failures_total",
+    "Total number of Kafka message production failures",
+    labelnames=["topic", "error_type"],
 )
 
 # Batch Processing Metrics

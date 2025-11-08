@@ -62,7 +62,7 @@ class FeastClient:
             raise FeatureFetchError(
                 f"Failed to connect to Feast feature store: {e}",
                 store_type="feast",
-            )
+            ) from e
 
     async def disconnect(self) -> None:
         """Disconnect from Feast feature store."""
@@ -173,7 +173,7 @@ class FeastClient:
                     feature_names=feature_names,
                     store_type="online",
                     trace_id=trace_id,
-                )
+                ) from e
 
     async def get_historical_features(
         self,
@@ -253,7 +253,7 @@ class FeastClient:
                     feature_names=feature_names,
                     store_type="offline",
                     trace_id=trace_id,
-                )
+                ) from e
 
     async def get_feature_view_names(self) -> list[str]:
         """
@@ -272,7 +272,7 @@ class FeastClient:
             raise FeatureFetchError(
                 f"Failed to list feature views: {e}",
                 store_type="feast",
-            )
+            ) from e
 
     async def health_check(self) -> bool:
         """

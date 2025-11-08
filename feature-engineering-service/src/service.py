@@ -9,6 +9,7 @@ from .clients import (
     PostgresClient,
 )
 from .clients.qdrant_client import QdrantVectorClient
+from .clients.entities_consumer import EntitiesConsumer
 from .extractors import (
     SourceExtractor,
     TemporalExtractor,
@@ -39,6 +40,7 @@ class FeatureEngineeringService:
         self.consumer = SemanticGroupConsumer()
         self.producer = FeaturesProducer()
         self.postgres_client = PostgresClient()
+        self.entities_consumer = EntitiesConsumer()
         qdrant_config = QdrantConfig()
         self.qdrant_client = QdrantVectorClient(config=qdrant_config)
         feast_config = FeastConfig()
@@ -84,6 +86,13 @@ class FeatureEngineeringService:
             self.producer.connect()
             self.postgres_client.connect()
             self.qdrant_client.connect()
+
+            # Initialize entities consumer
+            try:
+                self.entities_consumer.initialize()
+                logger.info("Entities consumer initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize entities consumer: {e} (entities will be empty)")
 
             logger.info("All connections established")
 
@@ -143,6 +152,10 @@ class FeatureEngineeringService:
         try:
             while True:
                 try:
+                    # Consume entities batch (non-blocking)
+                    if self.entities_consumer.consumer:
+                        self.entities_consumer.consume_batch(timeout_seconds=0.1, max_messages=50)
+
                     # Consume message
                     message = self.consumer.consume_message(timeout_ms=1000)
 
@@ -233,8 +246,16 @@ class FeatureEngineeringService:
         articles = []
         for article_dict in article_dicts:
             try:
+                article_id = article_dict.get("article_id", "")
+
+                # Get entities from cache if available
+                entities = self.entities_consumer.get_entities(article_id)
+                if not entities:
+                    # Fallback to entities in article_dict if not in cache
+                    entities = article_dict.get("entities", [])
+
                 article = Article(
-                    article_id=article_dict.get("article_id", ""),
+                    article_id=article_id,
                     title=article_dict.get("title", ""),
                     body=article_dict.get("body", ""),
                     language=article_dict.get("language", ""),
@@ -242,7 +263,7 @@ class FeatureEngineeringService:
                     source=article_dict.get("source", ""),
                     published_at=article_dict.get("published_at", ""),
                     sentiment_score=float(article_dict.get("sentiment_score", 0.0)),
-                    entities=article_dict.get("entities", []),
+                    entities=entities,
                     publisher_credibility=article_dict.get("publisher_credibility"),
                 )
                 articles.append(article)
@@ -410,6 +431,7 @@ class FeatureEngineeringService:
             self.consumer.close()
             self.producer.close()
             self.postgres_client.close()
+            self.entities_consumer.shutdown()
             self.feast_registry.close()
             self.feast_writer.close()
             self.redis_writer.close()

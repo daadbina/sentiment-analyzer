@@ -36,9 +36,7 @@ class AccuracyMonitor:
         self.label_retriever = label_retriever
         self.consistency_threshold = consistency_threshold
 
-        logger.info(
-            f"Initialized accuracy monitor: consistency_threshold={consistency_threshold}"
-        )
+        logger.info(f"Initialized accuracy monitor: consistency_threshold={consistency_threshold}")
 
     async def compute_label_consistency(
         self,
@@ -153,8 +151,7 @@ class AccuracyMonitor:
 
                 # Filter by model version
                 model_predictions = [
-                    p for p in labeled_predictions
-                    if p["model_version"] == model_version
+                    p for p in labeled_predictions if p["model_version"] == model_version
                 ]
 
                 if not model_predictions:
@@ -230,4 +227,3 @@ class AccuracyMonitor:
                     "recall": 0.0,
                     "f1_score": 0.0,
                 }
-

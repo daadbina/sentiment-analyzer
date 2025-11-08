@@ -38,7 +38,7 @@ class KafkaProducerClient:
         self.config = config
         self._producer: AvroProducer | None = None
 
-        logger.info(f"Initializing Kafka producer: brokers={config.brokers}")
+        logger.info(f"Initializing Kafka producer: brokers={config.bootstrap_servers}")
 
     async def connect(self) -> None:
         """
@@ -48,11 +48,11 @@ class KafkaProducerClient:
             KafkaErrorException: If connection fails
         """
         try:
-            logger.info(f"Connecting to Kafka producer: {self.config.brokers}")
+            logger.info(f"Connecting to Kafka producer: {self.config.bootstrap_servers}")
 
             # Build producer configuration
             producer_config = {
-                "bootstrap.servers": self.config.brokers,
+                "bootstrap.servers": self.config.bootstrap_servers,
                 "schema.registry.url": self.config.schema_registry_url,
                 "acks": "all",  # Wait for all replicas
                 "enable.idempotence": True,  # Exactly-once semantics
@@ -64,12 +64,14 @@ class KafkaProducerClient:
 
             # Add TLS configuration if enabled
             if self.config.enable_tls:
-                producer_config.update({
-                    "security.protocol": "SSL",
-                    "ssl.ca.location": self.config.tls_ca_cert,
-                    "ssl.certificate.location": self.config.tls_client_cert,
-                    "ssl.key.location": self.config.tls_client_key,
-                })
+                producer_config.update(
+                    {
+                        "security.protocol": "SSL",
+                        "ssl.ca.location": self.config.tls_ca_cert,
+                        "ssl.certificate.location": self.config.tls_client_cert,
+                        "ssl.key.location": self.config.tls_client_key,
+                    }
+                )
 
             # Create Avro producer
             self._producer = AvroProducer(
@@ -78,7 +80,7 @@ class KafkaProducerClient:
                 default_value_schema=None,  # Schema provided per message
             )
 
-            logger.info(f"Connected to Kafka producer: brokers={self.config.brokers}")
+            logger.info(f"Connected to Kafka producer: brokers={self.config.bootstrap_servers}")
         except Exception as e:
             logger.error(f"Failed to connect to Kafka producer: {e}", exc_info=True)
             raise KafkaErrorException(
@@ -144,7 +146,7 @@ class KafkaProducerClient:
             )
         """
         producer = self._ensure_connected()
-        topic = self.config.predictions_topic
+        topic = self.config.output_topic
 
         with trace_span(
             "kafka_produce_prediction",
@@ -156,7 +158,7 @@ class KafkaProducerClient:
         ):
             try:
                 # Create delivery callback
-                delivery_future = asyncio.Future()
+                delivery_future: asyncio.Future[Any] = asyncio.Future()
 
                 def delivery_callback(err, msg):
                     """Callback for delivery confirmation."""
@@ -188,11 +190,12 @@ class KafkaProducerClient:
                 # Record metrics
                 kafka_messages_produced_total.labels(topic=topic).inc()
 
-                logger.debug(
-                    f"Produced prediction: topic={topic}, partition={msg.partition()}, "
-                    f"offset={msg.offset()}, group_id={prediction.get('group_id')}",
-                    extra={"trace_id": trace_id, "group_id": prediction.get("group_id")},
-                )
+                if msg:
+                    logger.debug(
+                        f"Produced prediction: topic={topic}, partition={msg.partition()}, "
+                        f"offset={msg.offset()}, group_id={prediction.get('group_id')}",
+                        extra={"trace_id": trace_id, "group_id": prediction.get("group_id")},
+                    )
 
             except SerializerError as e:
                 logger.error(
@@ -304,4 +307,3 @@ PREDICTION_SCHEMA = {
         },
     ],
 }
-

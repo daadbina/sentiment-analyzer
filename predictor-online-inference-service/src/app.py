@@ -123,6 +123,7 @@ async def lifespan(app: FastAPI):
     # Start streaming predictor if enabled
     if config.inference.enable_streaming:
         import asyncio
+
         asyncio.create_task(_streaming_predictor.start())
         logger.info("Streaming predictor started")
 
@@ -198,4 +199,3 @@ def create_app() -> FastAPI:
 
 # Create application instance
 app = create_app()
-

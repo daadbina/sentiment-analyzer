@@ -42,8 +42,8 @@ class KafkaConsumerClient:
         self._running = False
 
         logger.info(
-            f"Initializing Kafka consumer: brokers={config.brokers}, "
-            f"group={config.consumer_group}"
+            f"Initializing Kafka consumer: brokers={config.bootstrap_servers}, "
+            f"group={config.consumer_group_id}"
         )
 
     async def connect(self) -> None:
@@ -54,12 +54,12 @@ class KafkaConsumerClient:
             KafkaErrorException: If connection fails
         """
         try:
-            logger.info(f"Connecting to Kafka: {self.config.brokers}")
+            logger.info(f"Connecting to Kafka: {self.config.bootstrap_servers}")
 
             # Build consumer configuration
             consumer_config = {
-                "bootstrap.servers": self.config.brokers,
-                "group.id": self.config.consumer_group,
+                "bootstrap.servers": self.config.bootstrap_servers,
+                "group.id": self.config.consumer_group_id,
                 "schema.registry.url": self.config.schema_registry_url,
                 "auto.offset.reset": "earliest",
                 "enable.auto.commit": False,  # Manual commit for exactly-once
@@ -70,26 +70,28 @@ class KafkaConsumerClient:
 
             # Add TLS configuration if enabled
             if self.config.enable_tls:
-                consumer_config.update({
-                    "security.protocol": "SSL",
-                    "ssl.ca.location": self.config.tls_ca_cert,
-                    "ssl.certificate.location": self.config.tls_client_cert,
-                    "ssl.key.location": self.config.tls_client_key,
-                })
+                consumer_config.update(
+                    {
+                        "security.protocol": "SSL",
+                        "ssl.ca.location": self.config.tls_ca_cert,
+                        "ssl.certificate.location": self.config.tls_client_cert,
+                        "ssl.key.location": self.config.tls_client_key,
+                    }
+                )
 
             # Create Avro consumer
             self._consumer = AvroConsumer(consumer_config)
 
             logger.info(
-                f"Connected to Kafka: brokers={self.config.brokers}, "
-                f"group={self.config.consumer_group}"
+                f"Connected to Kafka: brokers={self.config.bootstrap_servers}, "
+                f"group={self.config.consumer_group_id}"
             )
         except Exception as e:
             logger.error(f"Failed to connect to Kafka: {e}", exc_info=True)
             raise KafkaErrorException(
                 f"Failed to connect to Kafka: {e}",
                 operation="connect",
-            )
+            ) from e
 
     async def disconnect(self) -> None:
         """Disconnect from Kafka and close consumer."""
@@ -137,7 +139,7 @@ class KafkaConsumerClient:
             raise KafkaErrorException(
                 f"Failed to subscribe to topics: {e}",
                 operation="subscribe",
-            )
+            ) from e
 
     async def consume_messages(
         self,
@@ -204,7 +206,7 @@ class KafkaConsumerClient:
                 f"Error during message consumption: {e}",
                 operation="consume",
                 trace_id=trace_id,
-            )
+            ) from e
 
     async def _process_message(
         self,
@@ -238,8 +240,7 @@ class KafkaConsumerClient:
                 message_value = msg.value()
 
                 logger.debug(
-                    f"Received message: topic={topic}, partition={partition}, "
-                    f"offset={offset}",
+                    f"Received message: topic={topic}, partition={partition}, " f"offset={offset}",
                     extra={"trace_id": trace_id},
                 )
 
@@ -249,7 +250,7 @@ class KafkaConsumerClient:
                 # Record metrics
                 kafka_messages_consumed_total.labels(
                     topic=topic,
-                    consumer_group=self.config.consumer_group,
+                    consumer_group=self.config.consumer_group_id,
                 ).inc()
 
             except SerializerError as e:
@@ -269,7 +270,7 @@ class KafkaConsumerClient:
                     topic=topic,
                     operation="deserialize",
                     trace_id=trace_id,
-                )
+                ) from e
             except Exception as e:
                 logger.error(
                     f"Failed to process message: topic={topic}, "
@@ -301,7 +302,7 @@ class KafkaConsumerClient:
             if not assignment:
                 return {}
 
-            lag_info = {}
+            lag_info: dict[str, dict[int, int]] = {}
 
             for topic_partition in assignment:
                 topic = topic_partition.topic
@@ -325,7 +326,7 @@ class KafkaConsumerClient:
                 kafka_consumer_lag.labels(
                     topic=topic,
                     partition=str(partition),
-                    consumer_group=self.config.consumer_group,
+                    consumer_group=self.config.consumer_group_id,
                 ).set(lag)
 
             return lag_info
@@ -354,4 +355,3 @@ class KafkaConsumerClient:
         except Exception as e:
             logger.warning(f"Kafka consumer health check failed: {e}")
             return False
-

@@ -171,27 +171,37 @@ class FeatureValidator:
         # feature_num_sources: int
         if "feature_num_sources" in features:
             if not isinstance(features["feature_num_sources"], (int, float)):
-                invalid["feature_num_sources"] = f"expected numeric, got {type(features['feature_num_sources']).__name__}"
+                invalid["feature_num_sources"] = (
+                    f"expected numeric, got {type(features['feature_num_sources']).__name__}"
+                )
 
         # feature_sentiment_mean: float
         if "feature_sentiment_mean" in features:
             if not isinstance(features["feature_sentiment_mean"], (int, float)):
-                invalid["feature_sentiment_mean"] = f"expected numeric, got {type(features['feature_sentiment_mean']).__name__}"
+                invalid["feature_sentiment_mean"] = (
+                    f"expected numeric, got {type(features['feature_sentiment_mean']).__name__}"
+                )
 
         # feature_credibility_mean: float
         if "feature_credibility_mean" in features:
             if not isinstance(features["feature_credibility_mean"], (int, float)):
-                invalid["feature_credibility_mean"] = f"expected numeric, got {type(features['feature_credibility_mean']).__name__}"
+                invalid["feature_credibility_mean"] = (
+                    f"expected numeric, got {type(features['feature_credibility_mean']).__name__}"
+                )
 
         # feature_entities: list or string
         if "feature_entities" in features:
             if not isinstance(features["feature_entities"], (list, str)):
-                invalid["feature_entities"] = f"expected list or string, got {type(features['feature_entities']).__name__}"
+                invalid["feature_entities"] = (
+                    f"expected list or string, got {type(features['feature_entities']).__name__}"
+                )
 
         # feature_time_density: float
         if "feature_time_density" in features:
             if not isinstance(features["feature_time_density"], (int, float)):
-                invalid["feature_time_density"] = f"expected numeric, got {type(features['feature_time_density']).__name__}"
+                invalid["feature_time_density"] = (
+                    f"expected numeric, got {type(features['feature_time_density']).__name__}"
+                )
 
         return invalid
 
@@ -210,7 +220,9 @@ class FeatureValidator:
         # feature_num_sources: >= 0
         if "feature_num_sources" in features:
             if features["feature_num_sources"] < 0:
-                out_of_range["feature_num_sources"] = f"negative value: {features['feature_num_sources']}"
+                out_of_range["feature_num_sources"] = (
+                    f"negative value: {features['feature_num_sources']}"
+                )
 
         # feature_sentiment_mean: [-1, 1]
         if "feature_sentiment_mean" in features:
@@ -274,4 +286,3 @@ class FeatureValidator:
                 f"Failed to parse feature timestamp: group_id={group_id}, error={e}",
                 extra={"trace_id": trace_id, "group_id": group_id},
             )
-

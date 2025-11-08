@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from feast import FeatureStore
+from feast import FeatureStore  # type: ignore[attr-defined]
 
 from ..config import FeastConfig
 from ..exceptions import FeatureFetchError
@@ -62,7 +62,7 @@ class FeastClient:
             raise FeatureFetchError(
                 f"Failed to connect to Feast feature store: {e}",
                 store_type="feast",
-            )
+            ) from e
 
     async def disconnect(self) -> None:
         """Disconnect from Feast feature store."""
@@ -173,7 +173,7 @@ class FeastClient:
                     feature_names=feature_names,
                     store_type="online",
                     trace_id=trace_id,
-                )
+                ) from e
 
     async def get_historical_features(
         self,
@@ -253,7 +253,7 @@ class FeastClient:
                     feature_names=feature_names,
                     store_type="offline",
                     trace_id=trace_id,
-                )
+                ) from e
 
     async def get_feature_view_names(self) -> list[str]:
         """
@@ -272,7 +272,7 @@ class FeastClient:
             raise FeatureFetchError(
                 f"Failed to list feature views: {e}",
                 store_type="feast",
-            )
+            ) from e
 
     async def health_check(self) -> bool:
         """
@@ -289,4 +289,3 @@ class FeastClient:
         except Exception as e:
             logger.warning(f"Feast health check failed: {e}")
             return False
-

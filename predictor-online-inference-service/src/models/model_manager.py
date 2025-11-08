@@ -168,14 +168,19 @@ class ModelManager:
 
                 # Extract probability and confidence
                 if isinstance(prediction, np.ndarray):
-                    if prediction.ndim == 2:
+                    if prediction.ndim == 2:  # type: ignore[attr-defined]
                         # Binary classification: [[prob_class_0, prob_class_1]]
-                        probability = float(prediction[0][1])
+                        probability = float(prediction[0][1])  # type: ignore[index]
                     else:
                         # Single value
-                        probability = float(prediction[0])
+                        probability = float(prediction[0])  # type: ignore[index]
                 else:
-                    probability = float(prediction)
+                    # Handle PyFuncOutput or other types - convert to numpy first
+                    pred_array = np.asarray(prediction)
+                    if pred_array.ndim == 2:
+                        probability = float(pred_array[0][1])
+                    else:
+                        probability = float(pred_array[0]) if pred_array.size > 0 else float(prediction)  # type: ignore[arg-type]
 
                 # Calculate confidence (distance from 0.5)
                 confidence = abs(probability - 0.5) * 2.0
@@ -220,7 +225,11 @@ class ModelManager:
             float(features.get("feature_num_sources", 0)),
             float(features.get("feature_sentiment_mean", 0)),
             float(features.get("feature_credibility_mean", 0)),
-            float(len(features.get("feature_entities", [])) if isinstance(features.get("feature_entities"), list) else 0),
+            float(
+                len(features.get("feature_entities", []))
+                if isinstance(features.get("feature_entities"), list)
+                else 0
+            ),
             float(features.get("feature_time_density", 0)),
         ]
 
@@ -250,4 +259,3 @@ class ModelManager:
             List of model version identifiers
         """
         return list(self._models.keys())
-

@@ -7,6 +7,7 @@ label consistency metrics weighted by label confidence.
 
 import logging
 from datetime import datetime, timedelta
+from typing import Any
 
 from ..exceptions import LabelValidationError
 from ..metrics import MetricsCollector
@@ -37,7 +38,7 @@ class PredictionValidator:
 
         logger.info(
             "Initialized PredictionValidator",
-            extra={"consistency_threshold": consistency_threshold}
+            extra={"consistency_threshold": consistency_threshold},
         )
 
     @trace_span("prediction_validator.compare_prediction_with_label")
@@ -48,8 +49,8 @@ class PredictionValidator:
         predicted_confidence: float,
         label_realized: bool,
         label_confidence: float,
-        trace_id: str | None = None
-    ) -> dict[str, any]:
+        trace_id: str | None = None,
+    ) -> dict[str, Any]:
         """
         Compare a prediction with its ground-truth label.
 
@@ -76,17 +77,17 @@ class PredictionValidator:
             if not (0 <= predicted_confidence <= 1):
                 raise LabelValidationError(
                     message=f"Invalid predicted_confidence: {predicted_confidence}",
-                    details={"group_id": group_id, "predicted_confidence": predicted_confidence}
+                    details={"group_id": group_id, "predicted_confidence": predicted_confidence},
                 )
 
             if not (0 <= label_confidence <= 1):
                 raise LabelValidationError(
                     message=f"Invalid label_confidence: {label_confidence}",
-                    details={"group_id": group_id, "label_confidence": label_confidence}
+                    details={"group_id": group_id, "label_confidence": label_confidence},
                 )
 
             # Check if prediction matches label
-            is_correct = (predicted_realized == label_realized)
+            is_correct = predicted_realized == label_realized
 
             # Calculate weighted score
             # Weight by label confidence: high-confidence labels matter more
@@ -102,7 +103,7 @@ class PredictionValidator:
                 "label_realized": label_realized,
                 "label_confidence": label_confidence,
                 "timestamp": datetime.now().isoformat(),
-                "trace_id": trace_id
+                "trace_id": trace_id,
             }
 
             self._validation_history.append(validation_result)
@@ -122,8 +123,8 @@ class PredictionValidator:
                     "predicted_realized": predicted_realized,
                     "label_realized": label_realized,
                     "label_confidence": label_confidence,
-                    "trace_id": trace_id
-                }
+                    "trace_id": trace_id,
+                },
             )
 
             return validation_result
@@ -131,22 +132,15 @@ class PredictionValidator:
         except Exception as e:
             logger.error(
                 "Failed to compare prediction with label",
-                extra={
-                    "group_id": group_id,
-                    "error": str(e),
-                    "trace_id": trace_id
-                },
-                exc_info=True
+                extra={"group_id": group_id, "error": str(e), "trace_id": trace_id},
+                exc_info=True,
             )
             raise LabelValidationError(
-                message=f"Failed to validate prediction: {str(e)}",
-                details={"group_id": group_id}
+                message=f"Failed to validate prediction: {str(e)}", details={"group_id": group_id}
             ) from e
 
     def calculate_label_consistency(
-        self,
-        time_window_hours: int | None = None,
-        trace_id: str | None = None
+        self, time_window_hours: int | None = None, trace_id: str | None = None
     ) -> float:
         """
         Calculate label consistency metric over time window.
@@ -163,7 +157,8 @@ class PredictionValidator:
             if time_window_hours:
                 cutoff_time = datetime.now() - timedelta(hours=time_window_hours)
                 relevant_validations = [
-                    v for v in self._validation_history
+                    v
+                    for v in self._validation_history
                     if datetime.fromisoformat(v["timestamp"]) >= cutoff_time
                 ]
             else:
@@ -172,7 +167,7 @@ class PredictionValidator:
             if not relevant_validations:
                 logger.warning(
                     "No validation history available",
-                    extra={"time_window_hours": time_window_hours, "trace_id": trace_id}
+                    extra={"time_window_hours": time_window_hours, "trace_id": trace_id},
                 )
                 return 0.0
 
@@ -183,7 +178,7 @@ class PredictionValidator:
             if total_weight == 0:
                 logger.warning(
                     "Total weight is zero",
-                    extra={"validation_count": len(relevant_validations), "trace_id": trace_id}
+                    extra={"validation_count": len(relevant_validations), "trace_id": trace_id},
                 )
                 return 0.0
 
@@ -199,8 +194,8 @@ class PredictionValidator:
                     "validation_count": len(relevant_validations),
                     "time_window_hours": time_window_hours,
                     "meets_threshold": consistency_score >= self.consistency_threshold,
-                    "trace_id": trace_id
-                }
+                    "trace_id": trace_id,
+                },
             )
 
             return consistency_score
@@ -211,17 +206,15 @@ class PredictionValidator:
                 extra={
                     "time_window_hours": time_window_hours,
                     "error": str(e),
-                    "trace_id": trace_id
+                    "trace_id": trace_id,
                 },
-                exc_info=True
+                exc_info=True,
             )
             return 0.0
 
     def get_accuracy_over_time(
-        self,
-        time_window_hours: int = 24,
-        trace_id: str | None = None
-    ) -> dict[str, any]:
+        self, time_window_hours: int = 24, trace_id: str | None = None
+    ) -> dict[str, Any]:
         """
         Get accuracy metrics over time window.
 
@@ -235,7 +228,8 @@ class PredictionValidator:
         try:
             cutoff_time = datetime.now() - timedelta(hours=time_window_hours)
             relevant_validations = [
-                v for v in self._validation_history
+                v
+                for v in self._validation_history
                 if datetime.fromisoformat(v["timestamp"]) >= cutoff_time
             ]
 
@@ -245,7 +239,7 @@ class PredictionValidator:
                     "correct_predictions": 0,
                     "accuracy": 0.0,
                     "weighted_consistency": 0.0,
-                    "time_window_hours": time_window_hours
+                    "time_window_hours": time_window_hours,
                 }
 
             total_predictions = len(relevant_validations)
@@ -264,13 +258,10 @@ class PredictionValidator:
                 "accuracy": accuracy,
                 "weighted_consistency": weighted_consistency,
                 "time_window_hours": time_window_hours,
-                "meets_threshold": weighted_consistency >= self.consistency_threshold
+                "meets_threshold": weighted_consistency >= self.consistency_threshold,
             }
 
-            logger.info(
-                "Calculated accuracy over time",
-                extra={**metrics, "trace_id": trace_id}
-            )
+            logger.info("Calculated accuracy over time", extra={**metrics, "trace_id": trace_id})
 
             return metrics
 
@@ -280,9 +271,9 @@ class PredictionValidator:
                 extra={
                     "time_window_hours": time_window_hours,
                     "error": str(e),
-                    "trace_id": trace_id
+                    "trace_id": trace_id,
                 },
-                exc_info=True
+                exc_info=True,
             )
             return {
                 "total_predictions": 0,
@@ -290,7 +281,7 @@ class PredictionValidator:
                 "accuracy": 0.0,
                 "weighted_consistency": 0.0,
                 "time_window_hours": time_window_hours,
-                "error": str(e)
+                "error": str(e),
             }
 
     def clear_history(self, older_than_hours: int | None = None) -> int:
@@ -313,7 +304,8 @@ class PredictionValidator:
         original_count = len(self._validation_history)
 
         self._validation_history = [
-            v for v in self._validation_history
+            v
+            for v in self._validation_history
             if datetime.fromisoformat(v["timestamp"]) >= cutoff_time
         ]
 
@@ -324,9 +316,8 @@ class PredictionValidator:
             extra={
                 "cleared_count": cleared_count,
                 "remaining_count": len(self._validation_history),
-                "older_than_hours": older_than_hours
-            }
+                "older_than_hours": older_than_hours,
+            },
         )
 
         return cleared_count
-

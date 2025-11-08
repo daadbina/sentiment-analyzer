@@ -30,7 +30,9 @@ class ModelVariant:
     def __post_init__(self):
         """Validate traffic percentage."""
         if not 0 <= self.traffic_percentage <= 100:
-            raise ValueError(f"Traffic percentage must be between 0 and 100, got {self.traffic_percentage}")
+            raise ValueError(
+                f"Traffic percentage must be between 0 and 100, got {self.traffic_percentage}"
+            )
 
 
 class ABTestingStrategy:
@@ -84,9 +86,7 @@ class ABTestingStrategy:
         # Check traffic percentages sum to 100
         total_traffic = sum(v.traffic_percentage for v in self.variants)
         if not 99.9 <= total_traffic <= 100.1:  # Allow small floating point errors
-            raise ValueError(
-                f"Traffic percentages must sum to 100, got {total_traffic}"
-            )
+            raise ValueError(f"Traffic percentages must sum to 100, got {total_traffic}")
 
     def _build_distribution(self) -> None:
         """Build cumulative distribution for variant selection."""
@@ -277,4 +277,3 @@ def create_ab_testing_strategy(
         )
 
     return ABTestingStrategy(model_variants, default_version)
-

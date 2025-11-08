@@ -85,9 +85,7 @@ class TLSConfigManager:
                 "CERT_OPTIONAL": ssl.CERT_OPTIONAL,
                 "CERT_REQUIRED": ssl.CERT_REQUIRED,
             }
-            context.verify_mode = verify_mode_map.get(
-                tls_config.verify_mode, ssl.CERT_REQUIRED
-            )
+            context.verify_mode = verify_mode_map.get(tls_config.verify_mode, ssl.CERT_REQUIRED)
 
             # Set hostname checking
             context.check_hostname = tls_config.check_hostname
@@ -107,9 +105,7 @@ class TLSConfigManager:
                 client_key_path = Path(tls_config.client_key_path)
 
                 if not client_cert_path.exists():
-                    raise FileNotFoundError(
-                        f"Client certificate not found: {client_cert_path}"
-                    )
+                    raise FileNotFoundError(f"Client certificate not found: {client_cert_path}")
                 if not client_key_path.exists():
                     raise FileNotFoundError(f"Client key not found: {client_key_path}")
 
@@ -118,8 +114,7 @@ class TLSConfigManager:
                     keyfile=str(client_key_path),
                 )
                 logger.info(
-                    f"Loaded client certificate: {client_cert_path}, "
-                    f"key: {client_key_path}"
+                    f"Loaded client certificate: {client_cert_path}, " f"key: {client_key_path}"
                 )
 
             logger.info("SSL context created successfully")
@@ -224,8 +219,7 @@ class TLSConfigManager:
             if self.kafka_tls_config.ca_cert_path:
                 if not Path(self.kafka_tls_config.ca_cert_path).exists():
                     logger.error(
-                        f"Kafka CA certificate not found: "
-                        f"{self.kafka_tls_config.ca_cert_path}"
+                        f"Kafka CA certificate not found: " f"{self.kafka_tls_config.ca_cert_path}"
                     )
                     all_valid = False
 
@@ -240,8 +234,7 @@ class TLSConfigManager:
             if self.kafka_tls_config.client_key_path:
                 if not Path(self.kafka_tls_config.client_key_path).exists():
                     logger.error(
-                        f"Kafka client key not found: "
-                        f"{self.kafka_tls_config.client_key_path}"
+                        f"Kafka client key not found: " f"{self.kafka_tls_config.client_key_path}"
                     )
                     all_valid = False
 
@@ -249,8 +242,7 @@ class TLSConfigManager:
         if self.redis_tls_config.enabled and self.redis_tls_config.ca_cert_path:
             if not Path(self.redis_tls_config.ca_cert_path).exists():
                 logger.error(
-                    f"Redis CA certificate not found: "
-                    f"{self.redis_tls_config.ca_cert_path}"
+                    f"Redis CA certificate not found: " f"{self.redis_tls_config.ca_cert_path}"
                 )
                 all_valid = False
 
@@ -315,4 +307,3 @@ def load_tls_config_from_env() -> TLSConfigManager:
         redis_tls_config=redis_tls_config,
         postgres_tls_config=postgres_tls_config,
     )
-

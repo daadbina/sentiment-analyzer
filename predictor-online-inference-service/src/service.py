@@ -8,6 +8,7 @@ and provides unified service lifecycle management.
 import asyncio
 import logging
 from datetime import datetime
+from typing import Any
 
 from .clients import (
     FeastClient,
@@ -143,13 +144,10 @@ class PredictorService:
 
         except Exception as e:
             logger.error(
-                "Failed to initialize PredictorService",
-                extra={"error": str(e)},
-                exc_info=True
+                "Failed to initialize PredictorService", extra={"error": str(e)}, exc_info=True
             )
             raise ServiceError(
-                message=f"Service initialization failed: {str(e)}",
-                details={}
+                message=f"Service initialization failed: {str(e)}", details={}
             ) from e
 
     async def _initialize_clients(self) -> None:
@@ -181,32 +179,25 @@ class PredictorService:
 
         # Initialize new components
         self.feature_store_adapter = FeatureStoreAdapter(
-            config=self.config.feast,
-            metrics=self.metrics
+            config=self.config.feast, metrics=self.metrics
         )
         await self.feature_store_adapter.connect()
 
-        self.model_loader = ModelLoader(
-            config=self.config.mlflow,
-            metrics=self.metrics
-        )
+        self.model_loader = ModelLoader(config=self.config.mlflow, metrics=self.metrics)
 
         self.confidence_scorer = ConfidenceScorer(metrics=self.metrics)
 
         self.prediction_validator = PredictionValidator(
             metrics=self.metrics,
-            consistency_threshold=self.config.validation.label_consistency_threshold
+            consistency_threshold=self.config.validation.label_consistency_threshold,
         )
 
         self.feature_quality_monitor = FeatureQualityMonitor(
             metrics=self.metrics,
-            freshness_threshold_seconds=self.config.validation.feature_freshness_threshold_seconds
+            freshness_threshold_seconds=self.config.validation.feature_freshness_threshold_seconds,
         )
 
-        self.drift_detector = DriftDetector(
-            metrics=self.metrics,
-            drift_threshold=0.05
-        )
+        self.drift_detector = DriftDetector(metrics=self.metrics, drift_threshold=0.05)
 
         # Initialize existing components
         self.feature_fetcher = FeatureFetcher(self.feast_client)
@@ -224,14 +215,10 @@ class PredictorService:
         self.model_manager = ModelManager(self.mlflow_client, ab_testing_strategy)
 
         self.prediction_cache = PredictionCache(
-            self.redis_client,
-            ttl_seconds=self.config.inference.cache_ttl_seconds
+            self.redis_client, ttl_seconds=self.config.inference.cache_ttl_seconds
         )
 
-        self.prediction_logger = PredictionLogger(
-            self.postgres_client,
-            self.kafka_producer
-        )
+        self.prediction_logger = PredictionLogger(self.postgres_client, self.kafka_producer)
 
         logger.info("All components initialized")
 
@@ -268,7 +255,7 @@ class PredictorService:
             kafka_consumer=self.kafka_consumer,
             postgres_client=self.postgres_client,
             prediction_validator=self.prediction_validator,
-            metrics=self.metrics
+            metrics=self.metrics,
         )
 
         logger.info("Services initialized")
@@ -281,11 +268,7 @@ class PredictorService:
             await self.model_manager.load_model()
             logger.info("Default model loaded successfully")
         except Exception as e:
-            logger.error(
-                "Failed to load default model",
-                extra={"error": str(e)},
-                exc_info=True
-            )
+            logger.error("Failed to load default model", extra={"error": str(e)}, exc_info=True)
             # Continue anyway - model will be loaded on first request
 
     async def start(self) -> None:
@@ -319,15 +302,8 @@ class PredictorService:
             logger.info("PredictorService started successfully")
 
         except Exception as e:
-            logger.error(
-                "Failed to start PredictorService",
-                extra={"error": str(e)},
-                exc_info=True
-            )
-            raise ServiceError(
-                message=f"Service start failed: {str(e)}",
-                details={}
-            ) from e
+            logger.error("Failed to start PredictorService", extra={"error": str(e)}, exc_info=True)
+            raise ServiceError(message=f"Service start failed: {str(e)}", details={}) from e
 
     async def stop(self) -> None:
         """
@@ -372,15 +348,8 @@ class PredictorService:
             logger.info("PredictorService stopped successfully")
 
         except Exception as e:
-            logger.error(
-                "Failed to stop PredictorService",
-                extra={"error": str(e)},
-                exc_info=True
-            )
-            raise ServiceError(
-                message=f"Service stop failed: {str(e)}",
-                details={}
-            ) from e
+            logger.error("Failed to stop PredictorService", extra={"error": str(e)}, exc_info=True)
+            raise ServiceError(message=f"Service stop failed: {str(e)}", details={}) from e
 
     def is_running(self) -> bool:
         """Check if service is running."""
@@ -398,11 +367,11 @@ class PredictorService:
             Health check status dictionary
         """
         try:
-            health_status = {
+            health_status: dict[str, Any] = {
                 "service": "predictor-online-inference-service",
                 "status": "healthy" if self._running else "stopped",
                 "timestamp": datetime.now().isoformat(),
-                "components": {}
+                "components": {},
             }
 
             # Check clients
@@ -436,7 +405,8 @@ class PredictorService:
 
             # Overall status
             unhealthy_components = [
-                k for k, v in health_status["components"].items()
+                k
+                for k, v in health_status["components"].items()
                 if isinstance(v, str) and ("unhealthy" in v or "error" in v)
             ]
 
@@ -447,15 +417,10 @@ class PredictorService:
             return health_status
 
         except Exception as e:
-            logger.error(
-                "Health check failed",
-                extra={"error": str(e)},
-                exc_info=True
-            )
+            logger.error("Health check failed", extra={"error": str(e)}, exc_info=True)
             return {
                 "service": "predictor-online-inference-service",
                 "status": "unhealthy",
                 "error": str(e),
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now().isoformat(),
             }
-

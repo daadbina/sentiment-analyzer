@@ -33,8 +33,7 @@ class FeatureReconciliationChecker:
         self.reconciliation_threshold = reconciliation_threshold
 
         logger.info(
-            f"Initialized feature reconciliation checker: "
-            f"threshold={reconciliation_threshold}"
+            f"Initialized feature reconciliation checker: " f"threshold={reconciliation_threshold}"
         )
 
     async def check_reconciliation(
@@ -141,7 +140,11 @@ class FeatureReconciliationChecker:
             return False
 
         # Handle numeric features with tolerance
-        if feature_name in ["feature_sentiment_mean", "feature_credibility_mean", "feature_time_density"]:
+        if feature_name in [
+            "feature_sentiment_mean",
+            "feature_credibility_mean",
+            "feature_time_density",
+        ]:
             return self._numeric_match(offline_value, online_value, tolerance=0.01)
 
         # Handle integer features
@@ -277,4 +280,3 @@ class FeatureReconciliationChecker:
                 )
 
             return overall_rate, all_mismatches
-

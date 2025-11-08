@@ -278,4 +278,3 @@ class FeatureFetcher:
             List of required feature names
         """
         return REQUIRED_FEATURES.copy()
-

@@ -31,38 +31,21 @@ def parse_args() -> argparse.Namespace:
     Returns:
         Parsed arguments
     """
-    parser = argparse.ArgumentParser(
-        description="Predictor Online Inference Service"
-    )
+    parser = argparse.ArgumentParser(description="Predictor Online Inference Service")
+    parser.add_argument("--host", type=str, default=None, help="Host to bind to (overrides config)")
+    parser.add_argument("--port", type=int, default=None, help="Port to bind to (overrides config)")
     parser.add_argument(
-        "--host",
-        type=str,
-        default=None,
-        help="Host to bind to (overrides config)"
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=None,
-        help="Port to bind to (overrides config)"
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=None,
-        help="Number of worker processes (overrides config)"
+        "--workers", type=int, default=None, help="Number of worker processes (overrides config)"
     )
     parser.add_argument(
         "--log-level",
         type=str,
         default=None,
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        help="Log level (overrides config)"
+        help="Log level (overrides config)",
     )
     parser.add_argument(
-        "--skip-startup-checks",
-        action="store_true",
-        help="Skip startup health checks"
+        "--skip-startup-checks", action="store_true", help="Skip startup health checks"
     )
 
     return parser.parse_args()
@@ -312,4 +295,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

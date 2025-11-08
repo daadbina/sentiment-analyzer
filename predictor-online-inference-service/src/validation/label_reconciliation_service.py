@@ -35,7 +35,7 @@ class LabelReconciliationService:
         kafka_consumer: KafkaConsumerClient,
         postgres_client: PostgresClient,
         prediction_validator: PredictionValidator,
-        metrics: MetricsCollector
+        metrics: MetricsCollector,
     ):
         """
         Initialize label reconciliation service.
@@ -68,9 +68,7 @@ class LabelReconciliationService:
             await self.consume_ground_truth_updates()
         except Exception as e:
             logger.error(
-                "LabelReconciliationService failed",
-                extra={"error": str(e)},
-                exc_info=True
+                "LabelReconciliationService failed", extra={"error": str(e)}, exc_info=True
             )
             raise
 
@@ -93,18 +91,14 @@ class LabelReconciliationService:
             while self._running:
                 # Poll for messages
                 messages = await self.kafka_consumer.consume_batch(
-                    topic=self.config.kafka.ground_truth_topic,
-                    batch_size=100,
-                    timeout_ms=1000
+                    topic=self.config.kafka.ground_truth_topic, batch_size=100, timeout_ms=1000
                 )
 
                 if not messages:
                     await asyncio.sleep(0.1)
                     continue
 
-                logger.debug(
-                    f"Received {len(messages)} ground-truth messages"
-                )
+                logger.debug(f"Received {len(messages)} ground-truth messages")
 
                 # Process each message
                 for message in messages:
@@ -113,11 +107,8 @@ class LabelReconciliationService:
                     except Exception as e:
                         logger.error(
                             "Failed to process ground-truth message",
-                            extra={
-                                "message_key": message.get("key"),
-                                "error": str(e)
-                            },
-                            exc_info=True
+                            extra={"message_key": message.get("key"), "error": str(e)},
+                            exc_info=True,
                         )
 
                 # Commit offsets
@@ -125,19 +116,13 @@ class LabelReconciliationService:
 
         except Exception as e:
             logger.error(
-                "Failed to consume ground-truth updates",
-                extra={"error": str(e)},
-                exc_info=True
+                "Failed to consume ground-truth updates", extra={"error": str(e)}, exc_info=True
             )
             raise KafkaError(
-                message=f"Failed to consume ground-truth updates: {str(e)}",
-                details={}
+                message=f"Failed to consume ground-truth updates: {str(e)}", details={}
             ) from e
 
-    async def _process_ground_truth_message(
-        self,
-        message: dict[str, Any]
-    ) -> None:
+    async def _process_ground_truth_message(self, message: dict[str, Any]) -> None:
         """
         Process a single ground-truth message.
 
@@ -163,8 +148,8 @@ class LabelReconciliationService:
                     "label_realized": label_realized,
                     "label_confidence": label_confidence,
                     "label_source": label_source,
-                    "trace_id": trace_id
-                }
+                    "trace_id": trace_id,
+                },
             )
 
             # Fetch corresponding prediction from PostgreSQL
@@ -173,7 +158,7 @@ class LabelReconciliationService:
             if not prediction:
                 logger.warning(
                     "No prediction found for ground-truth label",
-                    extra={"group_id": group_id, "trace_id": trace_id}
+                    extra={"group_id": group_id, "trace_id": trace_id},
                 )
                 return
 
@@ -184,7 +169,7 @@ class LabelReconciliationService:
                 predicted_confidence=prediction["predicted_confidence"],
                 label_realized=label_realized,
                 label_confidence=label_confidence,
-                trace_id=trace_id
+                trace_id=trace_id,
             )
 
             # Update reconciliation status in PostgreSQL
@@ -194,7 +179,7 @@ class LabelReconciliationService:
                 label_realized=label_realized,
                 label_confidence=label_confidence,
                 label_source=label_source,
-                trace_id=trace_id
+                trace_id=trace_id,
             )
 
             # Update metrics
@@ -206,25 +191,20 @@ class LabelReconciliationService:
                 extra={
                     "group_id": group_id,
                     "is_correct": validation_result["is_correct"],
-                    "trace_id": trace_id
-                }
+                    "trace_id": trace_id,
+                },
             )
 
         except Exception as e:
             logger.error(
                 "Failed to process ground-truth message",
-                extra={
-                    "message": message,
-                    "error": str(e)
-                },
-                exc_info=True
+                extra={"message": message, "error": str(e)},
+                exc_info=True,
             )
             raise
 
     async def _fetch_prediction(
-        self,
-        group_id: str,
-        trace_id: str | None = None
+        self, group_id: str, trace_id: str | None = None
     ) -> dict[str, Any] | None:
         """
         Fetch prediction from PostgreSQL.
@@ -250,11 +230,7 @@ class LabelReconciliationService:
             LIMIT 1
             """
 
-            result = await self.postgres_client.execute_query(
-                query,
-                [group_id],
-                trace_id=trace_id
-            )
+            result = await self.postgres_client.execute_query(query, [group_id], trace_id=trace_id)
 
             if result:
                 return dict(result[0])
@@ -264,12 +240,8 @@ class LabelReconciliationService:
         except Exception as e:
             logger.error(
                 "Failed to fetch prediction",
-                extra={
-                    "group_id": group_id,
-                    "error": str(e),
-                    "trace_id": trace_id
-                },
-                exc_info=True
+                extra={"group_id": group_id, "error": str(e), "trace_id": trace_id},
+                exc_info=True,
             )
             return None
 
@@ -280,7 +252,7 @@ class LabelReconciliationService:
         label_realized: bool,
         label_confidence: float,
         label_source: str,
-        trace_id: str | None = None
+        trace_id: str | None = None,
     ) -> None:
         """
         Update reconciliation status in PostgreSQL.
@@ -316,9 +288,9 @@ class LabelReconciliationService:
                     label_realized,
                     label_confidence,
                     label_source,
-                    reconciled_at
+                    reconciled_at,
                 ],
-                trace_id=trace_id
+                trace_id=trace_id,
             )
 
             logger.debug(
@@ -326,23 +298,19 @@ class LabelReconciliationService:
                 extra={
                     "group_id": group_id,
                     "reconciliation_status": reconciliation_status,
-                    "trace_id": trace_id
-                }
+                    "trace_id": trace_id,
+                },
             )
 
         except Exception as e:
             logger.error(
                 "Failed to update reconciliation status",
-                extra={
-                    "group_id": group_id,
-                    "error": str(e),
-                    "trace_id": trace_id
-                },
-                exc_info=True
+                extra={"group_id": group_id, "error": str(e), "trace_id": trace_id},
+                exc_info=True,
             )
             raise PostgresError(
                 message=f"Failed to update reconciliation status: {str(e)}",
-                details={"group_id": group_id}
+                details={"group_id": group_id},
             ) from e
 
     def get_reconciliation_coverage_rate(self) -> float:
@@ -362,9 +330,8 @@ class LabelReconciliationService:
             extra={
                 "coverage_rate": coverage_rate,
                 "reconciliation_count": self._reconciliation_count,
-                "total_predictions": self._total_predictions
-            }
+                "total_predictions": self._total_predictions,
+            },
         )
 
         return coverage_rate
-

@@ -28,9 +28,7 @@ class DriftDetector:
     """
 
     def __init__(
-        self,
-        metrics: MetricsCollector,
-        drift_threshold: float = 0.05  # p-value threshold
+        self, metrics: MetricsCollector, drift_threshold: float = 0.05  # p-value threshold
     ):
         """
         Initialize drift detector.
@@ -46,17 +44,11 @@ class DriftDetector:
         self._prediction_baseline: list[float] = []
         self._prediction_current: list[float] = []
 
-        logger.info(
-            "Initialized DriftDetector",
-            extra={"drift_threshold": drift_threshold}
-        )
+        logger.info("Initialized DriftDetector", extra={"drift_threshold": drift_threshold})
 
     @trace_span("drift_detector.track_features")
     def track_features(
-        self,
-        features: dict[str, float],
-        is_baseline: bool = False,
-        trace_id: str | None = None
+        self, features: dict[str, float], is_baseline: bool = False, trace_id: str | None = None
     ) -> None:
         """
         Track features for drift detection.
@@ -78,27 +70,20 @@ class DriftDetector:
                 extra={
                     "feature_count": len(features),
                     "is_baseline": is_baseline,
-                    "trace_id": trace_id
-                }
+                    "trace_id": trace_id,
+                },
             )
 
         except Exception as e:
             logger.error(
                 "Failed to track features",
-                extra={
-                    "is_baseline": is_baseline,
-                    "error": str(e),
-                    "trace_id": trace_id
-                },
-                exc_info=True
+                extra={"is_baseline": is_baseline, "error": str(e), "trace_id": trace_id},
+                exc_info=True,
             )
 
     @trace_span("drift_detector.track_prediction")
     def track_prediction(
-        self,
-        prediction_value: float,
-        is_baseline: bool = False,
-        trace_id: str | None = None
+        self, prediction_value: float, is_baseline: bool = False, trace_id: str | None = None
     ) -> None:
         """
         Track prediction for drift detection.
@@ -120,26 +105,20 @@ class DriftDetector:
                 extra={
                     "prediction_value": prediction_value,
                     "is_baseline": is_baseline,
-                    "trace_id": trace_id
-                }
+                    "trace_id": trace_id,
+                },
             )
 
         except Exception as e:
             logger.error(
                 "Failed to track prediction",
-                extra={
-                    "is_baseline": is_baseline,
-                    "error": str(e),
-                    "trace_id": trace_id
-                },
-                exc_info=True
+                extra={"is_baseline": is_baseline, "error": str(e), "trace_id": trace_id},
+                exc_info=True,
             )
 
     @trace_span("drift_detector.detect_feature_drift")
     def detect_feature_drift(
-        self,
-        feature_name: str | None = None,
-        trace_id: str | None = None
+        self, feature_name: str | None = None, trace_id: str | None = None
     ) -> dict[str, Any]:
         """
         Detect feature drift using Kolmogorov-Smirnov test.
@@ -155,10 +134,7 @@ class DriftDetector:
             drift_results = {}
 
             # Check specific feature or all features
-            features_to_check = (
-                [feature_name] if feature_name
-                else self._feature_baseline.keys()
-            )
+            features_to_check = [feature_name] if feature_name else self._feature_baseline.keys()
 
             for fname in features_to_check:
                 baseline_values = self._feature_baseline.get(fname, [])
@@ -170,16 +146,13 @@ class DriftDetector:
                         extra={
                             "baseline_count": len(baseline_values),
                             "current_count": len(current_values),
-                            "trace_id": trace_id
-                        }
+                            "trace_id": trace_id,
+                        },
                     )
                     continue
 
                 # Perform Kolmogorov-Smirnov test
-                ks_statistic, p_value = stats.ks_2samp(
-                    baseline_values,
-                    current_values
-                )
+                ks_statistic, p_value = stats.ks_2samp(baseline_values, current_values)
 
                 # Check if drift detected
                 drift_detected = p_value < self.drift_threshold
@@ -199,17 +172,14 @@ class DriftDetector:
                     "mean_shift": float(mean_shift),
                     "mean_shift_pct": float(mean_shift_pct),
                     "baseline_count": len(baseline_values),
-                    "current_count": len(current_values)
+                    "current_count": len(current_values),
                 }
 
                 # Alert if drift detected
                 if drift_detected:
                     logger.warning(
                         f"Feature drift detected: {fname}",
-                        extra={
-                            **drift_results[fname],
-                            "trace_id": trace_id
-                        }
+                        extra={**drift_results[fname], "trace_id": trace_id},
                     )
 
                     self.metrics.increment_feature_drift_detected(fname)
@@ -219,11 +189,10 @@ class DriftDetector:
                 extra={
                     "features_checked": len(drift_results),
                     "drifts_detected": sum(
-                        1 for r in drift_results.values()
-                        if r["drift_detected"]
+                        1 for r in drift_results.values() if r["drift_detected"]
                     ),
-                    "trace_id": trace_id
-                }
+                    "trace_id": trace_id,
+                },
             )
 
             return drift_results
@@ -231,20 +200,13 @@ class DriftDetector:
         except Exception as e:
             logger.error(
                 "Failed to detect feature drift",
-                extra={
-                    "feature_name": feature_name,
-                    "error": str(e),
-                    "trace_id": trace_id
-                },
-                exc_info=True
+                extra={"feature_name": feature_name, "error": str(e), "trace_id": trace_id},
+                exc_info=True,
             )
             return {}
 
     @trace_span("drift_detector.detect_prediction_drift")
-    def detect_prediction_drift(
-        self,
-        trace_id: str | None = None
-    ) -> dict[str, Any]:
+    def detect_prediction_drift(self, trace_id: str | None = None) -> dict[str, Any]:
         """
         Detect prediction drift using Kolmogorov-Smirnov test.
 
@@ -261,18 +223,14 @@ class DriftDetector:
                     extra={
                         "baseline_count": len(self._prediction_baseline),
                         "current_count": len(self._prediction_current),
-                        "trace_id": trace_id
-                    }
+                        "trace_id": trace_id,
+                    },
                 )
-                return {
-                    "drift_detected": False,
-                    "error": "Insufficient data"
-                }
+                return {"drift_detected": False, "error": "Insufficient data"}
 
             # Perform Kolmogorov-Smirnov test
             ks_statistic, p_value = stats.ks_2samp(
-                self._prediction_baseline,
-                self._prediction_current
+                self._prediction_baseline, self._prediction_current
             )
 
             # Check if drift detected
@@ -293,27 +251,19 @@ class DriftDetector:
                 "mean_shift": float(mean_shift),
                 "mean_shift_pct": float(mean_shift_pct),
                 "baseline_count": len(self._prediction_baseline),
-                "current_count": len(self._prediction_current)
+                "current_count": len(self._prediction_current),
             }
 
             # Alert if drift detected
             if drift_detected:
                 logger.warning(
-                    "Prediction drift detected",
-                    extra={
-                        **drift_result,
-                        "trace_id": trace_id
-                    }
+                    "Prediction drift detected", extra={**drift_result, "trace_id": trace_id}
                 )
 
                 self.metrics.increment_prediction_drift_detected()
 
             logger.info(
-                "Prediction drift detection completed",
-                extra={
-                    **drift_result,
-                    "trace_id": trace_id
-                }
+                "Prediction drift detection completed", extra={**drift_result, "trace_id": trace_id}
             )
 
             return drift_result
@@ -321,16 +271,10 @@ class DriftDetector:
         except Exception as e:
             logger.error(
                 "Failed to detect prediction drift",
-                extra={
-                    "error": str(e),
-                    "trace_id": trace_id
-                },
-                exc_info=True
+                extra={"error": str(e), "trace_id": trace_id},
+                exc_info=True,
             )
-            return {
-                "drift_detected": False,
-                "error": str(e)
-            }
+            return {"drift_detected": False, "error": str(e)}
 
     def set_baseline(self, trace_id: str | None = None) -> None:
         """
@@ -350,8 +294,8 @@ class DriftDetector:
             extra={
                 "feature_count": len(self._feature_baseline),
                 "prediction_count": len(self._prediction_baseline),
-                "trace_id": trace_id
-            }
+                "trace_id": trace_id,
+            },
         )
 
     def clear_current(self, trace_id: str | None = None) -> None:
@@ -364,10 +308,7 @@ class DriftDetector:
         self._feature_current = defaultdict(list)
         self._prediction_current = []
 
-        logger.info(
-            "Cleared current data",
-            extra={"trace_id": trace_id}
-        )
+        logger.info("Cleared current data", extra={"trace_id": trace_id})
 
     def get_drift_summary(self, trace_id: str | None = None) -> dict[str, Any]:
         """
@@ -387,17 +328,12 @@ class DriftDetector:
             "prediction_drift": prediction_drift,
             "total_features_checked": len(feature_drift),
             "features_with_drift": sum(
-                1 for r in feature_drift.values()
-                if r.get("drift_detected", False)
+                1 for r in feature_drift.values() if r.get("drift_detected", False)
             ),
             "prediction_drift_detected": prediction_drift.get("drift_detected", False),
-            "generated_at": datetime.now().isoformat()
+            "generated_at": datetime.now().isoformat(),
         }
 
-        logger.info(
-            "Generated drift summary",
-            extra={**summary, "trace_id": trace_id}
-        )
+        logger.info("Generated drift summary", extra={**summary, "trace_id": trace_id})
 
         return summary
-

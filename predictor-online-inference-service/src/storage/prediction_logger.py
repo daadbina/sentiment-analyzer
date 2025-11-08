@@ -158,4 +158,3 @@ class PredictionLogger:
                 exc_info=True,
                 extra={"trace_id": trace_id},
             )
-

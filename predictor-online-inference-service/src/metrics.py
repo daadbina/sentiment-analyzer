@@ -5,7 +5,6 @@ All metrics are exposed on the configured Prometheus port for scraping.
 Metrics follow Prometheus naming conventions and best practices.
 """
 
-
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
 # Create a custom registry for better control
@@ -284,7 +283,9 @@ class MetricsCollector:
         predictions_total.labels(mode=mode, model_version=model_version, domain=domain).inc()
         prediction_latency_ms.labels(mode=mode, model_version=model_version).observe(latency_ms)
         if confidence is not None:
-            prediction_confidence_avg.labels(model_version=model_version, domain=domain).set(confidence)
+            prediction_confidence_avg.labels(model_version=model_version, domain=domain).set(
+                confidence
+            )
 
     @staticmethod
     def record_cache_hit() -> None:
@@ -378,8 +379,12 @@ class MetricsCollector:
             status_code: HTTP status code
             latency_ms: Request latency in milliseconds
         """
-        api_requests_total.labels(endpoint=endpoint, method=method, status_code=str(status_code)).inc()
-        api_request_latency_ms.labels(endpoint=endpoint, method=method, status_code=str(status_code)).observe(latency_ms)
+        api_requests_total.labels(
+            endpoint=endpoint, method=method, status_code=str(status_code)
+        ).inc()
+        api_request_latency_ms.labels(
+            endpoint=endpoint, method=method, status_code=str(status_code)
+        ).observe(latency_ms)
 
     @staticmethod
     def update_service_health(component: str, healthy: bool) -> None:
@@ -392,16 +397,7 @@ class MetricsCollector:
         """
         service_health.labels(component=component).set(1 if healthy else 0)
 
-    @staticmethod
-    def record_feature_fetch_latency(latency_ms: float, store_type: str) -> None:
-        """
-        Record feature fetch latency.
 
-        Args:
-            latency_ms: Fetch latency in milliseconds
-            store_type: Type of feature store (online/offline)
-        """
-        feature_fetch_latency_ms.labels(store_type=store_type).observe(latency_ms)
 
     @staticmethod
     def increment_feature_fetch_failures(store_type: str) -> None:
@@ -421,7 +417,9 @@ class MetricsCollector:
         Args:
             load_time_ms: Load time in milliseconds
         """
-        model_load_duration_seconds.labels(model_name="default", model_version="latest").observe(load_time_ms / 1000.0)
+        model_load_duration_seconds.labels(model_name="default", model_version="latest").observe(
+            load_time_ms / 1000.0
+        )
 
     @staticmethod
     def increment_model_load_failures() -> None:
@@ -507,4 +505,3 @@ class MetricsCollector:
     def increment_prediction_drift_detected() -> None:
         """Increment prediction drift detected counter."""
         prediction_drift_score.labels(domain="default").set(1.0)
-

@@ -38,10 +38,7 @@ class ConfidenceScorer:
 
     @trace_span("confidence_scorer.compute_confidence")
     def compute_confidence(
-        self,
-        model_output: Any,
-        model_type: str = "xgboost",
-        trace_id: str | None = None
+        self, model_output: Any, model_type: str = "xgboost", trace_id: str | None = None
     ) -> float:
         """
         Compute confidence score for model prediction.
@@ -59,11 +56,7 @@ class ConfidenceScorer:
         """
         try:
             logger.debug(
-                "Computing confidence score",
-                extra={
-                    "model_type": model_type,
-                    "trace_id": trace_id
-                }
+                "Computing confidence score", extra={"model_type": model_type, "trace_id": trace_id}
             )
 
             if model_type == "xgboost":
@@ -84,11 +77,7 @@ class ConfidenceScorer:
 
             logger.debug(
                 "Computed confidence score",
-                extra={
-                    "confidence": confidence,
-                    "model_type": model_type,
-                    "trace_id": trace_id
-                }
+                extra={"confidence": confidence, "model_type": model_type, "trace_id": trace_id},
             )
 
             return confidence
@@ -96,16 +85,12 @@ class ConfidenceScorer:
         except Exception as e:
             logger.error(
                 "Failed to compute confidence score",
-                extra={
-                    "model_type": model_type,
-                    "error": str(e),
-                    "trace_id": trace_id
-                },
-                exc_info=True
+                extra={"model_type": model_type, "error": str(e), "trace_id": trace_id},
+                exc_info=True,
             )
             raise InferenceError(
                 message=f"Failed to compute confidence: {str(e)}",
-                details={"model_type": model_type}
+                details={"model_type": model_type},
             ) from e
 
     def _compute_xgboost_confidence(self, model_output: Any) -> float:
@@ -139,8 +124,7 @@ class ConfidenceScorer:
 
         except Exception as e:
             logger.warning(
-                "Failed to compute XGBoost confidence, using default",
-                extra={"error": str(e)}
+                "Failed to compute XGBoost confidence, using default", extra={"error": str(e)}
             )
             return 0.5
 
@@ -172,8 +156,7 @@ class ConfidenceScorer:
 
         except Exception as e:
             logger.warning(
-                "Failed to compute sklearn confidence, using default",
-                extra={"error": str(e)}
+                "Failed to compute sklearn confidence, using default", extra={"error": str(e)}
             )
             return 0.5
 
@@ -214,10 +197,7 @@ class ConfidenceScorer:
             return confidence
 
         except Exception as e:
-            logger.warning(
-                "Failed to compute default confidence",
-                extra={"error": str(e)}
-            )
+            logger.warning("Failed to compute default confidence", extra={"error": str(e)})
             return 0.5
 
     @trace_span("confidence_scorer.quantify_uncertainty")
@@ -225,7 +205,7 @@ class ConfidenceScorer:
         self,
         model_output: Any,
         feature_quality: dict[str, float] | None = None,
-        trace_id: str | None = None
+        trace_id: str | None = None,
     ) -> dict[str, float]:
         """
         Quantify prediction uncertainty.
@@ -242,10 +222,7 @@ class ConfidenceScorer:
                 - total_uncertainty: Combined uncertainty
         """
         try:
-            logger.debug(
-                "Quantifying uncertainty",
-                extra={"trace_id": trace_id}
-            )
+            logger.debug("Quantifying uncertainty", extra={"trace_id": trace_id})
 
             # Compute epistemic uncertainty (model uncertainty)
             # Based on prediction entropy
@@ -273,29 +250,23 @@ class ConfidenceScorer:
             if feature_quality:
                 # Average feature quality as proxy for data certainty
                 avg_quality = np.mean(list(feature_quality.values()))
-                aleatoric_uncertainty = 1.0 - avg_quality
+                aleatoric_uncertainty = float(1.0 - avg_quality)
             else:
                 # Default: moderate uncertainty
                 aleatoric_uncertainty = 0.3
 
             # Compute total uncertainty
             # Combine epistemic and aleatoric
-            total_uncertainty = np.sqrt(
-                epistemic_uncertainty**2 + aleatoric_uncertainty**2
-            )
+            total_uncertainty = np.sqrt(epistemic_uncertainty**2 + aleatoric_uncertainty**2)
 
             uncertainty_metrics = {
                 "epistemic_uncertainty": float(epistemic_uncertainty),
                 "aleatoric_uncertainty": float(aleatoric_uncertainty),
-                "total_uncertainty": float(total_uncertainty)
+                "total_uncertainty": float(total_uncertainty),
             }
 
             logger.debug(
-                "Quantified uncertainty",
-                extra={
-                    **uncertainty_metrics,
-                    "trace_id": trace_id
-                }
+                "Quantified uncertainty", extra={**uncertainty_metrics, "trace_id": trace_id}
             )
 
             return uncertainty_metrics
@@ -303,23 +274,16 @@ class ConfidenceScorer:
         except Exception as e:
             logger.error(
                 "Failed to quantify uncertainty",
-                extra={
-                    "error": str(e),
-                    "trace_id": trace_id
-                },
-                exc_info=True
+                extra={"error": str(e), "trace_id": trace_id},
+                exc_info=True,
             )
             return {
                 "epistemic_uncertainty": 0.5,
                 "aleatoric_uncertainty": 0.5,
-                "total_uncertainty": 0.7
+                "total_uncertainty": 0.7,
             }
 
-    def adjust_confidence_by_uncertainty(
-        self,
-        confidence: float,
-        uncertainty: float
-    ) -> float:
+    def adjust_confidence_by_uncertainty(self, confidence: float, uncertainty: float) -> float:
         """
         Adjust confidence score by uncertainty.
 
@@ -334,4 +298,3 @@ class ConfidenceScorer:
         adjusted_confidence = confidence * (1.0 - uncertainty)
 
         return float(np.clip(adjusted_confidence, 0.0, 1.0))
-

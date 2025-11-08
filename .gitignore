@@ -83,6 +83,8 @@ k8s/secrets/
 *.tmp
 *.temp
 *.bak
+.mypy_cache/
+bandit-report.json
 
 # Node (if needed)
 node_modules/

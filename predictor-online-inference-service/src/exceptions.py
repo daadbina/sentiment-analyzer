@@ -14,6 +14,7 @@ class PredictionError(Exception):
 
     Attributes:
         message: Human-readable error message
+        group_id: ID of the semantic group (optional)
         context: Additional context information for debugging
         trace_id: Distributed tracing identifier
     """
@@ -21,6 +22,7 @@ class PredictionError(Exception):
     def __init__(
         self,
         message: str,
+        group_id: str | None = None,
         context: dict[str, Any] | None = None,
         trace_id: str | None = None,
     ):
@@ -29,13 +31,19 @@ class PredictionError(Exception):
 
         Args:
             message: Human-readable error message
+            group_id: ID of the semantic group
             context: Additional context information
             trace_id: Distributed tracing identifier
         """
         super().__init__(message)
         self.message = message
+        self.group_id = group_id
         self.context = context or {}
         self.trace_id = trace_id
+
+        # Add group_id to context for backward compatibility
+        if group_id:
+            self.context["group_id"] = group_id
 
     def __str__(self) -> str:
         """Return string representation of error."""
@@ -77,12 +85,14 @@ class ModelLoadError(PredictionError):
             context: Additional context information
             trace_id: Distributed tracing identifier
         """
+        self.model_name = model_name
+        self.model_version = model_version
         context = context or {}
         if model_name:
             context["model_name"] = model_name
         if model_version:
             context["model_version"] = model_version
-        super().__init__(message, context, trace_id)
+        super().__init__(message, context=context, trace_id=trace_id)
 
 
 class FeatureError(PredictionError):
@@ -91,7 +101,30 @@ class FeatureError(PredictionError):
 
     This is the parent class for all feature store and feature validation errors.
     """
-    pass
+
+    def __init__(
+        self,
+        message: str,
+        feature_name: str | None = None,
+        group_id: str | None = None,
+        context: dict[str, Any] | None = None,
+        trace_id: str | None = None,
+    ):
+        """
+        Initialize feature error.
+
+        Args:
+            message: Human-readable error message
+            feature_name: Name of the feature that caused the error
+            group_id: ID of the semantic group
+            context: Additional context information
+            trace_id: Distributed tracing identifier
+        """
+        self.feature_name = feature_name
+        context = context or {}
+        if feature_name:
+            context["feature_name"] = feature_name
+        super().__init__(message, group_id=group_id, context=context, trace_id=trace_id)
 
 
 class FeatureFetchError(FeatureError):
@@ -125,14 +158,14 @@ class FeatureFetchError(FeatureError):
             context: Additional context information
             trace_id: Distributed tracing identifier
         """
+        self.feature_names = feature_names
+        self.store_type = store_type
         context = context or {}
-        if group_id:
-            context["group_id"] = group_id
         if feature_names:
             context["feature_names"] = feature_names
         if store_type:
             context["store_type"] = store_type
-        super().__init__(message, context, trace_id)
+        super().__init__(message, group_id=group_id, context=context, trace_id=trace_id)
 
 
 class FeatureValidationError(FeatureError):
@@ -152,6 +185,7 @@ class FeatureValidationError(FeatureError):
         group_id: str | None = None,
         missing_features: list[str] | None = None,
         invalid_features: dict[str, str] | None = None,
+        validation_type: str | None = None,
         context: dict[str, Any] | None = None,
         trace_id: str | None = None,
     ):
@@ -163,17 +197,21 @@ class FeatureValidationError(FeatureError):
             group_id: ID of the semantic group
             missing_features: List of missing required features
             invalid_features: Dictionary of invalid features and reasons
+            validation_type: Type of validation that failed
             context: Additional context information
             trace_id: Distributed tracing identifier
         """
+        self.missing_features = missing_features
+        self.invalid_features = invalid_features
+        self.validation_type = validation_type
         context = context or {}
-        if group_id:
-            context["group_id"] = group_id
         if missing_features:
             context["missing_features"] = missing_features
         if invalid_features:
             context["invalid_features"] = invalid_features
-        super().__init__(message, context, trace_id)
+        if validation_type:
+            context["validation_type"] = validation_type
+        super().__init__(message, group_id=group_id, context=context, trace_id=trace_id)
 
 
 class FeatureReconciliationError(FeatureError):
@@ -192,6 +230,7 @@ class FeatureReconciliationError(FeatureError):
         group_id: str | None = None,
         mismatched_features: dict[str, tuple] | None = None,
         reconciliation_rate: float | None = None,
+        mismatch_rate: float | None = None,
         context: dict[str, Any] | None = None,
         trace_id: str | None = None,
     ):
@@ -203,17 +242,21 @@ class FeatureReconciliationError(FeatureError):
             group_id: ID of the semantic group
             mismatched_features: Dictionary of mismatched features with (offline, online) values
             reconciliation_rate: Calculated reconciliation rate
+            mismatch_rate: Calculated mismatch rate (for backward compatibility)
             context: Additional context information
             trace_id: Distributed tracing identifier
         """
+        self.mismatched_features = mismatched_features
+        self.reconciliation_rate = reconciliation_rate
+        self.mismatch_rate = mismatch_rate or (1.0 - reconciliation_rate if reconciliation_rate is not None else None)
         context = context or {}
-        if group_id:
-            context["group_id"] = group_id
         if mismatched_features:
             context["mismatched_features"] = mismatched_features
         if reconciliation_rate is not None:
             context["reconciliation_rate"] = reconciliation_rate
-        super().__init__(message, context, trace_id)
+        if self.mismatch_rate is not None:
+            context["mismatch_rate"] = self.mismatch_rate
+        super().__init__(message, group_id=group_id, context=context, trace_id=trace_id)
 
 
 class InferenceError(PredictionError):
@@ -265,6 +308,7 @@ class InferenceTimeoutError(InferenceError):
         group_id: str | None = None,
         model_version: str | None = None,
         timeout_ms: int | None = None,
+        timeout_seconds: int | None = None,
         elapsed_ms: int | None = None,
         context: dict[str, Any] | None = None,
         trace_id: str | None = None,
@@ -277,13 +321,19 @@ class InferenceTimeoutError(InferenceError):
             group_id: ID of the semantic group
             model_version: Version of the model used for inference
             timeout_ms: Configured timeout in milliseconds
+            timeout_seconds: Configured timeout in seconds (for backward compatibility)
             elapsed_ms: Actual elapsed time in milliseconds
             context: Additional context information
             trace_id: Distributed tracing identifier
         """
+        self.timeout_ms = timeout_ms
+        self.timeout_seconds = timeout_seconds or (timeout_ms // 1000 if timeout_ms is not None else None)
+        self.elapsed_ms = elapsed_ms
         context = context or {}
         if timeout_ms is not None:
             context["timeout_ms"] = timeout_ms
+        if self.timeout_seconds is not None:
+            context["timeout_seconds"] = self.timeout_seconds
         if elapsed_ms is not None:
             context["elapsed_ms"] = elapsed_ms
         super().__init__(message, group_id, model_version, context, trace_id)
@@ -359,12 +409,11 @@ class LabelFetchError(PredictionError):
             context: Additional context information
             trace_id: Distributed tracing identifier
         """
+        self.source = source
         context = context or {}
-        if group_id:
-            context["group_id"] = group_id
         if source:
             context["source"] = source
-        super().__init__(message, context, trace_id)
+        super().__init__(message, group_id=group_id, context=context, trace_id=trace_id)
 
 
 class CacheError(PredictionError):
@@ -396,12 +445,14 @@ class CacheError(PredictionError):
             context: Additional context information
             trace_id: Distributed tracing identifier
         """
+        self.operation = operation
+        self.key = key
         context = context or {}
         if operation:
             context["operation"] = operation
         if key:
             context["key"] = key
-        super().__init__(message, context, trace_id)
+        super().__init__(message, context=context, trace_id=trace_id)
 
 
 class KafkaError(PredictionError):
@@ -434,12 +485,14 @@ class KafkaError(PredictionError):
             context: Additional context information
             trace_id: Distributed tracing identifier
         """
+        self.topic = topic
+        self.operation = operation
         context = context or {}
         if topic:
             context["topic"] = topic
         if operation:
             context["operation"] = operation
-        super().__init__(message, context, trace_id)
+        super().__init__(message, context=context, trace_id=trace_id)
 
 
 class PostgresError(PredictionError):
@@ -471,13 +524,16 @@ class PostgresError(PredictionError):
             context: Additional context information
             trace_id: Distributed tracing identifier
         """
+        self.operation = operation
+        self.query = query
         context = context or {}
         if operation:
             context["operation"] = operation
         if query:
             # Truncate query for logging (max 200 chars)
-            context["query"] = query[:200] + "..." if len(query) > 200 else query
-        super().__init__(message, context, trace_id)
+            truncated_query = query[:200] + "..." if len(query) > 200 else query
+            context["query"] = truncated_query
+        super().__init__(message, context=context, trace_id=trace_id)
 
 
 class ServiceError(PredictionError):
@@ -533,4 +589,3 @@ class ValidationError(PredictionError):
             trace_id: Distributed tracing identifier
         """
         super().__init__(message, details, trace_id)
-

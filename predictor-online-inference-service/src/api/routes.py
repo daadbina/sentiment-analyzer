@@ -184,7 +184,7 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
                     "message": str(e),
                     "trace_id": trace_id,
                 },
-            )
+            ) from e
         except Exception as e:
             logger.error(
                 f"Unexpected API error: group_id={request.group_id}, error={e}",
@@ -208,7 +208,7 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
                     "message": "An unexpected error occurred",
                     "trace_id": trace_id,
                 },
-            )
+            ) from e
 
 
 @router.post(
@@ -320,7 +320,7 @@ async def predict_batch(request: BatchPredictionRequest) -> BatchPredictionRespo
                     "message": str(e),
                     "trace_id": trace_id,
                 },
-            )
+            ) from e
 
 
 @router.get(
@@ -530,5 +530,4 @@ async def get_model_metadata() -> ModelMetadataResponse:
                 "error": "ModelMetadataError",
                 "message": str(e),
             },
-        )
-
+        ) from e

@@ -184,4 +184,3 @@ class PredictionCache:
             Redis cache key
         """
         return f"prediction:{group_id}"
-

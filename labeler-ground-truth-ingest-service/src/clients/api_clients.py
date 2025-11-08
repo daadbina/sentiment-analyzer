@@ -732,10 +732,10 @@ class GDELTFetcher(BaseAPIClient):
                         else:
                             event_type_name = "ARMED_CONFLICT"
 
-                    # FILTER: Only include conflict events for ground truth labels
-                    # Non-conflict events (label_conflict=0) are not used for model training
-                    if label_conflict == 0:
-                        continue
+                    # Include both conflict and non-conflict events for balanced training
+                    # label_conflict=1: conflict event (positive example)
+                    # label_conflict=0: non-conflict event (negative example)
+                    # This provides balanced positive/negative examples for binary classification
 
                     # Extract countries from GDELT event data
                     # GDELT provides Actor1CountryCode, Actor2CountryCode, ActionGeo_CountryCode

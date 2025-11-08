@@ -658,8 +658,9 @@ class LabelerService:
                 label["verified_at"] = verification_timestamp  # Set verification timestamp
                 # Map label_conflict to label_realized for PostgreSQL storage
                 # label_conflict is set by ACLED/GDELT fetchers (0 or 1)
-                # label_realized is the column name in ground_truth table
-                label["label_realized"] = label.get("label_conflict", 0)
+                # label_realized is the column name in ground_truth table (BOOLEAN type)
+                label_conflict_value = label.get("label_conflict", 0)
+                label["label_realized"] = bool(label_conflict_value)
                 enriched_event_labels.append(label)
 
 

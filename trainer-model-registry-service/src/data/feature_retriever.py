@@ -96,13 +96,17 @@ class FeatureRetriever:
                 ]
 
                 logger.info(f"Requesting {len(formatted_features)} features from Feast")
-                logger.debug(f"Formatted features: {formatted_features}")
+                logger.info(f"Formatted features: {formatted_features}")
+                logger.info(f"Entity dataframe shape: {entity_df.shape}")
+                logger.info(f"Entity dataframe:\n{entity_df}")
 
+                logger.info("Calling feast_client.get_features()")
                 feature_df = self.feast_client.get_features(
                     entity_df=entity_df,
                     features=formatted_features,
                     timestamp_column="timestamp",
                 )
+                logger.info("feast_client.get_features() returned successfully")
 
                 logger.info(
                     f"Retrieved {feature_df.shape[0]} rows with "

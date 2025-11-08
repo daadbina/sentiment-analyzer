@@ -7,7 +7,8 @@ Coordinates all training, evaluation, and registry operations.
 import logging
 import asyncio
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import pandas as pd
 
 from src.config import config
 from src.clients.postgres_client import PostgreSQLClient
@@ -173,8 +174,9 @@ class TrainerService:
                 logger.info("Starting training pipeline")
 
                 # Set default dates if not provided (18-month window)
+                # Use UTC timezone to match PostgreSQL CURRENT_TIMESTAMP
                 if not end_date:
-                    end_date = datetime.now()
+                    end_date = datetime.now(timezone.utc)
                 else:
                     end_date = datetime.fromisoformat(end_date)
 
@@ -182,6 +184,13 @@ class TrainerService:
                     start_date = end_date - timedelta(days=18*30)  # 18 months
                 else:
                     start_date = datetime.fromisoformat(start_date)
+
+                # Convert to naive datetimes for PostgreSQL (which stores naive timestamps)
+                # PostgreSQL CURRENT_TIMESTAMP is naive, so we need to strip timezone info
+                if start_date.tzinfo is not None:
+                    start_date = start_date.replace(tzinfo=None)
+                if end_date.tzinfo is not None:
+                    end_date = end_date.replace(tzinfo=None)
 
                 logger.info(f"Training window: {start_date} to {end_date}")
 
@@ -200,11 +209,14 @@ class TrainerService:
                 # Extract group IDs from labels
                 # Ground truth labels already have group_id mapped by labeler service
                 logger.info("Extracting group IDs from labels")
+                logger.info(f"Labels dataframe shape: {y.shape}")
+                logger.info(f"Labels columns: {list(y.columns)}")
+                logger.info(f"Labels sample:\n{y.head()}")
                 group_ids = y['group_id'].unique().tolist()
                 # Remove None values
                 group_ids = [gid for gid in group_ids if gid is not None]
                 logger.info(f"Found {len(group_ids)} unique groups in labels")
-                logger.debug(f"Group IDs (first 5): {group_ids[:5]}")
+                logger.info(f"Group IDs (first 5): {group_ids[:5]}")
 
                 if not group_ids:
                     logger.warning("No groups found in labeled data")
@@ -242,10 +254,39 @@ class TrainerService:
                         logger.error("No valid labels after removing null values")
                         raise TrainerError("No valid labels available for training")
 
-                # Convert boolean to int (0/1)
-                y_series = y['label_realized'].astype(int)
-                logger.info(f"Extracted label column: {y_series.shape}")
-                logger.debug(f"Label distribution before preprocessing: {y_series.value_counts().to_dict()}")
+                # Align features with labels by group_id
+                # We have multiple labels per group_id, so we need to replicate feature rows
+                logger.info("Aligning features with labels by group_id")
+                logger.info(f"Before alignment: X shape={X.shape}, y shape={y.shape}")
+
+                # Set group_id as index in features for alignment
+                X_indexed = X.set_index('group_id') if 'group_id' in X.columns else X
+
+                # For each label, get the corresponding feature row
+                aligned_X_list = []
+                aligned_y_list = []
+
+                for idx, label_row in y.iterrows():
+                    group_id = label_row['group_id']
+                    if group_id in X_indexed.index:
+                        # Get feature row for this group_id
+                        feature_row = X_indexed.loc[group_id]
+                        # Handle case where multiple rows have same group_id (shouldn't happen but be safe)
+                        if isinstance(feature_row, pd.DataFrame):
+                            feature_row = feature_row.iloc[0]
+                        aligned_X_list.append(feature_row)
+                        aligned_y_list.append(label_row['label_realized'])
+
+                if not aligned_X_list:
+                    logger.error("No labels could be aligned with features!")
+                    raise TrainerError("No labels could be aligned with features")
+
+                # Create aligned dataframes
+                X = pd.DataFrame(aligned_X_list)
+                y_series = pd.Series(aligned_y_list, dtype=int)
+
+                logger.info(f"After alignment: X shape={X.shape}, y shape={y_series.shape}")
+                logger.info(f"Label distribution after alignment: {y_series.value_counts().to_dict()}")
 
                 # Preprocess data
                 logger.info("Preprocessing data")
@@ -277,13 +318,23 @@ class TrainerService:
                 )
                 logger.info(f"Evaluation results: {eval_results}")
 
-                # Detect drift
+                # Detect drift (non-blocking - log errors but continue)
                 logger.info("Detecting drift")
-                feature_drift = self.drift_detector.detect_feature_drift(
-                    X_train, X_test
-                )
-                target_drift = self.drift_detector.detect_target_drift(y_train, y_test)
-                logger.info(f"Feature drift: {feature_drift}, Target drift: {target_drift}")
+                feature_drift = None
+                target_drift = None
+                try:
+                    feature_drift = self.drift_detector.detect_feature_drift(
+                        X_train, X_test
+                    )
+                    logger.info(f"Feature drift detected: {feature_drift}")
+                except Exception as e:
+                    logger.warning(f"Feature drift detection failed (non-blocking): {e}")
+
+                try:
+                    target_drift = self.drift_detector.detect_target_drift(y_train, y_test)
+                    logger.info(f"Target drift detected: {target_drift}")
+                except Exception as e:
+                    logger.warning(f"Target drift detection failed (non-blocking): {e}")
 
                 result = {
                     "timestamp": datetime.now().isoformat(),

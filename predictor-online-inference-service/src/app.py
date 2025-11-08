@@ -19,6 +19,7 @@ from .clients import (
     MLflowModelClient,
     PostgresClient,
     RedisClient,
+    S3Client,
 )
 from .config import get_config
 from .features import FeatureFetcher, FeatureReconciliationChecker, FeatureValidator
@@ -52,7 +53,8 @@ async def lifespan(app: FastAPI):
 
     # Initialize clients
     feast_client = FeastClient(config.feast)
-    mlflow_client = MLflowModelClient(config.mlflow)
+    s3_client = S3Client(config.s3)
+    mlflow_client = MLflowModelClient(config.mlflow, s3_client=s3_client)
     redis_client = RedisClient(config.redis)
     postgres_client = PostgresClient(config.postgres)
     kafka_consumer = KafkaConsumerClient(config.kafka)
@@ -60,14 +62,21 @@ async def lifespan(app: FastAPI):
 
     # Connect clients
     await feast_client.connect()
+    await s3_client.connect()
+    await mlflow_client.connect()
     await redis_client.connect()
     await postgres_client.connect()
+    await kafka_consumer.connect()
     await kafka_producer.connect()
 
     logger.info("All clients connected")
 
     # Initialize A/B testing strategy
-    ab_testing_strategy = create_ab_testing_strategy(config.inference)
+    ab_testing_strategy = create_ab_testing_strategy(
+        enable_ab_testing=config.inference.ab_testing_enabled,
+        default_version=config.mlflow.model_version,
+        variants=None,  # No variants configured yet
+    )
 
     # Initialize components
     feature_fetcher = FeatureFetcher(feast_client)
@@ -143,7 +152,7 @@ async def lifespan(app: FastAPI):
     await feast_client.disconnect()
     await redis_client.disconnect()
     await postgres_client.disconnect()
-    await kafka_producer.close()
+    await kafka_producer.disconnect()
 
     logger.info("Service shutdown complete")
 
@@ -164,8 +173,9 @@ def create_app() -> FastAPI:
     # Initialize tracing
     initialize_tracing(
         service_name="predictor-online-inference-service",
-        jaeger_host=config.monitoring.jaeger_host,
-        jaeger_port=config.monitoring.jaeger_port,
+        jaeger_agent_host=config.monitoring.jaeger_agent_host,
+        jaeger_agent_port=config.monitoring.jaeger_agent_port,
+        enable_tracing=config.monitoring.enable_tracing,
     )
 
     # Create FastAPI app

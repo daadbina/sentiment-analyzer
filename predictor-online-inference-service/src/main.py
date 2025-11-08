@@ -12,7 +12,7 @@ import sys
 
 import uvicorn
 
-from .config import get_config
+from .config import load_config
 from .metrics_server import MetricsServer
 from .service import PredictorService
 from .utils.logging_config import setup_logging
@@ -99,9 +99,13 @@ async def perform_startup_checks(config) -> bool:
         try:
             redis_client = RedisClient(config.redis)
             await redis_client.connect()
-            await redis_client.ping()
+            is_healthy = await redis_client.health_check()
             await redis_client.disconnect()
-            logger.info("✓ Redis health check passed")
+            if is_healthy:
+                logger.info("✓ Redis health check passed")
+            else:
+                logger.error("✗ Redis health check failed: unhealthy")
+                return False
         except Exception as e:
             logger.error(f"✗ Redis health check failed: {e}")
             return False
@@ -111,12 +115,13 @@ async def perform_startup_checks(config) -> bool:
         try:
             postgres_client = PostgresClient(config.postgres)
             await postgres_client.connect()
-            # Verify predictions table exists
-            await postgres_client.execute_query(
-                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'predictions')"
-            )
+            is_healthy = await postgres_client.health_check()
             await postgres_client.disconnect()
-            logger.info("✓ PostgreSQL schema validated")
+            if is_healthy:
+                logger.info("✓ PostgreSQL schema validated")
+            else:
+                logger.error("✗ PostgreSQL schema check failed: unhealthy")
+                return False
         except Exception as e:
             logger.error(f"✗ PostgreSQL schema check failed: {e}")
             return False
@@ -126,8 +131,13 @@ async def perform_startup_checks(config) -> bool:
         try:
             kafka_producer = KafkaProducerClient(config.kafka)
             await kafka_producer.connect()
-            await kafka_producer.close()
-            logger.info("✓ Kafka topics verified")
+            is_healthy = await kafka_producer.health_check()
+            await kafka_producer.disconnect()
+            if is_healthy:
+                logger.info("✓ Kafka topics verified")
+            else:
+                logger.error("✗ Kafka topic check failed: unhealthy")
+                return False
         except Exception as e:
             logger.error(f"✗ Kafka topic check failed: {e}")
             return False
@@ -184,10 +194,11 @@ async def start_metrics_server(config) -> MetricsServer:
         MetricsServer instance
     """
     metrics_server = MetricsServer(
-        host=config.monitoring.prometheus_host,
+        host="0.0.0.0",  # Bind to all interfaces
         port=config.monitoring.prometheus_port,
     )
     await metrics_server.start()
+    logger.info(f"Metrics server started on port {config.monitoring.prometheus_port}")
     return metrics_server
 
 
@@ -204,7 +215,8 @@ def main() -> None:
         args = parse_args()
 
         # Load configuration
-        config = get_config()
+        config = load_config()
+        logger.info("Configuration loaded successfully")
 
         # Override config with command-line arguments
         if args.host:

@@ -83,7 +83,7 @@ class RedisClient:
         """Disconnect from Redis server."""
         if self._client:
             logger.info("Disconnecting from Redis")
-            await self._client.close()
+            await self._client.aclose()
             self._client = None
 
     def _ensure_connected(self) -> Redis:

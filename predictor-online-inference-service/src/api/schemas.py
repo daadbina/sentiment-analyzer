@@ -6,7 +6,7 @@ Defines Pydantic models for API validation and documentation.
 
 from typing import Any
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class PredictionRequest(BaseModel):
@@ -15,21 +15,23 @@ class PredictionRequest(BaseModel):
     group_id: str = Field(..., description="Semantic group ID")
     domain: str = Field(..., description="Domain (btc/conflict/geopolitical)")
 
-    @validator("domain")
-    def validate_domain(self, v):
+    @field_validator("domain")
+    @classmethod
+    def validate_domain(cls, v):
         """Validate domain value."""
         allowed_domains = ["btc", "conflict", "geopolitical"]
         if v not in allowed_domains:
             raise ValueError(f"Domain must be one of {allowed_domains}")
         return v
 
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "group_id": "group_123",
                 "domain": "btc",
             }
         }
+    )
 
 
 class BatchPredictionRequest(BaseModel):
@@ -38,16 +40,18 @@ class BatchPredictionRequest(BaseModel):
     group_ids: list[str] = Field(..., description="List of semantic group IDs")
     domain: str = Field(..., description="Domain (btc/conflict/geopolitical)")
 
-    @validator("domain")
-    def validate_domain(self, v):
+    @field_validator("domain")
+    @classmethod
+    def validate_domain(cls, v):
         """Validate domain value."""
         allowed_domains = ["btc", "conflict", "geopolitical"]
         if v not in allowed_domains:
             raise ValueError(f"Domain must be one of {allowed_domains}")
         return v
 
-    @validator("group_ids")
-    def validate_group_ids(self, v):
+    @field_validator("group_ids")
+    @classmethod
+    def validate_group_ids(cls, v):
         """Validate group_ids list."""
         if not v:
             raise ValueError("group_ids cannot be empty")
@@ -55,13 +59,14 @@ class BatchPredictionRequest(BaseModel):
             raise ValueError("group_ids cannot exceed 1000 items")
         return v
 
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "group_ids": ["group_123", "group_456", "group_789"],
                 "domain": "btc",
             }
         }
+    )
 
 
 class PredictionResponse(BaseModel):
@@ -85,8 +90,8 @@ class PredictionResponse(BaseModel):
     predicted_at: str = Field(..., description="Prediction timestamp (ISO format)")
     trace_id: str | None = Field(None, description="Trace ID for distributed tracing")
 
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "group_id": "group_123",
                 "domain": "btc",
@@ -97,6 +102,7 @@ class PredictionResponse(BaseModel):
                 "trace_id": "01JCABCDEFGHIJKLMNOPQRSTUV",
             }
         }
+    )
 
 
 class BatchPredictionResponse(BaseModel):
@@ -105,8 +111,8 @@ class BatchPredictionResponse(BaseModel):
     predictions: list[PredictionResponse] = Field(..., description="List of predictions")
     total: int = Field(..., description="Total number of predictions")
 
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "predictions": [
                     {
@@ -122,6 +128,7 @@ class BatchPredictionResponse(BaseModel):
                 "total": 1,
             }
         }
+    )
 
 
 class HealthResponse(BaseModel):
@@ -132,8 +139,8 @@ class HealthResponse(BaseModel):
     timestamp: str = Field(..., description="Current timestamp (ISO format)")
     dependencies: dict[str, str] = Field(..., description="Dependency health status")
 
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "status": "healthy",
                 "version": "1.0.0",
@@ -147,6 +154,7 @@ class HealthResponse(BaseModel):
                 },
             }
         }
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -157,8 +165,8 @@ class ErrorResponse(BaseModel):
     trace_id: str | None = Field(None, description="Trace ID for debugging")
     details: dict[str, Any] | None = Field(None, description="Additional error details")
 
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "error": "FeatureFetchError",
                 "message": "Failed to fetch features from online store",
@@ -169,6 +177,7 @@ class ErrorResponse(BaseModel):
                 },
             }
         }
+    )
 
 
 class ModelMetadataResponse(BaseModel):
@@ -181,8 +190,8 @@ class ModelMetadataResponse(BaseModel):
     description: str | None = Field(None, description="Model description")
     tags: dict[str, str] | None = Field(None, description="Model tags")
 
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "model_name": "predictor_model",
                 "model_version": "v1.0.0",
@@ -195,3 +204,4 @@ class ModelMetadataResponse(BaseModel):
                 },
             }
         }
+    )

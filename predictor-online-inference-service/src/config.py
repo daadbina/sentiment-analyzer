@@ -7,6 +7,15 @@ No hardcoded values or defaults that could lead to production issues.
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load .env file from the service root directory
+env_path = Path(__file__).parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+    print(f"Loaded environment variables from {env_path}")
 
 
 @dataclass
@@ -42,26 +51,52 @@ class KafkaConfig:
 
 
 @dataclass
+class S3Config:
+    """S3 configuration parameters."""
+
+    bucket: str
+    region: str
+    access_key_id: str
+    secret_access_key: str
+    endpoint_url: str | None
+
+    @classmethod
+    def from_env(cls) -> "S3Config":
+        """Load S3 configuration from environment variables."""
+        return cls(
+            bucket=os.environ.get("S3_BUCKET", "sentiment-analyzer-models"),
+            region=os.environ.get("S3_REGION", "us-east-1"),
+            access_key_id=os.environ.get("S3_ACCESS_KEY_ID", "minioadmin"),
+            secret_access_key=os.environ.get("S3_SECRET_ACCESS_KEY", "minioadmin"),
+            endpoint_url=os.environ.get("S3_ENDPOINT_URL", "http://154.53.166.231:9900"),
+        )
+
+
+@dataclass
 class MLflowConfig:
     """MLflow configuration parameters."""
 
     tracking_uri: str
-    model_name: str
-    model_version: str
-    model_stage: str
+    model_name: str | None
+    model_version: str | None
+    model_stage: str | None
     fallback_model_version: str | None
     model_load_timeout_seconds: int
+    auto_select_best_model: bool
+    model_selection_metric: str
 
     @classmethod
     def from_env(cls) -> "MLflowConfig":
         """Load MLflow configuration from environment variables."""
         return cls(
             tracking_uri=os.environ["MLFLOW_TRACKING_URI"],
-            model_name=os.environ.get("MLFLOW_MODEL_NAME", "predictor_model"),
-            model_version=os.environ.get("MLFLOW_MODEL_VERSION", "v1.0.0"),
-            model_stage=os.environ.get("MLFLOW_MODEL_STAGE", "Production"),
+            model_name=os.environ.get("MLFLOW_MODEL_NAME"),
+            model_version=os.environ.get("MLFLOW_MODEL_VERSION"),
+            model_stage=os.environ.get("MLFLOW_MODEL_STAGE"),
             fallback_model_version=os.environ.get("MLFLOW_FALLBACK_MODEL_VERSION"),
             model_load_timeout_seconds=int(os.environ.get("MLFLOW_MODEL_LOAD_TIMEOUT_SECONDS", "30")),
+            auto_select_best_model=os.environ.get("MLFLOW_AUTO_SELECT_BEST_MODEL", "true").lower() == "true",
+            model_selection_metric=os.environ.get("MLFLOW_MODEL_SELECTION_METRIC", "f1"),
         )
 
 
@@ -207,7 +242,7 @@ class APIConfig:
 
         return cls(
             host=os.environ.get("API_HOST", "0.0.0.0"),
-            port=int(os.environ.get("REST_API_PORT", "8000")),
+            port=int(os.environ.get("REST_API_PORT", "8010")),
             workers=int(os.environ.get("API_WORKERS", "4")),
             enable_cors=os.environ.get("ENABLE_CORS", "true").lower() == "true",
             cors_origins=cors_origins,
@@ -281,6 +316,7 @@ class Config:
 
     kafka: KafkaConfig
     mlflow: MLflowConfig
+    s3: S3Config
     feast: FeastConfig
     redis: RedisConfig
     postgres: PostgresConfig
@@ -295,6 +331,7 @@ class Config:
         return cls(
             kafka=KafkaConfig.from_env(),
             mlflow=MLflowConfig.from_env(),
+            s3=S3Config.from_env(),
             feast=FeastConfig.from_env(),
             redis=RedisConfig.from_env(),
             postgres=PostgresConfig.from_env(),

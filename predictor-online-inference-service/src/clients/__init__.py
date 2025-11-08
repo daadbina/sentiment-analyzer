@@ -6,6 +6,7 @@ from .kafka_producer import PREDICTION_SCHEMA, KafkaProducerClient
 from .mlflow_client import MLflowModelClient
 from .postgres_client import PostgresClient
 from .redis_client import RedisClient
+from .s3_client import S3Client
 
 __all__ = [
     "FeastClient",
@@ -14,5 +15,6 @@ __all__ = [
     "PostgresClient",
     "KafkaConsumerClient",
     "KafkaProducerClient",
+    "S3Client",
     "PREDICTION_SCHEMA",
 ]

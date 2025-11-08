@@ -18,6 +18,7 @@ from .clients import (
     PostgresClient,
     RedisClient,
 )
+from .clients.s3_client import S3Client
 from .config import Config, get_config
 from .exceptions import ServiceError
 from .features import (
@@ -65,6 +66,7 @@ class PredictorService:
 
         # Clients
         self.feast_client: FeastClient | None = None
+        self.s3_client: S3Client | None = None
         self.mlflow_client: MLflowModelClient | None = None
         self.redis_client: RedisClient | None = None
         self.postgres_client: PostgresClient | None = None
@@ -156,7 +158,8 @@ class PredictorService:
 
         # Create clients
         self.feast_client = FeastClient(self.config.feast)
-        self.mlflow_client = MLflowModelClient(self.config.mlflow)
+        self.s3_client = S3Client(self.config.s3)
+        self.mlflow_client = MLflowModelClient(self.config.mlflow, s3_client=self.s3_client)
         self.redis_client = RedisClient(self.config.redis)
         self.postgres_client = PostgresClient(self.config.postgres)
         self.kafka_consumer = KafkaConsumerClient(self.config.kafka)
@@ -164,6 +167,8 @@ class PredictorService:
 
         # Connect clients
         await self.feast_client.connect()
+        await self.s3_client.connect()
+        await self.mlflow_client.connect()
         await self.redis_client.connect()
         await self.postgres_client.connect()
         await self.kafka_producer.connect()
@@ -175,7 +180,11 @@ class PredictorService:
         logger.info("Initializing components")
 
         # Initialize A/B testing strategy
-        ab_testing_strategy = create_ab_testing_strategy(self.config.inference)
+        ab_testing_strategy = create_ab_testing_strategy(
+            enable_ab_testing=self.config.inference.ab_testing_enabled,
+            default_version=self.config.mlflow.model_version,
+            variants=None,  # No variants configured yet
+        )
 
         # Initialize new components
         self.feature_store_adapter = FeatureStoreAdapter(

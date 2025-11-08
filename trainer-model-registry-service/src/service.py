@@ -410,44 +410,39 @@ class TrainerService:
                             if filtered_config:
                                 self.mlflow_client.log_params(run_id, filtered_config)
 
-                            # Log model directly to MLflow (uses configured artifact store)
+                            # Save and register model
                             model_version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                             try:
-                                # Use MLflow's sklearn flavor for all models
-                                import mlflow.sklearn
-                                mlflow.sklearn.log_model(
-                                    model.model,
-                                    artifact_path="model",
-                                    registered_model_name=f"sentiment_{model_type}"
+                                artifact_metadata = self.artifact_manager.save_model_artifact(
+                                    model=model,
+                                    model_name=f"sentiment_{model_type}",
+                                    version=model_version,
                                 )
-                                logger.info(f"Model logged to MLflow: sentiment_{model_type}")
-                            except Exception as e:
-                                logger.warning(f"Could not log model with sklearn flavor: {e}, trying generic approach")
-                                # Fallback: log as generic Python model
-                                mlflow.log_artifact(
-                                    local_path=model.model,
-                                    artifact_path="model"
-                                )
+                                logger.info(f"Model artifact saved: {artifact_metadata}")
 
-                            # Register in MLflow registry
-                            model_uri = f"runs://{run_id}/model"
-                            registered_version = self.mlflow_client.register_model(
-                                model_uri=model_uri,
-                                model_name=f"sentiment_{model_type}",
-                                tags={
-                                    "model_type": model_type,
-                                    "version": model_version,
-                                    "auc": str(eval_result.get("auc", 0)),
+                                # Register in MLflow registry
+                                model_uri = f"runs://{run_id}/model"
+                                registered_version = self.mlflow_client.register_model(
+                                    model_uri=model_uri,
+                                    model_name=f"sentiment_{model_type}",
+                                    tags={
+                                        "model_type": model_type,
+                                        "version": model_version,
+                                        "auc": str(eval_result.get("auc", 0)),
+                                    }
+                                )
+                                logger.info(f"Model registered: sentiment_{model_type} (version: {registered_version})")
+
+                                registered_models[model_type] = {
+                                    "model_name": f"sentiment_{model_type}",
+                                    "version": registered_version,
+                                    "run_id": run_id,
+                                    "metrics": eval_result,
                                 }
-                            )
-                            logger.info(f"Model registered: sentiment_{model_type} (version: {registered_version})")
-
-                            registered_models[model_type] = {
-                                "model_name": f"sentiment_{model_type}",
-                                "version": registered_version,
-                                "run_id": run_id,
-                                "metrics": eval_result,
-                            }
+                            except Exception as artifact_error:
+                                logger.error(f"Failed to save/register artifact: {artifact_error}")
+                                # Continue without artifact registration
+                                pass
                     except Exception as e:
                         logger.error(f"Failed to register {model_type} model: {e}", exc_info=True)
                         # Continue with other models

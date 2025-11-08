@@ -18,6 +18,7 @@ from src.config import config
 from src.service import TrainerService
 from src.exceptions import TrainerError
 from src.utils.trace import get_tracer
+from src.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -263,6 +264,9 @@ def main():
 
     Starts the FastAPI server.
     """
+    # Setup logging
+    setup_logging(log_level=config.service.log_level)
+
     logger.info("Starting trainer service on port %d", config.service.port)
 
     uvicorn.run(

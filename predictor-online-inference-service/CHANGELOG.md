@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration tests for Redis (Task 45)
 - Integration tests for Kafka (Task 46)
 - Integration tests for PostgreSQL (Task 46)
+- Contract tests for Avro schemas (Task 47, 20+ tests)
+- Integration tests for feature reconciliation (Task 48, 8+ tests)
+- Integration tests for label validation (Task 49, 12+ tests)
 
 ### Changed
 - Enhanced main.py with signal handling and startup checks

@@ -60,15 +60,18 @@ class LabelRetriever:
             try:
                 logger.info(f"Retrieving labels from {start_date} to {end_date}")
 
-                # Query labels from PostgreSQL
+                # Query labels from PostgreSQL ground_truth table
+                # Ground truth table contains event realization labels with group_id mapping
                 query = """
                     SELECT
-                        article_id,
-                        sentiment,
-                        confidence,
+                        event_id,
+                        group_id,
+                        label_realized,
+                        label_confidence,
                         created_at
                     FROM ground_truth
                     WHERE created_at >= $1 AND created_at <= $2
+                    AND group_id IS NOT NULL
                     ORDER BY created_at DESC
                 """
 
@@ -98,14 +101,14 @@ class LabelRetriever:
                 else:
                     logger.info("No null values found in labels")
 
-                # Check sentiment distribution
-                if 'sentiment' in label_df.columns:
-                    sentiment_dist = label_df['sentiment'].value_counts()
-                    logger.info(f"Sentiment distribution:\n{sentiment_dist}")
+                # Check label realization distribution
+                if 'label_realized' in label_df.columns:
+                    realization_dist = label_df['label_realized'].value_counts()
+                    logger.info(f"Label realization distribution:\n{realization_dist}")
 
                 # Check confidence statistics
-                if 'confidence' in label_df.columns:
-                    logger.info(f"Confidence statistics:\n{label_df['confidence'].describe()}")
+                if 'label_confidence' in label_df.columns:
+                    logger.info(f"Label confidence statistics:\n{label_df['label_confidence'].describe()}")
 
                 return label_df
 
@@ -125,10 +128,10 @@ class LabelRetriever:
         entity_ids: List[str],
     ) -> pd.DataFrame:
         """
-        Retrieve labels for specific entities.
+        Retrieve labels for specific group entities.
 
         Args:
-            entity_ids: List of entity IDs (article IDs)
+            entity_ids: List of group IDs (semantic group IDs)
 
         Returns:
             DataFrame with labels
@@ -140,29 +143,30 @@ class LabelRetriever:
             span.set_attribute("num_entities", len(entity_ids))
 
             try:
-                logger.info(f"Retrieving labels for {len(entity_ids)} entities")
+                logger.info(f"Retrieving labels for {len(entity_ids)} group entities")
 
                 # Create placeholders for SQL IN clause
                 placeholders = ", ".join(f"${i+1}" for i in range(len(entity_ids)))
                 query = f"""
-                    SELECT 
-                        article_id,
-                        sentiment,
-                        confidence,
+                    SELECT
+                        event_id,
+                        group_id,
+                        label_realized,
+                        label_confidence,
                         created_at
                     FROM ground_truth
-                    WHERE article_id IN ({placeholders})
+                    WHERE group_id IN ({placeholders})
                     ORDER BY created_at DESC
                 """
 
                 rows = await self.postgres_client.fetch_all(query, *entity_ids)
 
                 if not rows:
-                    logger.warning(f"No labels found for {len(entity_ids)} entities")
+                    logger.warning(f"No labels found for {len(entity_ids)} group entities")
                     return pd.DataFrame()
 
                 label_df = pd.DataFrame(rows)
-                logger.info(f"Retrieved {len(label_df)} labels for entities")
+                logger.info(f"Retrieved {len(label_df)} labels for group entities")
 
                 return label_df
 

@@ -656,6 +656,10 @@ class LabelerService:
                 group_id = reconciliation_map.get(event_id)
                 label["group_id"] = group_id  # None if not reconciled
                 label["verified_at"] = verification_timestamp  # Set verification timestamp
+                # Map label_conflict to label_realized for PostgreSQL storage
+                # label_conflict is set by ACLED/GDELT fetchers (0 or 1)
+                # label_realized is the column name in ground_truth table
+                label["label_realized"] = label.get("label_conflict", 0)
                 enriched_event_labels.append(label)
 
 

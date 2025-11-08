@@ -1,5 +1,5 @@
 project: sentiment_analyzer
-registry: registry.db
+registry: ../feast/registry.db
 provider: local
 offline_store:
   type: file

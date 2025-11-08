@@ -38,14 +38,14 @@ class FeastClient:
             ExternalServiceError: If connection fails
         """
         try:
-            self.store = FeatureStore(repo_path=self.config.registry_path)
+            self.store = FeatureStore(repo_path=self.config.repo_path)
             logger.info("Feast feature store connected")
         except Exception as e:
             logger.error(f"Failed to connect to Feast: {e}")
             raise ExternalServiceError(
                 f"Failed to connect to Feast: {e}",
                 service_name="Feast",
-                details={"registry_path": self.config.registry_path},
+                details={"repo_path": self.config.repo_path, "registry_path": self.config.registry_path},
             )
 
     def health_check(self) -> bool:
@@ -99,9 +99,19 @@ class FeastClient:
                 f"Retrieving {len(features)} features for {len(entity_df)} entities"
             )
 
+            # Feast requires event_timestamp column
+            # Rename timestamp column to event_timestamp if needed
+            entity_df_copy = entity_df.copy()
+            if timestamp_column in entity_df_copy.columns and timestamp_column != "event_timestamp":
+                entity_df_copy = entity_df_copy.rename(columns={timestamp_column: "event_timestamp"})
+                logger.debug(f"Renamed {timestamp_column} to event_timestamp")
+
+            logger.debug(f"Entity dataframe columns: {list(entity_df_copy.columns)}")
+            logger.debug(f"Entity dataframe dtypes:\n{entity_df_copy.dtypes}")
+
             # Get historical features
             feature_df = self.store.get_historical_features(
-                entity_df=entity_df,
+                entity_df=entity_df_copy,
                 features=features,
                 full_feature_names=True,
             ).to_df()

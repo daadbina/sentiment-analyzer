@@ -24,6 +24,7 @@ class KafkaConfig(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 class PostgresConfig(BaseSettings):
@@ -40,6 +41,7 @@ class PostgresConfig(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
     @property
     def connection_string(self) -> str:
@@ -62,6 +64,7 @@ class RedisConfig(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 class QdrantConfig(BaseSettings):
@@ -75,6 +78,7 @@ class QdrantConfig(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 class FeastConfig(BaseSettings):
@@ -89,6 +93,7 @@ class FeastConfig(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 class FeatureConfig(BaseSettings):
@@ -108,6 +113,7 @@ class FeatureConfig(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 class MonitoringConfig(BaseSettings):
@@ -121,6 +127,7 @@ class MonitoringConfig(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 class Config(BaseSettings):
@@ -137,6 +144,7 @@ class Config(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 # Global config instance

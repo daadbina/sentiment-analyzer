@@ -15,8 +15,13 @@ class FeastConfig(BaseSettings):
 
     model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
+    repo_path: str = Field(
+        default=".",
+        alias="FEAST_REPO_PATH",
+        description="Path to Feast repository (directory containing feature_store.yaml)",
+    )
     registry_path: str = Field(
-        default="/feast/registry.db",
+        default="file:///C:/feast/registry.db",
         alias="FEAST_REGISTRY_PATH",
         description="Path to Feast registry database",
     )

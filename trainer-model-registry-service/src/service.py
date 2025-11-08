@@ -65,6 +65,7 @@ class TrainerService:
         with tracer.start_as_current_span("start_service"):
             try:
                 logger.info("Starting trainer service")
+                logger.info(f"Configuration: feast={config.feast}")
 
                 # Initialize tracing
                 tracing_config = TracingConfig(
@@ -184,36 +185,78 @@ class TrainerService:
 
                 logger.info(f"Training window: {start_date} to {end_date}")
 
-                # Retrieve data
-                logger.info("Retrieving features and labels")
-                X = self.feature_retriever.retrieve_features(
-                    entity_ids=[],  # Will be populated from labels
-                    start_date=start_date,
-                    end_date=end_date,
-                )
-                logger.info(f"Features retrieved: shape={X.shape}")
-
+                # Retrieve labels first
+                logger.info("Retrieving labels")
                 y = await self.label_retriever.retrieve_labels(
                     start_date=start_date,
                     end_date=end_date,
                 )
                 logger.info(f"Labels retrieved: shape={y.shape}")
 
-                # Check if we have data
-                if X.empty or y.empty:
-                    logger.error("No data retrieved for training!")
+                if y.empty:
+                    logger.error("No labels retrieved for training!")
                     raise TrainerError("No training data available")
+
+                # Extract group IDs from labels
+                # Ground truth labels already have group_id mapped by labeler service
+                logger.info("Extracting group IDs from labels")
+                group_ids = y['group_id'].unique().tolist()
+                # Remove None values
+                group_ids = [gid for gid in group_ids if gid is not None]
+                logger.info(f"Found {len(group_ids)} unique groups in labels")
+                logger.debug(f"Group IDs (first 5): {group_ids[:5]}")
+
+                if not group_ids:
+                    logger.warning("No groups found in labeled data")
+                    raise TrainerError("No semantic groups found in labeled data")
+
+                # Retrieve features for the mapped group IDs
+                logger.info("Retrieving features")
+                X = self.feature_retriever.retrieve_features(
+                    entity_ids=group_ids,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+                logger.info(f"Features retrieved: shape={X.shape}")
+
+                # Check if we have data
+                if X.empty:
+                    logger.error("No features retrieved for training!")
+                    raise TrainerError("No training data available")
+
+                # Extract label column from labels DataFrame
+                # Use label_realized as the target variable for event realization prediction
+                if 'label_realized' not in y.columns:
+                    logger.error(f"Label column 'label_realized' not found. Available columns: {list(y.columns)}")
+                    raise TrainerError("Label column 'label_realized' not found in ground truth data")
+
+                # Handle null values in label_realized
+                null_count = y['label_realized'].isnull().sum()
+                if null_count > 0:
+                    logger.warning(f"Found {null_count} null values in label_realized column")
+                    # Drop rows with null labels
+                    y = y.dropna(subset=['label_realized'])
+                    logger.info(f"After dropping nulls: {len(y)} labels remaining")
+
+                    if y.empty:
+                        logger.error("No valid labels after removing null values")
+                        raise TrainerError("No valid labels available for training")
+
+                # Convert boolean to int (0/1)
+                y_series = y['label_realized'].astype(int)
+                logger.info(f"Extracted label column: {y_series.shape}")
+                logger.debug(f"Label distribution before preprocessing: {y_series.value_counts().to_dict()}")
 
                 # Preprocess data
                 logger.info("Preprocessing data")
                 X_before = X.shape
-                X, y = self.preprocessor.preprocess(X, y, fit=True)
+                X, _ = self.preprocessor.preprocess(X, y_series, fit=True)
                 logger.info(f"Data after preprocessing: {X.shape} (was {X_before})")
 
                 # Split data
                 logger.info("Splitting data")
                 (X_train, y_train), (X_val, y_val), (X_test, y_test) = (
-                    self.splitter.split_temporal(X, y)
+                    self.splitter.split_temporal(X, y_series)
                 )
                 logger.info(f"Train set: {X_train.shape}, Val set: {X_val.shape}, Test set: {X_test.shape}")
                 logger.info(f"Train labels distribution: {y_train.value_counts().to_dict()}")

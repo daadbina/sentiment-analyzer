@@ -1,0 +1,14 @@
+apiVersion: v2
+name: api-analytics-service
+description: REST API for querying semantic groups, predictions, and analytics
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - api
+  - analytics
+  - sentiment-analyzer
+maintainers:
+  - name: Development Team
+    email: dev@example.com
+

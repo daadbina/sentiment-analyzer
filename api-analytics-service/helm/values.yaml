@@ -1,0 +1,89 @@
+replicaCount: 3
+
+image:
+  repository: sentiment-analyzer/api-analytics-service
+  pullPolicy: Always
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 8000
+  metricsPort: 9111
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: api-analytics.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+
+config:
+  postgres:
+    host: "postgres.sentiment-analyzer.svc.cluster.local"
+    port: 5432
+    database: "sentiment"
+  neo4j:
+    uri: "bolt://neo4j.sentiment-analyzer.svc.cluster.local:7687"
+  redis:
+    host: "redis.sentiment-analyzer.svc.cluster.local"
+    port: 6379
+  jwt:
+    algorithm: "HS256"
+    expirationHours: 24
+  cache:
+    ttlSeconds: 3600
+  rateLimit:
+    requestsPerWindow: 1000
+    windowSeconds: 60
+  api:
+    host: "0.0.0.0"
+    port: 8000
+    workers: 4
+    logLevel: "INFO"
+
+secrets:
+  postgres:
+    user: "adminsentiment"
+    password: "CHANGE_ME"
+  neo4j:
+    user: "neo4j"
+    password: "CHANGE_ME"
+  jwt:
+    secretKey: "CHANGE_ME_TO_RANDOM_SECRET"
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - api-analytics-service
+          topologyKey: kubernetes.io/hostname
+

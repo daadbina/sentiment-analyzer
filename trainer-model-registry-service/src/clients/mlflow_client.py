@@ -38,12 +38,15 @@ class MLflowClientWrapper:
             ExternalServiceError: If connection fails
         """
         try:
+            logger.info(f"Connecting to MLflow at {self.config.tracking_uri}")
             mlflow.set_tracking_uri(self.config.tracking_uri)
             mlflow.set_registry_uri(self.config.registry_uri)
             self.client = MlflowClient(tracking_uri=self.config.tracking_uri)
-            logger.info("MLflow client connected")
+            logger.info(f"MLflow client connected successfully")
+            logger.debug(f"Tracking URI: {self.config.tracking_uri}")
+            logger.debug(f"Registry URI: {self.config.registry_uri}")
         except Exception as e:
-            logger.error(f"Failed to connect to MLflow: {e}")
+            logger.error(f"Failed to connect to MLflow: {e}", exc_info=True)
             raise ExternalServiceError(
                 f"Failed to connect to MLflow: {e}",
                 service_name="MLflow",
@@ -358,4 +361,81 @@ class MLflowClientWrapper:
                 f"Failed to list model versions: {e}",
                 service_name="MLflow",
                 details={"model_name": model_name},
+            )
+
+    def list_experiments(self) -> List[Dict[str, Any]]:
+        """
+        List all experiments.
+
+        Returns:
+            List of experiment details
+
+        Raises:
+            ExternalServiceError: If listing fails
+        """
+        if not self.client:
+            raise ExternalServiceError(
+                "MLflow client not initialized",
+                service_name="MLflow",
+            )
+
+        try:
+            experiments = self.client.search_experiments()
+            logger.info(f"Listed {len(experiments)} experiments")
+            return [
+                {
+                    "experiment_id": exp.experiment_id,
+                    "name": exp.name,
+                    "artifact_location": exp.artifact_location,
+                    "lifecycle_stage": exp.lifecycle_stage,
+                }
+                for exp in experiments
+            ]
+        except Exception as e:
+            logger.error(f"Failed to list experiments: {e}")
+            raise ExternalServiceError(
+                f"Failed to list experiments: {e}",
+                service_name="MLflow",
+            )
+
+    def list_registered_models(self) -> List[Dict[str, Any]]:
+        """
+        List all registered models.
+
+        Returns:
+            List of registered model details
+
+        Raises:
+            ExternalServiceError: If listing fails
+        """
+        if not self.client:
+            raise ExternalServiceError(
+                "MLflow client not initialized",
+                service_name="MLflow",
+            )
+
+        try:
+            models = self.client.search_registered_models()
+            logger.info(f"Listed {len(models)} registered models")
+            return [
+                {
+                    "name": model.name,
+                    "creation_timestamp": model.creation_timestamp,
+                    "last_updated_timestamp": model.last_updated_timestamp,
+                    "latest_versions": [
+                        {
+                            "version": v.version,
+                            "stage": v.current_stage,
+                            "status": v.status,
+                        }
+                        for v in model.latest_versions
+                    ],
+                }
+                for model in models
+            ]
+        except Exception as e:
+            logger.error(f"Failed to list registered models: {e}")
+            raise ExternalServiceError(
+                f"Failed to list registered models: {e}",
+                service_name="MLflow",
             )

@@ -75,8 +75,13 @@ class LogisticRegressionModel(BaseModel):
                 logger.info(
                     f"Training Logistic Regression model with {len(X_train)} samples"
                 )
+                logger.info(f"Training data shape: {X_train.shape}")
+                logger.info(f"Training labels distribution: {pd.Series(y_train).value_counts().to_dict()}")
+                logger.debug(f"Training features: {list(X_train.columns)}")
+                logger.debug(f"Training data null values: {X_train.isnull().sum().sum()}")
 
                 # Train model
+                logger.info("Starting Logistic Regression model fitting...")
                 self.model.fit(X_train, y_train)
 
                 self.is_trained = True
@@ -91,8 +96,11 @@ class LogisticRegressionModel(BaseModel):
                 }
 
                 if X_val is not None and y_val is not None:
+                    logger.info(f"Validation data shape: {X_val.shape}")
+                    logger.info(f"Validation labels distribution: {pd.Series(y_val).value_counts().to_dict()}")
                     val_score = self.model.score(X_val, y_val)
                     metrics["val_accuracy"] = val_score
+                    logger.info(f"Validation accuracy: {val_score}")
 
                 logger.info(f"Logistic Regression training complete: {metrics}")
                 return metrics

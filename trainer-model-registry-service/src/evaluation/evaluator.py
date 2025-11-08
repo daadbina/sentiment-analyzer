@@ -117,6 +117,11 @@ class Evaluator:
         """
         with tracer.start_as_current_span("compute_metrics"):
             try:
+                # Log prediction distributions
+                logger.info(f"True labels distribution: {pd.Series(y_true).value_counts().to_dict()}")
+                logger.info(f"Predicted labels distribution: {pd.Series(y_pred).value_counts().to_dict()}")
+                logger.debug(f"Predicted probabilities (class 1) - min: {y_pred_proba.min():.4f}, max: {y_pred_proba.max():.4f}, mean: {y_pred_proba.mean():.4f}")
+
                 # Classification metrics
                 accuracy = accuracy_score(y_true, y_pred)
                 precision = precision_score(y_true, y_pred, zero_division=0)
@@ -146,7 +151,8 @@ class Evaluator:
                     "true_positives": int(tp),
                 }
 
-                logger.debug(f"Computed metrics: {metrics_dict}")
+                logger.info(f"Confusion matrix - TP: {tp}, TN: {tn}, FP: {fp}, FN: {fn}")
+                logger.info(f"Computed metrics: {metrics_dict}")
                 return metrics_dict
 
             except Exception as e:

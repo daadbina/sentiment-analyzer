@@ -76,14 +76,21 @@ class XGBoostModel(BaseModel):
                 self.validate_input(X_train, y_train)
 
                 logger.info(f"Training XGBoost model with {len(X_train)} samples")
+                logger.info(f"Training data shape: {X_train.shape}")
+                logger.info(f"Training labels distribution: {pd.Series(y_train).value_counts().to_dict()}")
+                logger.debug(f"Training features: {list(X_train.columns)}")
+                logger.debug(f"Training data null values: {X_train.isnull().sum().sum()}")
 
                 # Prepare evaluation set
                 eval_set = None
                 if X_val is not None and y_val is not None:
                     self.validate_input(X_val, y_val)
+                    logger.info(f"Validation data shape: {X_val.shape}")
+                    logger.info(f"Validation labels distribution: {pd.Series(y_val).value_counts().to_dict()}")
                     eval_set = [(X_val, y_val)]
 
                 # Train model
+                logger.info("Starting XGBoost model fitting...")
                 self.model.fit(
                     X_train,
                     y_train,
@@ -106,6 +113,7 @@ class XGBoostModel(BaseModel):
                     results = self.model.evals_result()
                     if "validation_0" in results:
                         metrics["best_auc"] = max(results["validation_0"]["auc"])
+                        logger.info(f"Best validation AUC: {metrics['best_auc']}")
 
                 logger.info(f"XGBoost training complete: {metrics}")
                 return metrics

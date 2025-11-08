@@ -199,8 +199,8 @@ class LabelRetriever:
                         stage="label_validation",
                     )
 
-                # Check for required columns
-                required_cols = ["article_id", "sentiment"]
+                # Check for required columns (from ground_truth table schema)
+                required_cols = ["event_id", "group_id", "label_realized", "label_confidence"]
                 missing_cols = [c for c in required_cols if c not in label_df.columns]
 
                 if missing_cols:
@@ -212,16 +212,22 @@ class LabelRetriever:
                 # Check for null values in critical columns
                 null_counts = label_df[required_cols].isnull().sum()
                 if null_counts.sum() > 0:
-                    logger.warning(f"Found null values in labels: {null_counts}")
+                    logger.warning(f"Found null values in labels:\n{null_counts[null_counts > 0]}")
 
-                # Check sentiment values are valid
-                valid_sentiments = {"positive", "negative", "neutral"}
-                invalid_sentiments = (
-                    set(label_df["sentiment"].unique()) - valid_sentiments
-                )
-                if invalid_sentiments:
+                # Check label_realized values are binary (0 or 1)
+                valid_labels = {0, 1}
+                invalid_labels = set(label_df["label_realized"].unique()) - valid_labels
+                if invalid_labels:
                     logger.warning(
-                        f"Found invalid sentiment values: {invalid_sentiments}"
+                        f"Found invalid label_realized values: {invalid_labels}. Expected 0 or 1."
+                    )
+
+                # Check label_confidence values are in valid range [0, 1]
+                confidence_min = label_df["label_confidence"].min()
+                confidence_max = label_df["label_confidence"].max()
+                if confidence_min < 0 or confidence_max > 1:
+                    logger.warning(
+                        f"Found out-of-range label_confidence values: min={confidence_min}, max={confidence_max}. Expected [0, 1]."
                     )
 
                 logger.info("Label validation passed")

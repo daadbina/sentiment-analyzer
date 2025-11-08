@@ -258,6 +258,10 @@ class TrainerService:
                 # We have multiple labels per group_id, so we need to replicate feature rows
                 logger.info("Aligning features with labels by group_id")
                 logger.info(f"Before alignment: X shape={X.shape}, y shape={y.shape}")
+                logger.debug(f"X columns: {list(X.columns)}")
+                logger.debug(f"y columns: {list(y.columns)}")
+                logger.debug(f"X group_id unique count: {X['group_id'].nunique() if 'group_id' in X.columns else 'N/A'}")
+                logger.debug(f"y group_id unique count: {y['group_id'].nunique() if 'group_id' in y.columns else 'N/A'}")
 
                 # Set group_id as index in features for alignment
                 X_indexed = X.set_index('group_id') if 'group_id' in X.columns else X
@@ -265,6 +269,8 @@ class TrainerService:
                 # For each label, get the corresponding feature row
                 aligned_X_list = []
                 aligned_y_list = []
+                unmatched_labels = 0
+                matched_labels = 0
 
                 for idx, label_row in y.iterrows():
                     group_id = label_row['group_id']
@@ -273,9 +279,16 @@ class TrainerService:
                         feature_row = X_indexed.loc[group_id]
                         # Handle case where multiple rows have same group_id (shouldn't happen but be safe)
                         if isinstance(feature_row, pd.DataFrame):
+                            logger.debug(f"Multiple feature rows for group_id {group_id}, using first")
                             feature_row = feature_row.iloc[0]
                         aligned_X_list.append(feature_row)
                         aligned_y_list.append(label_row['label_realized'])
+                        matched_labels += 1
+                    else:
+                        unmatched_labels += 1
+                        logger.debug(f"No feature row found for group_id {group_id}")
+
+                logger.info(f"Alignment results: {matched_labels} matched, {unmatched_labels} unmatched")
 
                 if not aligned_X_list:
                     logger.error("No labels could be aligned with features!")
@@ -287,6 +300,8 @@ class TrainerService:
 
                 logger.info(f"After alignment: X shape={X.shape}, y shape={y_series.shape}")
                 logger.info(f"Label distribution after alignment: {y_series.value_counts().to_dict()}")
+                logger.debug(f"Label 0 count: {(y_series == 0).sum()}, Label 1 count: {(y_series == 1).sum()}")
+                logger.debug(f"Label imbalance ratio: {(y_series == 1).sum() / (y_series == 0).sum() if (y_series == 0).sum() > 0 else 'N/A'}")
 
                 # Preprocess data
                 logger.info("Preprocessing data")

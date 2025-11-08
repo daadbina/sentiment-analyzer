@@ -232,13 +232,20 @@ class DataPreprocessor:
                 variances = X.var()
                 constant_features = variances[variances == 0].index.tolist()
 
+                logger.info(f"Feature variance analysis: {len(X.columns)} total features")
+                logger.debug(f"Feature variances:\n{variances}")
+
                 if constant_features:
                     logger.warning(
-                        f"Removing {len(constant_features)} constant features"
+                        f"Removing {len(constant_features)} constant features: {constant_features}"
                     )
+                    logger.warning(f"Constant feature values:\n{X[constant_features].iloc[0] if len(X) > 0 else 'N/A'}")
                     X = X.drop(columns=constant_features)
+                else:
+                    logger.info("No constant features found")
 
-                logger.debug(f"Remaining features: {X.shape[1]}")
+                logger.info(f"After constant feature removal: {X.shape[1]} features remaining")
+                logger.debug(f"Remaining features: {list(X.columns)}")
                 return X
 
             except Exception as e:

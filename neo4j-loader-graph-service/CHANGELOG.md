@@ -36,15 +36,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - .dockerignore and .env.example
 - Comprehensive README.md with setup and troubleshooting
 
+- PostgreSQL client with lineage tracking and snapshot retrieval
+- Snapshot manager with snapshot creation, comparison, and cleanup
+- Backup manager with neo4j-admin dump/restore
+- Kafka producer for graph_updated events with Avro serialization
+- Circuit breaker pattern for fault tolerance
+- Token bucket rate limiter for backpressure management
+- Graph metrics calculator for node/relationship counts and density
+
 ### In Progress
-- PostgreSQL client for metadata storage
-- Snapshot and backup management
-- Kafka producer for graph_updated events
-- Circuit breaker and rate limiting
 - OpenTelemetry tracing integration
 - Test suite (unit, integration, contract, performance tests)
 - TLS configuration
 - Alerting rules documentation
+- S3/MinIO storage for backups
+- Redis query caching
+- Dead-letter queue for failed messages
 
 ## [1.0.0] - TBD
 

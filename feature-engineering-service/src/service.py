@@ -347,24 +347,49 @@ class FeatureEngineeringService:
             features: Features to write
         """
         try:
+            # Remove metadata columns that shouldn't be in the feature store
+            # These are only for monitoring/validation
+            metadata_columns = {
+                "feature_count",
+                "feature_sum",
+                "feature_mean",
+                "feature_min",
+                "feature_max",
+                "feature_range",
+            }
+
+            # Create a clean copy of features without metadata
+            clean_features = {
+                k: v for k, v in features.items()
+                if k not in metadata_columns
+            }
+
+            logger.debug(
+                "Removed metadata columns before writing",
+                group_id=group_id,
+                original_count=len(features),
+                clean_count=len(clean_features),
+                removed_columns=list(metadata_columns & set(features.keys())),
+            )
+
             # Write to Delta Lake (offline)
-            self.delta_writer.write_features(group_id, features)
+            self.delta_writer.write_features(group_id, clean_features)
             logger.debug("Features written to Delta Lake", group_id=group_id)
 
             # Write to Feast (offline)
-            self.feast_writer.write_features(group_id, features)
+            self.feast_writer.write_features(group_id, clean_features)
             metrics.feast_writes.inc()
             logger.debug("Features written to Feast", group_id=group_id)
 
             # Write to Redis (online)
-            self.redis_writer.write_features(group_id, features)
+            self.redis_writer.write_features(group_id, clean_features)
             metrics.redis_writes.inc()
             logger.debug("Features written to Redis", group_id=group_id)
 
             logger.info(
                 "Features written to all storage backends",
                 group_id=group_id,
-                feature_count=len(features),
+                feature_count=len(clean_features),
             )
 
         except Exception as e:

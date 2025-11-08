@@ -53,15 +53,26 @@ class SourceExtractor(FeatureExtractor):
             features["num_sources"] = len(unique_sources)
 
             # source_credibility_avg: Average publisher credibility
-            credibility_scores = [
-                article.sentiment_score for article in articles
-            ]  # Placeholder: use actual credibility
+            # Extract credibility scores from articles (if available)
+            # If not available, use a default credibility value
+            credibility_scores = []
+            for article in articles:
+                # Try to get credibility from article metadata
+                if hasattr(article, 'credibility_score') and article.credibility_score is not None:
+                    credibility_scores.append(article.credibility_score)
+                elif hasattr(article, 'publisher_credibility') and article.publisher_credibility is not None:
+                    credibility_scores.append(article.publisher_credibility)
+                else:
+                    # Default credibility value if not available
+                    # This ensures we have a value for all articles
+                    credibility_scores.append(0.5)
+
             if credibility_scores:
                 features["source_credibility_avg"] = sum(credibility_scores) / len(
                     credibility_scores
                 )
             else:
-                features["source_credibility_avg"] = 0.0
+                features["source_credibility_avg"] = 0.5
 
             # source_credibility_std: Standard deviation of credibility
             if len(credibility_scores) > 1:

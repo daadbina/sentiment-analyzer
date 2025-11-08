@@ -38,7 +38,7 @@ class DeltaLakeWriter:
         group_id: str,
         features: Dict[str, Any],
     ) -> bool:
-        """Write features to Delta Lake.
+        """Write features to Delta Lake with UPSERT semantics.
 
         Args:
             group_id: Semantic group ID
@@ -67,32 +67,58 @@ class DeltaLakeWriter:
                 dtypes={col: str(dtype) for col, dtype in df.dtypes.items()},
             )
 
-            # Write to Delta Lake
-            # Use mode='overwrite' on first write, then 'append' for subsequent writes
-            # This ensures schema consistency across all writes
+            # Write to Delta Lake with UPSERT logic
             from pathlib import Path as PathlibPath
             import shutil
+            from deltalake import DeltaTable
 
             table_exists = PathlibPath(self.delta_path).exists() and len(list(PathlibPath(self.delta_path).glob("*.parquet"))) > 0
-            write_mode = "append" if table_exists else "overwrite"
 
             logger.debug(
                 "Delta Lake write parameters",
                 table_exists=table_exists,
-                write_mode=write_mode,
                 delta_path=self.delta_path,
             )
 
             try:
-                write_deltalake(
-                    table_or_uri=str(self.delta_path),
-                    data=df,
-                    mode=write_mode,
-                    engine="rust",
-                )
+                if table_exists:
+                    # UPSERT: Delete existing group_id and insert new row
+                    # This ensures we don't have duplicates
+                    dt = DeltaTable(self.delta_path)
+                    existing_df = dt.to_pandas()
+
+                    # Filter out the group_id if it exists
+                    filtered_df = existing_df[existing_df['group_id'] != group_id]
+
+                    # Combine filtered data with new data
+                    combined_df = pd.concat([filtered_df, df], ignore_index=True)
+
+                    logger.debug(
+                        "UPSERT operation",
+                        group_id=group_id,
+                        existing_rows=len(existing_df),
+                        filtered_rows=len(filtered_df),
+                        combined_rows=len(combined_df),
+                    )
+
+                    # Overwrite table with combined data
+                    write_deltalake(
+                        table_or_uri=str(self.delta_path),
+                        data=combined_df,
+                        mode="overwrite",
+                        engine="rust",
+                    )
+                else:
+                    # First write - use overwrite mode
+                    write_deltalake(
+                        table_or_uri=str(self.delta_path),
+                        data=df,
+                        mode="overwrite",
+                        engine="rust",
+                    )
             except Exception as write_error:
-                # If schema mismatch on append, delete table and recreate with overwrite
-                if "Schema of data does not match table schema" in str(write_error) and write_mode == "append":
+                # If schema mismatch, delete table and recreate with overwrite
+                if "Schema of data does not match table schema" in str(write_error):
                     logger.warning(
                         "Schema mismatch detected, recreating Delta Lake table",
                         delta_path=self.delta_path,
@@ -113,7 +139,7 @@ class DeltaLakeWriter:
                     raise
 
             logger.info(
-                "Features written to Delta Lake",
+                "Features written to Delta Lake (UPSERT)",
                 group_id=group_id,
                 feature_count=len(features),
                 delta_path=self.delta_path,

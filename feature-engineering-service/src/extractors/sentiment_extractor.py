@@ -51,6 +51,14 @@ class SentimentExtractor(FeatureExtractor):
                 if article.sentiment_score is not None
             ]
 
+            logger.debug(
+                "Sentiment scores extracted",
+                group_id=self.get_group_id(group),
+                article_count=len(articles),
+                sentiment_score_count=len(sentiment_scores),
+                sentiment_scores_sample=sentiment_scores[:5] if sentiment_scores else [],
+            )
+
             if not sentiment_scores:
                 logger.warning(
                     "No sentiment scores found", group_id=self.get_group_id(group)

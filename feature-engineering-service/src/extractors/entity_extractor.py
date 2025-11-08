@@ -48,13 +48,24 @@ class EntityExtractor(FeatureExtractor):
             # Collect all entities from articles
             all_entities = []
             entity_types = set()
+            articles_with_entities = 0
 
             for article in articles:
                 if article.entities:
+                    articles_with_entities += 1
                     for entity in article.entities:
                         all_entities.append(entity)
                         if isinstance(entity, dict) and "type" in entity:
                             entity_types.add(entity["type"])
+
+            logger.debug(
+                "Entity extraction analysis",
+                group_id=self.get_group_id(group),
+                article_count=len(articles),
+                articles_with_entities=articles_with_entities,
+                total_entities=len(all_entities),
+                entity_types=list(entity_types),
+            )
 
             if not all_entities:
                 logger.debug(

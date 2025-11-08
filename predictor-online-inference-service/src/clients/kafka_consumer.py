@@ -302,7 +302,7 @@ class KafkaConsumerClient:
             if not assignment:
                 return {}
 
-            lag_info = {}
+            lag_info: dict[str, dict[int, int]] = {}
 
             for topic_partition in assignment:
                 topic = topic_partition.topic

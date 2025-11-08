@@ -158,7 +158,7 @@ class KafkaProducerClient:
         ):
             try:
                 # Create delivery callback
-                delivery_future = asyncio.Future()
+                delivery_future: asyncio.Future[Any] = asyncio.Future()
 
                 def delivery_callback(err, msg):
                     """Callback for delivery confirmation."""
@@ -190,11 +190,12 @@ class KafkaProducerClient:
                 # Record metrics
                 kafka_messages_produced_total.labels(topic=topic).inc()
 
-                logger.debug(
-                    f"Produced prediction: topic={topic}, partition={msg.partition()}, "
-                    f"offset={msg.offset()}, group_id={prediction.get('group_id')}",
-                    extra={"trace_id": trace_id, "group_id": prediction.get("group_id")},
-                )
+                if msg:
+                    logger.debug(
+                        f"Produced prediction: topic={topic}, partition={msg.partition()}, "
+                        f"offset={msg.offset()}, group_id={prediction.get('group_id')}",
+                        extra={"trace_id": trace_id, "group_id": prediction.get("group_id")},
+                    )
 
             except SerializerError as e:
                 logger.error(

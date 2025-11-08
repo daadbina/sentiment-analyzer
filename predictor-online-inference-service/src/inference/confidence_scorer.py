@@ -250,7 +250,7 @@ class ConfidenceScorer:
             if feature_quality:
                 # Average feature quality as proxy for data certainty
                 avg_quality = np.mean(list(feature_quality.values()))
-                aleatoric_uncertainty = 1.0 - avg_quality
+                aleatoric_uncertainty = float(1.0 - avg_quality)
             else:
                 # Default: moderate uncertainty
                 aleatoric_uncertainty = 0.3

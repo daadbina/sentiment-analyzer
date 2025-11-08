@@ -307,7 +307,7 @@ class FeatureQualityMonitor:
             freshness_rate = fresh_count / len(relevant_fetches)
 
             # Count missing features by name
-            missing_by_name = defaultdict(int)
+            missing_by_name: dict[str, int] = defaultdict(int)
             for fetch in relevant_fetches:
                 for feature in fetch["missing_features"]:
                     missing_by_name[feature] += 1

@@ -397,16 +397,7 @@ class MetricsCollector:
         """
         service_health.labels(component=component).set(1 if healthy else 0)
 
-    @staticmethod
-    def record_feature_fetch_latency(latency_ms: float, store_type: str) -> None:
-        """
-        Record feature fetch latency.
 
-        Args:
-            latency_ms: Fetch latency in milliseconds
-            store_type: Type of feature store (online/offline)
-        """
-        feature_fetch_latency_ms.labels(store_type=store_type).observe(latency_ms)
 
     @staticmethod
     def increment_feature_fetch_failures(store_type: str) -> None:

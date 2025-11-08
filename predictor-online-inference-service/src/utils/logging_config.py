@@ -126,6 +126,7 @@ def setup_logging(
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(numeric_level)
 
+    formatter: logging.Formatter
     if enable_json:
         # Use JSON formatter
         formatter = CustomJsonFormatter(

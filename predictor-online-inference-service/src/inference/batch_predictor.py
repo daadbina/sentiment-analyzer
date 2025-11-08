@@ -283,7 +283,7 @@ class BatchPredictor:
         Returns:
             Dictionary mapping group_id to cached prediction
         """
-        cached = {}
+        cached: dict[str, dict[str, Any]] = {}
 
         # Fetch cached predictions concurrently
         tasks = [self.prediction_cache.get_cached_prediction(gid, trace_id) for gid in group_ids]
@@ -298,7 +298,7 @@ class BatchPredictor:
                 continue
 
             if result is not None:
-                cached[group_id] = result
+                cached[group_id] = result  # type: ignore[assignment]
                 MetricsCollector.record_cache_hit()
             else:
                 MetricsCollector.record_cache_miss()

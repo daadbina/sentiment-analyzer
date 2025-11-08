@@ -7,6 +7,7 @@ label consistency metrics weighted by label confidence.
 
 import logging
 from datetime import datetime, timedelta
+from typing import Any
 
 from ..exceptions import LabelValidationError
 from ..metrics import MetricsCollector
@@ -49,7 +50,7 @@ class PredictionValidator:
         label_realized: bool,
         label_confidence: float,
         trace_id: str | None = None,
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Compare a prediction with its ground-truth label.
 
@@ -213,7 +214,7 @@ class PredictionValidator:
 
     def get_accuracy_over_time(
         self, time_window_hours: int = 24, trace_id: str | None = None
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Get accuracy metrics over time window.
 

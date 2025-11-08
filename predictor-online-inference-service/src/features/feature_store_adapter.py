@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from feast import FeatureStore
+from feast import FeatureStore  # type: ignore[attr-defined]
 
 from ..config import FeastConfig
 from ..exceptions import FeatureError

@@ -8,6 +8,7 @@ and provides unified service lifecycle management.
 import asyncio
 import logging
 from datetime import datetime
+from typing import Any
 
 from .clients import (
     FeastClient,
@@ -366,7 +367,7 @@ class PredictorService:
             Health check status dictionary
         """
         try:
-            health_status = {
+            health_status: dict[str, Any] = {
                 "service": "predictor-online-inference-service",
                 "status": "healthy" if self._running else "stopped",
                 "timestamp": datetime.now().isoformat(),

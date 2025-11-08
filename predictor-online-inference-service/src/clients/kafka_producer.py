@@ -38,7 +38,7 @@ class KafkaProducerClient:
         self.config = config
         self._producer: AvroProducer | None = None
 
-        logger.info(f"Initializing Kafka producer: brokers={config.brokers}")
+        logger.info(f"Initializing Kafka producer: brokers={config.bootstrap_servers}")
 
     async def connect(self) -> None:
         """
@@ -48,11 +48,11 @@ class KafkaProducerClient:
             KafkaErrorException: If connection fails
         """
         try:
-            logger.info(f"Connecting to Kafka producer: {self.config.brokers}")
+            logger.info(f"Connecting to Kafka producer: {self.config.bootstrap_servers}")
 
             # Build producer configuration
             producer_config = {
-                "bootstrap.servers": self.config.brokers,
+                "bootstrap.servers": self.config.bootstrap_servers,
                 "schema.registry.url": self.config.schema_registry_url,
                 "acks": "all",  # Wait for all replicas
                 "enable.idempotence": True,  # Exactly-once semantics
@@ -80,7 +80,7 @@ class KafkaProducerClient:
                 default_value_schema=None,  # Schema provided per message
             )
 
-            logger.info(f"Connected to Kafka producer: brokers={self.config.brokers}")
+            logger.info(f"Connected to Kafka producer: brokers={self.config.bootstrap_servers}")
         except Exception as e:
             logger.error(f"Failed to connect to Kafka producer: {e}", exc_info=True)
             raise KafkaErrorException(
@@ -146,7 +146,7 @@ class KafkaProducerClient:
             )
         """
         producer = self._ensure_connected()
-        topic = self.config.predictions_topic
+        topic = self.config.output_topic
 
         with trace_span(
             "kafka_produce_prediction",

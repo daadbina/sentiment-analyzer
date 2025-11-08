@@ -312,10 +312,10 @@ class Config:
             ValueError: If any configuration parameter is invalid.
         """
         # Validate Kafka configuration
-        if not self.kafka.brokers:
-            raise ValueError("KAFKA_BROKERS environment variable is required")
+        if not self.kafka.bootstrap_servers:
+            raise ValueError("KAFKA_BOOTSTRAP_SERVERS environment variable is required")
         if not self.kafka.schema_registry_url:
-            raise ValueError("SCHEMA_REGISTRY_URL environment variable is required")
+            raise ValueError("KAFKA_SCHEMA_REGISTRY_URL environment variable is required")
 
         # Validate MLflow configuration
         if not self.mlflow.tracking_uri:

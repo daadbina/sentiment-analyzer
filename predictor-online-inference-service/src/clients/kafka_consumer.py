@@ -42,8 +42,8 @@ class KafkaConsumerClient:
         self._running = False
 
         logger.info(
-            f"Initializing Kafka consumer: brokers={config.brokers}, "
-            f"group={config.consumer_group}"
+            f"Initializing Kafka consumer: brokers={config.bootstrap_servers}, "
+            f"group={config.consumer_group_id}"
         )
 
     async def connect(self) -> None:
@@ -54,12 +54,12 @@ class KafkaConsumerClient:
             KafkaErrorException: If connection fails
         """
         try:
-            logger.info(f"Connecting to Kafka: {self.config.brokers}")
+            logger.info(f"Connecting to Kafka: {self.config.bootstrap_servers}")
 
             # Build consumer configuration
             consumer_config = {
-                "bootstrap.servers": self.config.brokers,
-                "group.id": self.config.consumer_group,
+                "bootstrap.servers": self.config.bootstrap_servers,
+                "group.id": self.config.consumer_group_id,
                 "schema.registry.url": self.config.schema_registry_url,
                 "auto.offset.reset": "earliest",
                 "enable.auto.commit": False,  # Manual commit for exactly-once
@@ -83,8 +83,8 @@ class KafkaConsumerClient:
             self._consumer = AvroConsumer(consumer_config)
 
             logger.info(
-                f"Connected to Kafka: brokers={self.config.brokers}, "
-                f"group={self.config.consumer_group}"
+                f"Connected to Kafka: brokers={self.config.bootstrap_servers}, "
+                f"group={self.config.consumer_group_id}"
             )
         except Exception as e:
             logger.error(f"Failed to connect to Kafka: {e}", exc_info=True)
@@ -250,7 +250,7 @@ class KafkaConsumerClient:
                 # Record metrics
                 kafka_messages_consumed_total.labels(
                     topic=topic,
-                    consumer_group=self.config.consumer_group,
+                    consumer_group=self.config.consumer_group_id,
                 ).inc()
 
             except SerializerError as e:
@@ -326,7 +326,7 @@ class KafkaConsumerClient:
                 kafka_consumer_lag.labels(
                     topic=topic,
                     partition=str(partition),
-                    consumer_group=self.config.consumer_group,
+                    consumer_group=self.config.consumer_group_id,
                 ).set(lag)
 
             return lag_info

@@ -16,6 +16,7 @@ from sklearn.metrics import (
     roc_auc_score,
     confusion_matrix,
     classification_report,
+    roc_curve,
 )
 
 from src.models.base_model import BaseModel
@@ -93,6 +94,38 @@ class Evaluator:
                     model_name=model_type,
                 )
 
+    def _find_optimal_threshold(
+        self,
+        y_true: pd.Series,
+        y_pred_proba: np.ndarray,
+    ) -> float:
+        """
+        Find optimal decision threshold that maximizes F1 score.
+
+        Args:
+            y_true: True labels
+            y_pred_proba: Predicted probabilities for positive class
+
+        Returns:
+            Optimal threshold value
+        """
+        fpr, tpr, thresholds = roc_curve(y_true, y_pred_proba)
+
+        # Find threshold that maximizes F1 score
+        best_f1 = 0
+        best_threshold = 0.5
+
+        for threshold in np.linspace(0, 1, 101):
+            y_pred_threshold = (y_pred_proba >= threshold).astype(int)
+            f1 = f1_score(y_true, y_pred_threshold, zero_division=0)
+
+            if f1 > best_f1:
+                best_f1 = f1
+                best_threshold = threshold
+
+        logger.info(f"Optimal threshold: {best_threshold:.4f} (F1: {best_f1:.4f})")
+        return best_threshold
+
     def _compute_metrics(
         self,
         y_true: pd.Series,
@@ -122,17 +155,24 @@ class Evaluator:
                 logger.info(f"Predicted labels distribution: {pd.Series(y_pred).value_counts().to_dict()}")
                 logger.debug(f"Predicted probabilities (class 1) - min: {y_pred_proba.min():.4f}, max: {y_pred_proba.max():.4f}, mean: {y_pred_proba.mean():.4f}")
 
-                # Classification metrics
-                accuracy = accuracy_score(y_true, y_pred)
-                precision = precision_score(y_true, y_pred, zero_division=0)
-                recall = recall_score(y_true, y_pred, zero_division=0)
-                f1 = f1_score(y_true, y_pred, zero_division=0)
+                # Find optimal threshold
+                optimal_threshold = self._find_optimal_threshold(y_true, y_pred_proba)
 
-                # AUC-ROC
+                # Re-compute predictions using optimal threshold
+                y_pred_optimized = (y_pred_proba >= optimal_threshold).astype(int)
+                logger.info(f"Using optimized threshold {optimal_threshold:.4f} instead of default 0.5")
+
+                # Classification metrics (using optimized predictions)
+                accuracy = accuracy_score(y_true, y_pred_optimized)
+                precision = precision_score(y_true, y_pred_optimized, zero_division=0)
+                recall = recall_score(y_true, y_pred_optimized, zero_division=0)
+                f1 = f1_score(y_true, y_pred_optimized, zero_division=0)
+
+                # AUC-ROC (always uses probabilities, not affected by threshold)
                 auc = roc_auc_score(y_true, y_pred_proba)
 
-                # Confusion matrix
-                tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+                # Confusion matrix (using optimized predictions)
+                tn, fp, fn, tp = confusion_matrix(y_true, y_pred_optimized).ravel()
 
                 # Specificity
                 specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
@@ -149,6 +189,7 @@ class Evaluator:
                     "false_positives": int(fp),
                     "false_negatives": int(fn),
                     "true_positives": int(tp),
+                    "optimal_threshold": float(optimal_threshold),
                 }
 
                 logger.info(f"Confusion matrix - TP: {tp}, TN: {tn}, FP: {fp}, FN: {fn}")

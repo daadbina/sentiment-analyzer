@@ -153,9 +153,9 @@ class PostgresConfig:
         return cls(
             host=os.environ["POSTGRES_HOST"],
             port=int(os.environ.get("POSTGRES_PORT", "5432")),
-            user=os.environ["POSTGRES_USER"],
-            password=os.environ["POSTGRES_PASSWORD"],
-            database=os.environ["POSTGRES_DATABASE"],
+            user=os.environ.get("POSTGRES_USER", "postgres"),
+            password=os.environ.get("POSTGRES_PASSWORD", ""),
+            database=os.environ.get("POSTGRES_DATABASE", "sentiment_analyzer"),
             min_pool_size=int(os.environ.get("POSTGRES_MIN_POOL_SIZE", "10")),
             max_pool_size=int(os.environ.get("POSTGRES_MAX_POOL_SIZE", "50")),
             command_timeout=int(os.environ.get("POSTGRES_COMMAND_TIMEOUT", "30")),
@@ -328,12 +328,6 @@ class Config:
         # Validate PostgreSQL configuration
         if not self.postgres.host:
             raise ValueError("POSTGRES_HOST environment variable is required")
-        if not self.postgres.user:
-            raise ValueError("POSTGRES_USER environment variable is required")
-        if not self.postgres.password:
-            raise ValueError("POSTGRES_PASSWORD environment variable is required")
-        if not self.postgres.database:
-            raise ValueError("POSTGRES_DATABASE environment variable is required")
 
         # Validate thresholds
         if not 0.0 <= self.validation.label_consistency_threshold <= 1.0:

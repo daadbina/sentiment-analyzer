@@ -62,11 +62,26 @@ class Trainer:
 
             try:
                 logger.info(f"Starting training for {model_type}")
+                logger.debug(f"Training data shape: {X_train.shape}")
+                logger.debug(f"Training labels shape: {y_train.shape}")
+                logger.debug(f"Training features: {list(X_train.columns)}")
+
+                # Check training data quality
+                logger.info(f"Training data null values: {X_train.isnull().sum().sum()}")
+                logger.info(f"Training labels null values: {y_train.isnull().sum()}")
+                logger.info(f"Training labels distribution:\n{y_train.value_counts()}")
+
+                if X_val is not None:
+                    logger.debug(f"Validation data shape: {X_val.shape}")
+                    logger.info(f"Validation data null values: {X_val.isnull().sum().sum()}")
+                    logger.info(f"Validation labels distribution:\n{y_val.value_counts()}")
 
                 # Create model instance
                 model = self._create_model(model_type)
+                logger.debug(f"Model instance created: {type(model).__name__}")
 
                 # Train model
+                logger.info(f"Training {model_type} model...")
                 metrics_dict = model.train(X_train, y_train, X_val, y_val)
 
                 # Store model and history
@@ -79,11 +94,12 @@ class Trainer:
                 # Record metrics
                 metrics.record_training_run(model_type)
 
-                logger.info(f"Training complete for {model_type}: {metrics_dict}")
+                logger.info(f"Training complete for {model_type}")
+                logger.info(f"Training metrics: {metrics_dict}")
                 return model, metrics_dict
 
             except Exception as e:
-                logger.error(f"Training failed for {model_type}: {e}")
+                logger.error(f"Training failed for {model_type}: {e}", exc_info=True)
                 raise TrainingError(
                     f"Training failed for {model_type}: {e}",
                     model_name=model_type,

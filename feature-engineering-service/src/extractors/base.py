@@ -31,6 +31,7 @@ class Article:
     published_at: str
     sentiment_score: float
     entities: List[Dict[str, Any]]
+    publisher_credibility: float = None
 
 
 @dataclass

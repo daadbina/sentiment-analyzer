@@ -3,6 +3,8 @@
 import logging
 from datetime import datetime
 from typing import List, Dict
+from pathlib import Path
+import shutil
 import pandas as pd
 import numpy as np
 from deltalake import write_deltalake, DeltaTable
@@ -117,12 +119,32 @@ class DeltaLakeWriter:
                         df[col] = df[col].apply(lambda x: str(x) if isinstance(x, list) else x)
 
             # Write to Delta Lake
-            write_deltalake(
-                self.table_path,
-                df,
-                mode=mode,
-                overwrite_schema=False,
-            )
+            try:
+                write_deltalake(
+                    self.table_path,
+                    df,
+                    mode=mode,
+                    overwrite_schema=False,
+                )
+            except Exception as write_error:
+                # If schema mismatch, delete table and recreate with overwrite
+                if "Schema of data does not match table schema" in str(write_error):
+                    logger.warning(
+                        f"Schema mismatch detected, recreating Delta Lake table: {write_error}"
+                    )
+                    # Delete existing table
+                    if Path(self.table_path).exists():
+                        shutil.rmtree(self.table_path)
+                    # Recreate with overwrite
+                    write_deltalake(
+                        self.table_path,
+                        df,
+                        mode="overwrite",
+                        overwrite_schema=True,
+                    )
+                    logger.info("Delta Lake table recreated successfully")
+                else:
+                    raise
 
             logger.info(
                 f"Wrote {len(clusters)} clusters to Delta Lake "

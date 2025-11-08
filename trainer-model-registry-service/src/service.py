@@ -182,6 +182,8 @@ class TrainerService:
                 else:
                     start_date = datetime.fromisoformat(start_date)
 
+                logger.info(f"Training window: {start_date} to {end_date}")
+
                 # Retrieve data
                 logger.info("Retrieving features and labels")
                 X = self.feature_retriever.retrieve_features(
@@ -189,24 +191,39 @@ class TrainerService:
                     start_date=start_date,
                     end_date=end_date,
                 )
+                logger.info(f"Features retrieved: shape={X.shape}")
+
                 y = await self.label_retriever.retrieve_labels(
                     start_date=start_date,
                     end_date=end_date,
                 )
+                logger.info(f"Labels retrieved: shape={y.shape}")
+
+                # Check if we have data
+                if X.empty or y.empty:
+                    logger.error("No data retrieved for training!")
+                    raise TrainerError("No training data available")
 
                 # Preprocess data
                 logger.info("Preprocessing data")
+                X_before = X.shape
                 X, y = self.preprocessor.preprocess(X, y, fit=True)
+                logger.info(f"Data after preprocessing: {X.shape} (was {X_before})")
 
                 # Split data
                 logger.info("Splitting data")
                 (X_train, y_train), (X_val, y_val), (X_test, y_test) = (
                     self.splitter.split_temporal(X, y)
                 )
+                logger.info(f"Train set: {X_train.shape}, Val set: {X_val.shape}, Test set: {X_test.shape}")
+                logger.info(f"Train labels distribution: {y_train.value_counts().to_dict()}")
+                logger.info(f"Val labels distribution: {y_val.value_counts().to_dict()}")
+                logger.info(f"Test labels distribution: {y_test.value_counts().to_dict()}")
 
                 # Train models
                 logger.info("Training models")
                 models = self.trainer.train_all_models(X_train, y_train, X_val, y_val)
+                logger.info(f"Models trained: {list(models.keys())}")
 
                 # Evaluate models
                 logger.info("Evaluating models")
@@ -215,6 +232,7 @@ class TrainerService:
                     X_test,
                     y_test,
                 )
+                logger.info(f"Evaluation results: {eval_results}")
 
                 # Detect drift
                 logger.info("Detecting drift")
@@ -222,6 +240,7 @@ class TrainerService:
                     X_train, X_test
                 )
                 target_drift = self.drift_detector.detect_target_drift(y_train, y_test)
+                logger.info(f"Feature drift: {feature_drift}, Target drift: {target_drift}")
 
                 result = {
                     "timestamp": datetime.now().isoformat(),
@@ -235,7 +254,7 @@ class TrainerService:
                 return result
 
             except Exception as e:
-                logger.error(f"Training pipeline failed: {e}")
+                logger.error(f"Training pipeline failed: {e}", exc_info=True)
                 raise TrainerError(f"Training pipeline failed: {e}")
 
     async def health_check(self) -> Dict[str, Any]:

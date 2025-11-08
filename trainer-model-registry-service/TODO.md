@@ -326,6 +326,59 @@
 - [x] Verify Prometheus metrics available (metrics module initialized)
 - [x] Verify OpenTelemetry traces working (tracing initialized with Jaeger)
 
+### Diagnosis & Fixes ✅ COMPLETE (2025-11-07-2025-11-08)
+- [x] Created feature branch: `feature/trainer-service/diagnosis-and-fixes`
+- [x] Identified missing /ready and /live endpoints (required by Kubernetes)
+- [x] Fixed feature names to match feature-engineering-service output (24 features across 6 categories)
+- [x] Updated entity type from article_id to group_id (semantic groups)
+- [x] Added feature view prefix formatting for Feast queries
+- [x] Verified /health, /ready, /live endpoints working
+- [x] Verified service starts without errors
+- [x] Identified deprecation warnings (Jaeger, websockets, evidently)
+
+### Comprehensive Logging Implementation ✅ COMPLETE (2025-11-08)
+- [x] Added detailed logging to feature_retriever.py:
+  - Entity dataframe shape and dtypes
+  - Formatted features list
+  - Null value detection and reporting
+  - Feature statistics (min, max, mean, std)
+- [x] Added detailed logging to label_retriever.py:
+  - Label distribution (sentiment value counts)
+  - Confidence statistics
+  - Null value detection
+- [x] Added detailed logging to preprocessor.py:
+  - Input/output shapes at each transformation stage
+  - Null values before and after preprocessing
+  - Infinite value detection
+  - Feature statistics after scaling
+- [x] Added detailed logging to trainer.py:
+  - Training data quality metrics
+  - Label distributions for train/val/test sets
+  - Model training progress
+  - Training metrics
+- [x] Added detailed logging to service.py train_pipeline:
+  - Training window dates
+  - Data retrieval results
+  - Data flow through each pipeline stage
+  - Label distributions at each split
+  - Drift detection results
+- [x] Verified logging captures null values, distributions, and logical issues
+
+### Feast Feature View Registration ⏳ PENDING (2025-11-08)
+- [ ] Register feature view in Feast registry:
+  - [ ] Run `feast apply` in feature-engineering-service
+  - [ ] Run `feast apply` in trainer-model-registry-service
+  - [ ] Verify feature view exists: `feast feature-views list`
+  - [ ] Verify entities exist: `feast entities list`
+- [ ] Fix feature-engineering-service Feast writer:
+  - [ ] Implement actual write to Feast offline store (Delta Lake)
+  - [ ] Write features to `/data/delta/semantic_groups` path
+  - [ ] Verify features are persisted in Feast
+- [ ] Align Feast registry paths:
+  - [ ] Both services use same registry.db location
+  - [ ] Both services use same project name: `sentiment_analyzer`
+  - [ ] Both services use same offline store: Delta Lake at `/data/delta`
+
 ### Git Workflow ⏳ PENDING (User requested: "dont merge yet")
 - [ ] Create final commit with all changes
 - [ ] Push to feature branch

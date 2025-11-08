@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.1] - 2025-11-08
+
+### Fixed
+- Added missing `/ready` and `/live` endpoints required by Kubernetes health checks
+- Fixed feature names to match feature-engineering-service output (24 features across 6 categories)
+- Updated entity type from `article_id` to `group_id` for semantic groups
+- Added feature view prefix formatting for Feast queries (`semantic_group_features:feature_name`)
+- Updated feature retriever to use correct entity column name in validation
+
+### Added - Comprehensive Logging for Data Quality Monitoring
+- **Feature Retriever Logging**:
+  - Entity dataframe shape, dtypes, and sample data
+  - Formatted features list for Feast queries
+  - Null value detection and reporting
+  - Feature statistics (min, max, mean, std)
+
+- **Label Retriever Logging**:
+  - Label distribution (sentiment value counts)
+  - Confidence statistics
+  - Null value detection and reporting
+
+- **Data Preprocessor Logging**:
+  - Input/output shapes at each transformation stage
+  - Null values before and after preprocessing
+  - Infinite value detection
+  - Feature statistics after scaling
+
+- **Trainer Logging**:
+  - Training data quality metrics
+  - Label distributions for train/val/test sets
+  - Model training progress and metrics
+
+- **Service Pipeline Logging**:
+  - Training window dates
+  - Data retrieval results
+  - Data flow through each pipeline stage
+  - Label distributions at each split
+  - Drift detection results
+
+### Verified
+- `/health` endpoint working correctly (200 OK)
+- `/ready` endpoint returning 200 OK when service is healthy
+- `/live` endpoint returning 200 OK with timestamp
+- Service starts without errors
+- All health check components (postgres, feast, mlflow, s3, kafka) reporting healthy status
+- Comprehensive logging captures null values, distributions, and potential data quality issues
+
+---
+
 ## [1.0.0] - 2025-11-05
 
 ### Phase 12: Documentation & Finalization ✅ COMPLETE

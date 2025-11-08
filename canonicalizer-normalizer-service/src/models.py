@@ -75,6 +75,7 @@ class NewsCanonicalMessage(BaseModel):
     publisher_credibility: float
     publisher_country: Optional[str] = None
     language: str
+    sentiment_score: float
     source_published_at_utc: str
     validated_at: str
     canonicalized_at: str

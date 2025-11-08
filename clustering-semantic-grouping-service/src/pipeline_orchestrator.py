@@ -310,6 +310,16 @@ class PipelineOrchestrator:
 
             # Step 5: Write to storage
             if valid_clusters:
+                # Log detailed cluster information for debugging
+                for cluster in valid_clusters[:3]:  # Log first 3 clusters
+                    logger.info(
+                        f"Cluster details: group_id={cluster.get('group_id')}, "
+                        f"article_count={cluster.get('article_count')}, "
+                        f"similarity_avg={cluster.get('similarity_avg')}, "
+                        f"topic_label={cluster.get('topic_label')}, "
+                        f"centroid_magnitude={float(np.linalg.norm(np.array(cluster.get('centroid_vector', []))))}"
+                    )
+
                 self.delta_writer.write_clusters(valid_clusters)
                 for cluster in valid_clusters:
                     self.registry.register_cluster(cluster)

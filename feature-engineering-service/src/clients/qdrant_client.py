@@ -82,6 +82,7 @@ class QdrantVectorClient:
                                 point.payload.get("sentiment_score", 0.0)
                             ),
                             "entities": point.payload.get("entities", []),
+                            "publisher_credibility": point.payload.get("publisher_credibility"),
                         }
                         articles.append(article_data)
 
@@ -111,6 +112,7 @@ class QdrantVectorClient:
                                         point.payload.get("sentiment_score", 0.0)
                                     ),
                                     "entities": point.payload.get("entities", []),
+                                    "publisher_credibility": point.payload.get("publisher_credibility"),
                                 }
                                 articles.append(article_data)
                                 break
@@ -127,6 +129,20 @@ class QdrantVectorClient:
                 requested=len(article_ids),
                 fetched=len(articles),
             )
+
+            # Log sample article data for debugging
+            if articles:
+                sample_article = articles[0]
+                sentiment_score = sample_article.get("sentiment_score")
+                entities = sample_article.get("entities", [])
+                logger.info(
+                    f"Sample article from Qdrant: article_id={sample_article.get('article_id')}, "
+                    f"sentiment_score={sentiment_score}, entity_count={len(entities)}, "
+                    f"has_title={bool(sample_article.get('title'))}, has_body={bool(sample_article.get('body'))}, "
+                    f"publisher_credibility={sample_article.get('publisher_credibility')}, "
+                    f"source={sample_article.get('source')}, domain={sample_article.get('domain')}"
+                )
+
             return articles
 
         except Exception as e:

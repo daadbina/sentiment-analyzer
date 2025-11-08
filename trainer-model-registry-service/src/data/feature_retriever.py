@@ -42,7 +42,7 @@ class FeatureRetriever:
         Retrieve features for entities in time range.
 
         Args:
-            entity_ids: List of entity IDs (article IDs)
+            entity_ids: List of entity IDs (group IDs from semantic groups)
             start_date: Start date for feature retrieval
             end_date: End date for feature retrieval
             features: Optional list of specific features to retrieve
@@ -63,19 +63,34 @@ class FeatureRetriever:
                     f"Retrieving features for {len(entity_ids)} entities "
                     f"from {start_date} to {end_date}"
                 )
+                logger.debug(f"Entity IDs (first 5): {entity_ids[:5]}")
 
                 # Create entity dataframe with timestamps
+                # Use group_id as entity (semantic groups from feature-engineering-service)
                 entity_df = pd.DataFrame(
                     {
-                        "article_id": entity_ids,
+                        "group_id": entity_ids,
                         "timestamp": [end_date] * len(entity_ids),
                     }
                 )
 
+                logger.debug(f"Entity dataframe shape: {entity_df.shape}")
+                logger.debug(f"Entity dataframe dtypes:\n{entity_df.dtypes}")
+                logger.debug(f"Entity dataframe sample:\n{entity_df.head()}")
+
                 # Get features from Feast
+                feature_list = features or self._get_default_features()
+                # Format features with feature view prefix for Feast
+                formatted_features = [
+                    f"semantic_group_features:{feature}" for feature in feature_list
+                ]
+
+                logger.info(f"Requesting {len(formatted_features)} features from Feast")
+                logger.debug(f"Formatted features: {formatted_features}")
+
                 feature_df = self.feast_client.get_features(
                     entity_df=entity_df,
-                    features=features or self._get_default_features(),
+                    features=formatted_features,
                     timestamp_column="timestamp",
                 )
 
@@ -84,11 +99,24 @@ class FeatureRetriever:
                     f"{feature_df.shape[1]} features"
                 )
                 logger.debug(f"Feature columns: {list(feature_df.columns)}")
+                logger.debug(f"Feature dataframe dtypes:\n{feature_df.dtypes}")
+
+                # Check for null values
+                null_counts = feature_df.isnull().sum()
+                if null_counts.sum() > 0:
+                    logger.warning(f"Found null values in features:\n{null_counts[null_counts > 0]}")
+                else:
+                    logger.info("No null values found in features")
+
+                # Log data statistics
+                numeric_cols = feature_df.select_dtypes(include=['number']).columns
+                if len(numeric_cols) > 0:
+                    logger.debug(f"Feature statistics:\n{feature_df[numeric_cols].describe()}")
 
                 return feature_df
 
             except Exception as e:
-                logger.error(f"Feature retrieval failed: {e}")
+                logger.error(f"Feature retrieval failed: {e}", exc_info=True)
                 raise DataPreparationError(
                     f"Feature retrieval failed: {e}",
                     stage="feature_retrieval",
@@ -104,20 +132,41 @@ class FeatureRetriever:
         Get default feature list.
 
         Returns:
-            List of feature names
+            List of feature names from feature-engineering-service
         """
-        # These should match features defined in Feast registry
+        # These features are computed by feature-engineering-service
+        # and stored in Feast offline store
         return [
-            "article_features__word_count",
-            "article_features__sentence_count",
-            "article_features__avg_word_length",
-            "article_features__language_confidence",
-            "article_features__source_credibility",
-            "article_features__publication_frequency",
-            "temporal_features__hour_of_day",
-            "temporal_features__day_of_week",
-            "temporal_features__month_of_year",
-            "temporal_features__days_since_publication",
+            # Source features (4)
+            "num_sources",
+            "source_credibility_avg",
+            "source_credibility_std",
+            "source_diversity_score",
+            # Temporal features (4)
+            "time_span_hours",
+            "publication_velocity",
+            "temporal_concentration",
+            "days_since_first_article",
+            # Sentiment features (4)
+            "sentiment_mean",
+            "sentiment_std",
+            "sentiment_polarity_ratio",
+            "sentiment_volatility",
+            # Entity features (4)
+            "entity_count",
+            "entity_diversity",
+            "entity_prominence",
+            "entity_concentration",
+            # Content features (4)
+            "avg_word_count",
+            "avg_title_length",
+            "language_diversity",
+            "domain_diversity",
+            # Embedding features (4)
+            "centroid_magnitude",
+            "intra_cluster_similarity_mean",
+            "intra_cluster_similarity_std",
+            "embedding_drift_score",
         ]
 
     def validate_features(self, feature_df: pd.DataFrame) -> bool:
@@ -136,7 +185,8 @@ class FeatureRetriever:
         with tracer.start_as_current_span("validate_features"):
             try:
                 # Check for required columns
-                required_cols = ["article_id", "timestamp"]
+                # group_id is the entity from semantic groups
+                required_cols = ["group_id", "timestamp"]
                 missing_cols = [c for c in required_cols if c not in feature_df.columns]
 
                 if missing_cols:

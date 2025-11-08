@@ -9,6 +9,7 @@ from .clients import (
     PostgresClient,
 )
 from .clients.qdrant_client import QdrantVectorClient
+from .clients.entities_consumer import EntitiesConsumer
 from .extractors import (
     SourceExtractor,
     TemporalExtractor,
@@ -20,12 +21,13 @@ from .extractors import (
 )
 from .transformers import FeatureAggregator, FeatureNormalizer
 from .validation import FeatureValidator, QualityChecker
-from .storage import FeastWriter, RedisWriter, FeatureReconciliation
+from .storage import FeastWriter, RedisWriter, FeatureReconciliation, DeltaLakeWriter
 from .drift import DriftDetector
 from .utils import StructuredLogger, TraceContext, FeatureLineage
 from .metrics import metrics
 from .exceptions import FeatureError
 from .config import QdrantConfig, FeastConfig
+from .feast import FeastRegistry, create_semantic_group_feature_view
 
 logger = StructuredLogger(__name__)
 
@@ -38,10 +40,14 @@ class FeatureEngineeringService:
         self.consumer = SemanticGroupConsumer()
         self.producer = FeaturesProducer()
         self.postgres_client = PostgresClient()
+        self.entities_consumer = EntitiesConsumer()
         qdrant_config = QdrantConfig()
         self.qdrant_client = QdrantVectorClient(config=qdrant_config)
         feast_config = FeastConfig()
         self.feature_version = feast_config.feature_version
+
+        # Initialize Feast registry
+        self.feast_registry = FeastRegistry(config=feast_config)
 
         # Initialize extractors
         self.extractors = [
@@ -65,6 +71,7 @@ class FeatureEngineeringService:
         self.feast_writer = FeastWriter()
         self.redis_writer = RedisWriter()
         self.reconciliation = FeatureReconciliation()
+        self.delta_writer = DeltaLakeWriter()
 
         # Initialize drift detection
         self.drift_detector = DriftDetector()
@@ -80,7 +87,17 @@ class FeatureEngineeringService:
             self.postgres_client.connect()
             self.qdrant_client.connect()
 
+            # Initialize entities consumer
+            try:
+                self.entities_consumer.initialize()
+                logger.info("Entities consumer initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize entities consumer: {e} (entities will be empty)")
+
             logger.info("All connections established")
+
+            # Initialize Feast registry and register feature view
+            self._initialize_feast_registry()
 
             # Start consuming messages
             self._consume_loop()
@@ -89,11 +106,56 @@ class FeatureEngineeringService:
             logger.error("Error starting service", error=str(e))
             raise
 
+    def _initialize_feast_registry(self):
+        """Initialize Feast registry and register feature view."""
+        try:
+            logger.info("Initializing Feast registry")
+
+            # Connect to Feast registry
+            logger.debug("Connecting to Feast registry")
+            self.feast_registry.connect()
+            logger.debug("Feast registry connected")
+
+            # Create and register feature view
+            logger.debug("Creating semantic group feature view")
+            feature_view = create_semantic_group_feature_view()
+            logger.debug("Feature view created", feature_view_name=feature_view.name)
+
+            logger.debug("Registering feature view in Feast")
+            self.feast_registry.register_feature_view(feature_view)
+            logger.debug("Feature view registered")
+
+            # Verify feature view is registered
+            logger.debug("Verifying feature view registration")
+            fv = self.feast_registry.get_feature_view("semantic_group_features")
+            if fv:
+                logger.info(
+                    "Feature view registered successfully",
+                    feature_view_name="semantic_group_features",
+                    num_features=len(fv.features),
+                )
+            else:
+                logger.warning("Feature view registration verification failed")
+
+        except Exception as e:
+            logger.error(
+                "Error initializing Feast registry",
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
+            # Don't fail startup, just warn
+            logger.warning("Continuing without Feast registry initialization")
+
     def _consume_loop(self):
         """Main consumption loop."""
         try:
             while True:
                 try:
+                    # Consume entities batch (non-blocking)
+                    if self.entities_consumer.consumer:
+                        self.entities_consumer.consume_batch(timeout_seconds=0.1, max_messages=50)
+
                     # Consume message
                     message = self.consumer.consume_message(timeout_ms=1000)
 
@@ -184,8 +246,16 @@ class FeatureEngineeringService:
         articles = []
         for article_dict in article_dicts:
             try:
+                article_id = article_dict.get("article_id", "")
+
+                # Get entities from cache if available
+                entities = self.entities_consumer.get_entities(article_id)
+                if not entities:
+                    # Fallback to entities in article_dict if not in cache
+                    entities = article_dict.get("entities", [])
+
                 article = Article(
-                    article_id=article_dict.get("article_id", ""),
+                    article_id=article_id,
                     title=article_dict.get("title", ""),
                     body=article_dict.get("body", ""),
                     language=article_dict.get("language", ""),
@@ -193,7 +263,8 @@ class FeatureEngineeringService:
                     source=article_dict.get("source", ""),
                     published_at=article_dict.get("published_at", ""),
                     sentiment_score=float(article_dict.get("sentiment_score", 0.0)),
-                    entities=article_dict.get("entities", []),
+                    entities=entities,
+                    publisher_credibility=article_dict.get("publisher_credibility"),
                 )
                 articles.append(article)
             except Exception as e:
@@ -298,18 +369,58 @@ class FeatureEngineeringService:
             features: Features to write
         """
         try:
+            # Remove metadata columns that shouldn't be in the feature store
+            # These are only for monitoring/validation
+            metadata_columns = {
+                "feature_count",
+                "feature_sum",
+                "feature_mean",
+                "feature_min",
+                "feature_max",
+                "feature_range",
+            }
+
+            # Create a clean copy of features without metadata
+            clean_features = {
+                k: v for k, v in features.items()
+                if k not in metadata_columns
+            }
+
+            logger.debug(
+                "Removed metadata columns before writing",
+                group_id=group_id,
+                original_count=len(features),
+                clean_count=len(clean_features),
+                removed_columns=list(metadata_columns & set(features.keys())),
+            )
+
+            # Write to Delta Lake (offline)
+            self.delta_writer.write_features(group_id, clean_features)
+            logger.debug("Features written to Delta Lake", group_id=group_id)
+
             # Write to Feast (offline)
-            self.feast_writer.write_features(group_id, features)
+            self.feast_writer.write_features(group_id, clean_features)
             metrics.feast_writes.inc()
+            logger.debug("Features written to Feast", group_id=group_id)
 
             # Write to Redis (online)
-            self.redis_writer.write_features(group_id, features)
+            self.redis_writer.write_features(group_id, clean_features)
             metrics.redis_writes.inc()
+            logger.debug("Features written to Redis", group_id=group_id)
 
-            logger.info("Features written to storage", group_id=group_id)
+            logger.info(
+                "Features written to all storage backends",
+                group_id=group_id,
+                feature_count=len(clean_features),
+            )
 
         except Exception as e:
-            logger.error("Error writing features", error=str(e), group_id=group_id)
+            logger.error(
+                "Error writing features",
+                error=str(e),
+                group_id=group_id,
+                error_type=type(e).__name__,
+            )
             raise FeatureError(f"Error writing features: {str(e)}")
 
     def shutdown(self):
@@ -320,6 +431,8 @@ class FeatureEngineeringService:
             self.consumer.close()
             self.producer.close()
             self.postgres_client.close()
+            self.entities_consumer.shutdown()
+            self.feast_registry.close()
             self.feast_writer.close()
             self.redis_writer.close()
             self.reconciliation.close()

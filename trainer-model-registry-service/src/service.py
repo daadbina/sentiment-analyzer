@@ -413,14 +413,24 @@ class TrainerService:
                             # Save and register model
                             model_version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                             try:
+                                # Save to S3
                                 artifact_metadata = self.artifact_manager.save_model_artifact(
                                     model=model,
                                     model_name=f"sentiment_{model_type}",
                                     version=model_version,
                                 )
-                                logger.info(f"Model artifact saved: {artifact_metadata}")
+                                logger.info(f"Model artifact saved to S3: {artifact_metadata}")
 
-                                # Register in MLflow registry
+                                # Log model to MLflow run
+                                self.mlflow_client.log_model(
+                                    run_id=run_id,
+                                    model_path=artifact_metadata.get("file_path"),
+                                    artifact_path="model",
+                                    model_type=model_type,
+                                )
+                                logger.info(f"Model logged to MLflow run {run_id}")
+
+                                # Register in MLflow registry using the run artifact
                                 model_uri = f"runs://{run_id}/model"
                                 registered_version = self.mlflow_client.register_model(
                                     model_uri=model_uri,

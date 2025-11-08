@@ -115,12 +115,13 @@ async def perform_startup_checks(config) -> bool:
         try:
             postgres_client = PostgresClient(config.postgres)
             await postgres_client.connect()
-            # Verify predictions table exists
-            await postgres_client.execute_query(
-                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'predictions')"
-            )
+            is_healthy = await postgres_client.health_check()
             await postgres_client.disconnect()
-            logger.info("✓ PostgreSQL schema validated")
+            if is_healthy:
+                logger.info("✓ PostgreSQL schema validated")
+            else:
+                logger.error("✗ PostgreSQL schema check failed: unhealthy")
+                return False
         except Exception as e:
             logger.error(f"✗ PostgreSQL schema check failed: {e}")
             return False

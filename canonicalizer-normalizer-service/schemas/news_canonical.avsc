@@ -81,6 +81,12 @@
       "doc": "Detected language code (ISO 639-1)"
     },
     {
+      "name": "sentiment_score",
+      "type": "double",
+      "default": 0.0,
+      "doc": "Sentiment score in range [-1.0, 1.0] where -1.0 is most negative, 0.0 is neutral, 1.0 is most positive"
+    },
+    {
       "name": "source_published_at_utc",
       "type": "string",
       "doc": "Publication timestamp in UTC ISO-8601"

@@ -17,6 +17,7 @@ from src.enrichment import MetadataEnricher
 from src.classification import DomainClassifier
 from src.deduplication import FuzzyDeduplicator
 from src.scoring import NormalizationScorer
+from src.sentiment import SentimentAnalyzer
 from src.models import NewsValidatedMessage, NewsCanonicalMessage, NormalizationDetails
 from src.exceptions import NormalizationError
 import src.metrics as metrics
@@ -46,6 +47,7 @@ class CanonicalizeNormalizerService:
             threshold=self.settings.normalization.fuzzy_dedup_threshold
         )
         self.scorer = NormalizationScorer()
+        self.sentiment_analyzer = SentimentAnalyzer()
 
     async def start(self) -> None:
         """Start service."""
@@ -195,7 +197,18 @@ class CanonicalizeNormalizerService:
             if dedup_result.similar_articles:
                 metrics.fuzzy_dedup_duplicates_found.inc(len(dedup_result.similar_articles))
 
-            # Step 7: Calculate Normalization Score
+            # Step 7: Sentiment Analysis
+            sentiment_text = f"{content_result.normalized_title} {content_result.normalized_body}"
+            sentiment_score = self.sentiment_analyzer.analyze(
+                sentiment_text,
+                language=validated_msg.language
+            )
+            logger.debug(
+                f"[{trace_id}] Sentiment analysis: article_id={article_id}, "
+                f"language={validated_msg.language}, sentiment_score={sentiment_score:.3f}"
+            )
+
+            # Step 8: Calculate Normalization Score
             normalization_score = self.scorer.calculate_score(
                 url_canonicalized=url_result.canonicalized,
                 publisher_credibility=publisher_credibility,
@@ -208,7 +221,7 @@ class CanonicalizeNormalizerService:
             )
             metrics.normalization_score.observe(normalization_score)
 
-            # Step 8: Create output message
+            # Step 9: Create output message
             canonicalized_at = datetime.utcnow().isoformat() + "Z"
             canonical_msg = NewsCanonicalMessage(
                 article_id=article_id,
@@ -226,6 +239,7 @@ class CanonicalizeNormalizerService:
                 publisher_credibility=publisher_credibility,
                 publisher_country=publisher.country if publisher else None,
                 language=validated_msg.language,
+                sentiment_score=sentiment_score,
                 source_published_at_utc=validated_msg.source_published_at_utc,
                 validated_at=validated_msg.validated_at,
                 canonicalized_at=canonicalized_at,
@@ -259,7 +273,7 @@ class CanonicalizeNormalizerService:
                 trace_id=trace_id,
             )
 
-            # Step 9: Publish message
+            # Step 10: Publish message
             decision = self.scorer.get_decision(
                 normalization_score,
                 self.settings.normalization.normalization_score_accept,

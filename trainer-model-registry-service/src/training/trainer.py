@@ -14,6 +14,9 @@ from src.models.base_model import BaseModel
 from src.models.xgboost_model import XGBoostModel
 from src.models.logistic_regression_model import LogisticRegressionModel
 from src.models.llm_baseline_model import LLMBaselineModel
+from src.models.random_forest_model import RandomForestModel
+from src.models.gradient_boosting_model import GradientBoostingModel
+from src.models.voting_ensemble_model import VotingEnsembleModel
 from src.config import config
 from src.exceptions import TrainingError
 from src.utils.trace import get_tracer
@@ -113,7 +116,7 @@ class Trainer:
         y_val: Optional[pd.Series] = None,
     ) -> Dict[str, Tuple[BaseModel, Dict[str, Any]]]:
         """
-        Train all model types.
+        Train all model types including ensemble models.
 
         Args:
             X_train: Training features
@@ -132,9 +135,12 @@ class Trainer:
                 logger.info("Starting training for all models")
 
                 results = {}
-                model_types = ["xgboost", "logistic_regression", "llm"]
+                base_model_types = ["xgboost", "logistic_regression", "llm"]
+                ensemble_model_types = ["random_forest", "gradient_boosting"]
 
-                for model_type in model_types:
+                # Train base models first
+                logger.info("Training base models")
+                for model_type in base_model_types:
                     try:
                         model, metrics_dict = self.train_model(
                             model_type, X_train, y_train, X_val, y_val
@@ -144,13 +150,38 @@ class Trainer:
                         logger.error(f"Failed to train {model_type}: {e}")
                         # Continue with other models
 
+                # Train ensemble models
+                logger.info("Training ensemble models")
+                for model_type in ensemble_model_types:
+                    try:
+                        model, metrics_dict = self.train_model(
+                            model_type, X_train, y_train, X_val, y_val
+                        )
+                        results[model_type] = (model, metrics_dict)
+                    except Exception as e:
+                        logger.error(f"Failed to train {model_type}: {e}")
+                        # Continue with other models
+
+                # Train voting ensemble (requires base models)
+                if len(results) >= 2:
+                    try:
+                        logger.info("Training voting ensemble")
+                        model, metrics_dict = self.train_model(
+                            "voting_ensemble", X_train, y_train, X_val, y_val
+                        )
+                        results["voting_ensemble"] = (model, metrics_dict)
+                    except Exception as e:
+                        logger.error(f"Failed to train voting_ensemble: {e}")
+                else:
+                    logger.warning("Not enough base models trained for voting ensemble")
+
                 if not results:
                     raise TrainingError(
                         "Failed to train any models",
                         model_name="all",
                     )
 
-                logger.info(f"Training complete for {len(results)} models")
+                logger.info(f"Training complete for {len(results)} models: {list(results.keys())}")
                 return results
 
             except Exception as e:
@@ -179,6 +210,30 @@ class Trainer:
             return LogisticRegressionModel()
         elif model_type == "llm":
             return LLMBaselineModel()
+        elif model_type == "random_forest":
+            return RandomForestModel(config.random_forest.model_dump())
+        elif model_type == "gradient_boosting":
+            return GradientBoostingModel(config.gradient_boosting.model_dump())
+        elif model_type == "voting_ensemble":
+            # Create voting ensemble with trained base models
+            base_models = []
+            if "xgboost" in self.models:
+                base_models.append(self.models["xgboost"])
+            if "logistic_regression" in self.models:
+                base_models.append(self.models["logistic_regression"])
+            if "random_forest" in self.models:
+                base_models.append(self.models["random_forest"])
+            if "gradient_boosting" in self.models:
+                base_models.append(self.models["gradient_boosting"])
+
+            if not base_models:
+                raise TrainingError(
+                    "No base models available for voting ensemble",
+                    model_name="voting_ensemble",
+                )
+
+            logger.info(f"Creating voting ensemble with {len(base_models)} base models")
+            return VotingEnsembleModel(base_models, config.voting_ensemble.model_dump())
         else:
             raise TrainingError(
                 f"Unknown model type: {model_type}",

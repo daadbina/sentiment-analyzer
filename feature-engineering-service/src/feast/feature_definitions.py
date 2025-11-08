@@ -38,17 +38,27 @@ def create_semantic_group_source(push_source_name: str = "semantic_group_feature
     import os
     import pandas as pd
     import pyarrow.parquet as pq
+    from pathlib import Path
 
-    # Create directory if it doesn't exist
-    os.makedirs("data/feast/offline_store", exist_ok=True)
+    # Use shared path relative to repo root
+    # This ensures both feature-engineering and trainer services use the same offline store
+    repo_root = Path(__file__).parent.parent.parent.parent  # Go up to repo root
+    offline_store_dir = repo_root / "feast" / "offline_store"
+    offline_store_dir.mkdir(parents=True, exist_ok=True)
 
     # Create a minimal parquet file with the correct schema
-    parquet_path = "data/feast/offline_store/semantic_groups.parquet"
+    parquet_path = str(offline_store_dir / "semantic_groups.parquet")
     if not os.path.exists(parquet_path):
         # Create a minimal DataFrame with the schema
+        # Use proper datetime for timestamp with UTC timezone
+        from datetime import datetime
+        import pyarrow as pa
+
+        # Create DataFrame with explicit types
+        # Use UTC timezone to match Feast expectations
         df = pd.DataFrame({
             "group_id": ["dummy"],
-            "timestamp": [0],
+            "timestamp": pd.to_datetime([datetime.utcnow()], utc=True),
             "num_sources": [0],
             "source_credibility_avg": [0.0],
             "source_credibility_std": [0.0],
@@ -74,8 +84,14 @@ def create_semantic_group_source(push_source_name: str = "semantic_group_feature
             "intra_cluster_similarity_std": [0.0],
             "embedding_drift_score": [0.0],
         })
-        df.to_parquet(parquet_path, index=False)
+
+        # Ensure timestamp is datetime64[ns, UTC] type
+        df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
+
+        # Write with explicit schema to ensure timestamp is preserved
+        df.to_parquet(parquet_path, index=False, engine='pyarrow')
         logger.debug(f"Created minimal parquet file at {parquet_path}")
+        logger.debug(f"Parquet file dtypes: {df.dtypes.to_dict()}")
 
     batch_source = FileSource(
         path=parquet_path,

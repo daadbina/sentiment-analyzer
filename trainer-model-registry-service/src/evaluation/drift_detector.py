@@ -8,8 +8,7 @@ import logging
 from typing import Dict, Any, Optional, Tuple
 import pandas as pd
 import numpy as np
-from evidently import Report
-from evidently.legacy.metric_preset import DataDriftPreset, TargetDriftPreset
+from scipy import stats
 
 from src.config import config
 from src.exceptions import DriftDetectionError
@@ -58,23 +57,35 @@ class DriftDetector:
                     f"{len(X_current)} current samples"
                 )
 
-                # Create report
-                report = Report(metrics=[DataDriftPreset()])
-                report.run(
-                    reference_data=X_reference,
-                    current_data=X_current,
-                )
-
-                # Extract results
-                drift_results = report.as_dict()
-
-                # Check for drift
+                # Detect drift using statistical tests (Kolmogorov-Smirnov test)
                 drifted_features = []
-                if "metrics" in drift_results:
-                    for metric in drift_results["metrics"]:
-                        if "result" in metric and "drift_detected" in metric["result"]:
-                            if metric["result"]["drift_detected"]:
-                                drifted_features.append(metric.get("metric", "unknown"))
+
+                for column in X_reference.columns:
+                    if column in X_current.columns:
+                        # Skip non-numeric columns
+                        if not pd.api.types.is_numeric_dtype(X_reference[column]):
+                            continue
+
+                        # Perform KS test
+                        try:
+                            statistic, p_value = stats.ks_2samp(
+                                X_reference[column].dropna(),
+                                X_current[column].dropna()
+                            )
+
+                            # If p-value < threshold, drift is detected
+                            if p_value < threshold:
+                                drifted_features.append({
+                                    "feature": column,
+                                    "statistic": float(statistic),
+                                    "p_value": float(p_value)
+                                })
+                                logger.debug(
+                                    f"Drift detected in {column}: "
+                                    f"statistic={statistic:.4f}, p_value={p_value:.4f}"
+                                )
+                        except Exception as e:
+                            logger.warning(f"Failed to test drift for {column}: {e}")
 
                 result = {
                     "drift_detected": len(drifted_features) > 0,
@@ -83,6 +94,7 @@ class DriftDetector:
                     "num_total_features": X_current.shape[1],
                     "drift_percentage": (
                         len(drifted_features) / X_current.shape[1] * 100
+                        if X_current.shape[1] > 0 else 0
                     ),
                 }
 
@@ -91,7 +103,8 @@ class DriftDetector:
 
                 # Record metric
                 if result["drift_detected"]:
-                    metrics.record_drift_detected()
+                    logger.warning(f"Feature drift detected: {len(drifted_features)} features")
+                    metrics.record_drift_detection("feature", "sentiment_classifier")
 
                 logger.info(f"Feature drift detection complete: {result}")
                 return result
@@ -130,37 +143,33 @@ class DriftDetector:
                     f"{len(y_current)} current samples"
                 )
 
-                # Create dataframes for Evidently
-                ref_df = pd.DataFrame({"target": y_reference})
-                curr_df = pd.DataFrame({"target": y_current})
-
-                # Create report
-                report = Report(metrics=[TargetDriftPreset()])
-                report.run(
-                    reference_data=ref_df,
-                    current_data=curr_df,
-                )
-
-                # Extract results
-                drift_results = report.as_dict()
-
                 # Calculate distribution statistics
                 ref_dist = y_reference.value_counts(normalize=True).to_dict()
                 curr_dist = y_current.value_counts(normalize=True).to_dict()
 
-                # Check for significant change
+                # Check for significant change in class distribution
                 drift_detected = False
+                max_diff = 0.0
+
                 for label in set(list(ref_dist.keys()) + list(curr_dist.keys())):
                     ref_prop = ref_dist.get(label, 0)
                     curr_prop = curr_dist.get(label, 0)
-                    if abs(ref_prop - curr_prop) > threshold:
+                    diff = abs(ref_prop - curr_prop)
+                    max_diff = max(max_diff, diff)
+
+                    if diff > threshold:
                         drift_detected = True
-                        break
+                        logger.debug(
+                            f"Target drift detected for class {label}: "
+                            f"reference={ref_prop:.4f}, current={curr_prop:.4f}, "
+                            f"diff={diff:.4f}"
+                        )
 
                 result = {
                     "drift_detected": drift_detected,
-                    "reference_distribution": ref_dist,
-                    "current_distribution": curr_dist,
+                    "reference_distribution": {str(k): v for k, v in ref_dist.items()},
+                    "current_distribution": {str(k): v for k, v in curr_dist.items()},
+                    "max_difference": float(max_diff),
                     "threshold": threshold,
                 }
 
@@ -169,7 +178,8 @@ class DriftDetector:
 
                 # Record metric
                 if result["drift_detected"]:
-                    metrics.record_drift_detected()
+                    logger.warning(f"Target drift detected: max_diff={max_diff:.4f}")
+                    metrics.record_drift_detection("target", "sentiment_classifier")
 
                 logger.info(f"Target drift detection complete: {result}")
                 return result
@@ -225,7 +235,7 @@ class DriftDetector:
 
                 # Record metric
                 if result["drift_detected"]:
-                    metrics.record_drift_detected()
+                    metrics.record_drift_detection("model", "sentiment_classifier")
 
                 logger.info(f"Model drift detection complete: {result}")
                 return result

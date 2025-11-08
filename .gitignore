@@ -106,3 +106,7 @@ mlruns/
 COMPREHENSIVE_VALIDATION_REPORT.json
 logs/
 test_features.py
+test_trainer_diagnosis.py
+feast/
+test_all_tasks.py
+mlartifacts

@@ -6,13 +6,12 @@ Implements Rule R8 (Ground-Truth Sync) and Rule R10 (Truth Freshness).
 """
 
 import logging
-from typing import Dict, Optional, Any
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Any
 
 from ..exceptions import LabelValidationError
 from ..utils.trace import trace_span
 from .label_retriever import LABEL_FRESHNESS_THRESHOLDS
-
 
 logger = logging.getLogger(__name__)
 
@@ -20,33 +19,33 @@ logger = logging.getLogger(__name__)
 class LabelValidator:
     """
     Validator for ground-truth labels.
-    
+
     Validates label schema, freshness, and confidence.
     """
-    
+
     def __init__(self, min_confidence: float = 0.5):
         """
         Initialize label validator.
-        
+
         Args:
             min_confidence: Minimum label confidence threshold
         """
         self.min_confidence = min_confidence
-        
+
         logger.info(f"Initialized label validator: min_confidence={min_confidence}")
-    
+
     async def validate_label(
         self,
-        label: Dict[str, Any],
-        trace_id: Optional[str] = None,
+        label: dict[str, Any],
+        trace_id: str | None = None,
     ) -> None:
         """
         Validate label schema and quality.
-        
+
         Args:
             label: Label dictionary to validate
             trace_id: Optional trace ID for distributed tracing
-        
+
         Raises:
             LabelValidationError: If validation fails
         """
@@ -63,7 +62,7 @@ class LabelValidator:
                 "label_source",
                 "labeled_at",
             ]
-            
+
             missing_fields = [field for field in required_fields if field not in label]
             if missing_fields:
                 logger.error(
@@ -75,7 +74,7 @@ class LabelValidator:
                     group_id=label.get("group_id"),
                     trace_id=trace_id,
                 )
-            
+
             # Validate label value
             label_value = label["label_value"]
             if label_value not in [0.0, 1.0]:
@@ -88,7 +87,7 @@ class LabelValidator:
                     group_id=label["group_id"],
                     trace_id=trace_id,
                 )
-            
+
             # Validate label confidence
             label_confidence = label["label_confidence"]
             if not 0.0 <= label_confidence <= 1.0:
@@ -101,7 +100,7 @@ class LabelValidator:
                     group_id=label["group_id"],
                     trace_id=trace_id,
                 )
-            
+
             # Check minimum confidence
             if label_confidence < self.min_confidence:
                 logger.warning(
@@ -113,7 +112,7 @@ class LabelValidator:
                     group_id=label["group_id"],
                     trace_id=trace_id,
                 )
-            
+
             # Validate label source
             valid_sources = ["ACLED", "GDELT", "CoinGecko"]
             label_source = label["label_source"]
@@ -127,33 +126,33 @@ class LabelValidator:
                     group_id=label["group_id"],
                     trace_id=trace_id,
                 )
-            
+
             # Validate label freshness
             self._validate_freshness(label, trace_id)
-            
+
             logger.debug(
                 f"Label validated successfully: group_id={label['group_id']}",
                 extra={"trace_id": trace_id, "group_id": label["group_id"]},
             )
-    
+
     def _validate_freshness(
         self,
-        label: Dict[str, Any],
-        trace_id: Optional[str] = None,
+        label: dict[str, Any],
+        trace_id: str | None = None,
     ) -> None:
         """
         Validate label freshness against Rule R10 thresholds.
-        
+
         Args:
             label: Label dictionary
             trace_id: Optional trace ID for distributed tracing
-        
+
         Raises:
             LabelValidationError: If label is too stale
         """
         label_source = label["label_source"]
         labeled_at = label["labeled_at"]
-        
+
         # Get freshness threshold for source
         threshold = LABEL_FRESHNESS_THRESHOLDS.get(label_source)
         if not threshold:
@@ -162,13 +161,13 @@ class LabelValidator:
                 extra={"trace_id": trace_id},
             )
             return
-        
+
         # Calculate label age
         if isinstance(labeled_at, str):
             labeled_at = datetime.fromisoformat(labeled_at)
-        
+
         age = datetime.utcnow() - labeled_at
-        
+
         # Check if label is stale
         if age > threshold:
             logger.error(

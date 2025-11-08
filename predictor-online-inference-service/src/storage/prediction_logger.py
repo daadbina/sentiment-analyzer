@@ -6,12 +6,11 @@ Implements Rule R12 (Provenance Integrity).
 """
 
 import logging
-from typing import Dict, Optional, Any
+from typing import Any
 
-from ..clients import PostgresClient, KafkaProducerClient
-from ..exceptions import PostgresError, KafkaError
+from ..clients import KafkaProducerClient, PostgresClient
+from ..exceptions import KafkaError, PostgresError
 from ..utils.trace import trace_span
-
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +18,10 @@ logger = logging.getLogger(__name__)
 class PredictionLogger:
     """
     Logger for storing predictions in PostgreSQL and Kafka.
-    
+
     Provides audit trail and publishes predictions to Kafka topic.
     """
-    
+
     def __init__(
         self,
         postgres_client: PostgresClient,
@@ -30,24 +29,24 @@ class PredictionLogger:
     ):
         """
         Initialize prediction logger.
-        
+
         Args:
             postgres_client: PostgreSQL client instance
             kafka_producer: Kafka producer instance
         """
         self.postgres_client = postgres_client
         self.kafka_producer = kafka_producer
-        
+
         logger.info("Initialized prediction logger")
-    
+
     async def log_prediction(
         self,
-        prediction: Dict[str, Any],
-        trace_id: Optional[str] = None,
+        prediction: dict[str, Any],
+        trace_id: str | None = None,
     ) -> None:
         """
         Log prediction to PostgreSQL and Kafka.
-        
+
         Args:
             prediction: Prediction dictionary containing:
                 - group_id: str
@@ -68,18 +67,18 @@ class PredictionLogger:
         ):
             # Store in PostgreSQL
             await self._store_in_postgres(prediction, trace_id)
-            
+
             # Publish to Kafka
             await self._publish_to_kafka(prediction, trace_id)
-    
+
     async def _store_in_postgres(
         self,
-        prediction: Dict[str, Any],
-        trace_id: Optional[str] = None,
+        prediction: dict[str, Any],
+        trace_id: str | None = None,
     ) -> None:
         """
         Store prediction in PostgreSQL.
-        
+
         Args:
             prediction: Prediction dictionary
             trace_id: Optional trace ID for distributed tracing
@@ -94,12 +93,12 @@ class PredictionLogger:
                 features=prediction.get("features", {}),
                 trace_id=trace_id,
             )
-            
+
             logger.debug(
                 f"Prediction stored in PostgreSQL: group_id={prediction['group_id']}",
                 extra={"trace_id": trace_id, "group_id": prediction["group_id"]},
             )
-            
+
         except PostgresError as e:
             logger.error(
                 f"Failed to store prediction in PostgreSQL: "
@@ -115,15 +114,15 @@ class PredictionLogger:
                 exc_info=True,
                 extra={"trace_id": trace_id},
             )
-    
+
     async def _publish_to_kafka(
         self,
-        prediction: Dict[str, Any],
-        trace_id: Optional[str] = None,
+        prediction: dict[str, Any],
+        trace_id: str | None = None,
     ) -> None:
         """
         Publish prediction to Kafka topic.
-        
+
         Args:
             prediction: Prediction dictionary
             trace_id: Optional trace ID for distributed tracing
@@ -138,12 +137,12 @@ class PredictionLogger:
                 features=prediction.get("features", {}),
                 trace_id=trace_id,
             )
-            
+
             logger.debug(
                 f"Prediction published to Kafka: group_id={prediction['group_id']}",
                 extra={"trace_id": trace_id, "group_id": prediction["group_id"]},
             )
-            
+
         except KafkaError as e:
             logger.error(
                 f"Failed to publish prediction to Kafka: "

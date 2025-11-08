@@ -4,9 +4,13 @@ FROM python:3.11-slim as builder
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (including PostgreSQL client libraries)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    gcc \
+    g++ \
+    make \
+    libpq-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -23,8 +27,9 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install runtime dependencies
+# Install runtime dependencies (including PostgreSQL runtime libraries)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -43,11 +48,13 @@ RUN useradd -m -u 1000 predictor && \
 USER predictor
 
 # Expose ports
-EXPOSE 8000 9090
+# 8000: FastAPI application
+# 9109: Prometheus metrics
+EXPOSE 8000 9109
 
-# Health check
+# Health check (using /live endpoint for liveness)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+    CMD curl -f http://localhost:8000/live || exit 1
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

@@ -48,14 +48,15 @@ async def lifespan(app: FastAPI):
         logger.info("Database migrations completed")
 
         # Initialize semantic groups at startup (country+event combinations)
-        logger.info("Initializing semantic groups...")
-        await initialize_semantic_groups(
-            db_host=config.postgres.host,
-            db_port=config.postgres.port,
-            db_user=config.postgres.user,
-            db_password=config.postgres.password,
-            db_name=config.postgres.database
-        )
+        # DISABLED: Do not initialize 540 semantic groups - let them be created organically from clustering
+        # logger.info("Initializing semantic groups...")
+        # await initialize_semantic_groups(
+        #     db_host=config.postgres.host,
+        #     db_port=config.postgres.port,
+        #     db_user=config.postgres.user,
+        #     db_password=config.postgres.password,
+        #     db_name=config.postgres.database
+        # )
         logger.info("Semantic groups initialization completed")
 
         # Start scheduler

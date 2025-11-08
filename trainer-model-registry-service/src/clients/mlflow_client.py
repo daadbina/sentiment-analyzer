@@ -38,12 +38,15 @@ class MLflowClientWrapper:
             ExternalServiceError: If connection fails
         """
         try:
+            logger.info(f"Connecting to MLflow at {self.config.tracking_uri}")
             mlflow.set_tracking_uri(self.config.tracking_uri)
             mlflow.set_registry_uri(self.config.registry_uri)
             self.client = MlflowClient(tracking_uri=self.config.tracking_uri)
-            logger.info("MLflow client connected")
+            logger.info(f"MLflow client connected successfully")
+            logger.debug(f"Tracking URI: {self.config.tracking_uri}")
+            logger.debug(f"Registry URI: {self.config.registry_uri}")
         except Exception as e:
-            logger.error(f"Failed to connect to MLflow: {e}")
+            logger.error(f"Failed to connect to MLflow: {e}", exc_info=True)
             raise ExternalServiceError(
                 f"Failed to connect to MLflow: {e}",
                 service_name="MLflow",
@@ -173,6 +176,140 @@ class MLflowClientWrapper:
                 details={"run_id": run_id, "model_type": model_type},
             )
 
+    def start_run(self, experiment_id: str):
+        """
+        Start a new MLflow run (context manager).
+
+        Args:
+            experiment_id: MLflow experiment ID
+
+        Returns:
+            Context manager for MLflow run
+
+        Raises:
+            ExternalServiceError: If run creation fails
+        """
+        if not self.client:
+            raise ExternalServiceError(
+                "MLflow client not initialized",
+                service_name="MLflow",
+            )
+
+        try:
+            logger.info(f"Starting MLflow run for experiment {experiment_id}")
+            # Suppress MLflow's stdout output to avoid encoding issues on Windows
+            import sys
+            import io
+            from contextlib import redirect_stdout, redirect_stderr
+
+            # Create a custom context manager that suppresses output
+            class SuppressedRun:
+                def __init__(self, exp_id):
+                    self.exp_id = exp_id
+                    self.run_context = None
+
+                def __enter__(self):
+                    # Suppress stdout/stderr during run start
+                    self.stdout_backup = sys.stdout
+                    self.stderr_backup = sys.stderr
+                    sys.stdout = io.StringIO()
+                    sys.stderr = io.StringIO()
+                    try:
+                        self.run_context = mlflow.start_run(experiment_id=self.exp_id)
+                        self.run_context.__enter__()
+                    finally:
+                        sys.stdout = self.stdout_backup
+                        sys.stderr = self.stderr_backup
+                    return self
+
+                def __exit__(self, *args):
+                    # Suppress stdout/stderr during run end
+                    self.stdout_backup = sys.stdout
+                    self.stderr_backup = sys.stderr
+                    sys.stdout = io.StringIO()
+                    sys.stderr = io.StringIO()
+                    try:
+                        if self.run_context:
+                            self.run_context.__exit__(*args)
+                    finally:
+                        sys.stdout = self.stdout_backup
+                        sys.stderr = self.stderr_backup
+
+            return SuppressedRun(experiment_id)
+        except Exception as e:
+            logger.error(f"Failed to start run: {e}")
+            raise ExternalServiceError(
+                f"Failed to start run: {e}",
+                service_name="MLflow",
+                details={"experiment_id": experiment_id},
+            )
+
+    def log_metric(self, run_id: str, key: str, value: float) -> None:
+        """
+        Log a single metric to MLflow.
+
+        Args:
+            run_id: MLflow run ID
+            key: Metric name
+            value: Metric value
+
+        Raises:
+            ExternalServiceError: If logging fails
+        """
+        if not self.client:
+            raise ExternalServiceError(
+                "MLflow client not initialized",
+                service_name="MLflow",
+            )
+
+        try:
+            self.client.log_metric(run_id, key, value)
+            logger.debug(f"Logged metric {key}={value} for run {run_id}")
+        except Exception as e:
+            logger.error(f"Failed to log metric: {e}")
+            raise ExternalServiceError(
+                f"Failed to log metric: {e}",
+                service_name="MLflow",
+                details={"run_id": run_id, "metric_key": key},
+            )
+
+    def log_params(self, run_id: str, params: Dict[str, Any]) -> None:
+        """
+        Log parameters to MLflow.
+
+        Args:
+            run_id: MLflow run ID
+            params: Dictionary of parameter names and values
+
+        Raises:
+            ExternalServiceError: If logging fails
+        """
+        if not self.client:
+            raise ExternalServiceError(
+                "MLflow client not initialized",
+                service_name="MLflow",
+            )
+
+        try:
+            for key, value in params.items():
+                # Convert non-string values to strings
+                str_value = str(value) if not isinstance(value, str) else value
+                # Encode to UTF-8 and decode to handle special characters
+                try:
+                    str_value = str_value.encode('utf-8', errors='replace').decode('utf-8')
+                except Exception:
+                    # If encoding fails, use repr
+                    str_value = repr(value)
+                self.client.log_param(run_id, key, str_value)
+            logger.debug(f"Logged {len(params)} parameters for run {run_id}")
+        except Exception as e:
+            logger.error(f"Failed to log parameters: {e}")
+            raise ExternalServiceError(
+                f"Failed to log parameters: {e}",
+                service_name="MLflow",
+                details={"run_id": run_id, "num_params": len(params)},
+            )
+
     def log_metrics(self, run_id: str, metrics: Dict[str, float]) -> None:
         """
         Log metrics to MLflow.
@@ -229,10 +366,32 @@ class MLflowClientWrapper:
             )
 
         try:
-            model_version = mlflow.register_model(model_uri, model_name)
-            logger.info(
-                f"Registered model: {model_name} (version: {model_version.version})"
-            )
+            try:
+                # Try to register new model using client method
+                model_version = self.client.create_registered_model(model_name)
+                logger.info(f"Created registered model: {model_name}")
+
+                # Create version for this model
+                model_version = self.client.create_model_version(
+                    name=model_name,
+                    source=model_uri,
+                )
+                logger.info(
+                    f"Registered model: {model_name} (version: {model_version.version})"
+                )
+            except Exception as register_error:
+                # If model already exists, create a new version
+                if "already exists" in str(register_error) or "RESOURCE_ALREADY_EXISTS" in str(register_error):
+                    logger.info(f"Model {model_name} already exists, creating new version")
+                    model_version = self.client.create_model_version(
+                        name=model_name,
+                        source=model_uri,
+                    )
+                    logger.info(
+                        f"Created new version for model: {model_name} (version: {model_version.version})"
+                    )
+                else:
+                    raise
 
             if tags:
                 self.client.set_model_version_tag(
@@ -358,4 +517,81 @@ class MLflowClientWrapper:
                 f"Failed to list model versions: {e}",
                 service_name="MLflow",
                 details={"model_name": model_name},
+            )
+
+    def list_experiments(self) -> List[Dict[str, Any]]:
+        """
+        List all experiments.
+
+        Returns:
+            List of experiment details
+
+        Raises:
+            ExternalServiceError: If listing fails
+        """
+        if not self.client:
+            raise ExternalServiceError(
+                "MLflow client not initialized",
+                service_name="MLflow",
+            )
+
+        try:
+            experiments = self.client.search_experiments()
+            logger.info(f"Listed {len(experiments)} experiments")
+            return [
+                {
+                    "experiment_id": exp.experiment_id,
+                    "name": exp.name,
+                    "artifact_location": exp.artifact_location,
+                    "lifecycle_stage": exp.lifecycle_stage,
+                }
+                for exp in experiments
+            ]
+        except Exception as e:
+            logger.error(f"Failed to list experiments: {e}")
+            raise ExternalServiceError(
+                f"Failed to list experiments: {e}",
+                service_name="MLflow",
+            )
+
+    def list_registered_models(self) -> List[Dict[str, Any]]:
+        """
+        List all registered models.
+
+        Returns:
+            List of registered model details
+
+        Raises:
+            ExternalServiceError: If listing fails
+        """
+        if not self.client:
+            raise ExternalServiceError(
+                "MLflow client not initialized",
+                service_name="MLflow",
+            )
+
+        try:
+            models = self.client.search_registered_models()
+            logger.info(f"Listed {len(models)} registered models")
+            return [
+                {
+                    "name": model.name,
+                    "creation_timestamp": model.creation_timestamp,
+                    "last_updated_timestamp": model.last_updated_timestamp,
+                    "latest_versions": [
+                        {
+                            "version": v.version,
+                            "stage": v.current_stage,
+                            "status": v.status,
+                        }
+                        for v in model.latest_versions
+                    ],
+                }
+                for model in models
+            ]
+        except Exception as e:
+            logger.error(f"Failed to list registered models: {e}")
+            raise ExternalServiceError(
+                f"Failed to list registered models: {e}",
+                service_name="MLflow",
             )

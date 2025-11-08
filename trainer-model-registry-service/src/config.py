@@ -15,8 +15,13 @@ class FeastConfig(BaseSettings):
 
     model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
+    repo_path: str = Field(
+        default=".",
+        alias="FEAST_REPO_PATH",
+        description="Path to Feast repository (directory containing feature_store.yaml)",
+    )
     registry_path: str = Field(
-        default="/feast/registry.db",
+        default="file:///C:/feast/registry.db",
         alias="FEAST_REGISTRY_PATH",
         description="Path to Feast registry database",
     )
@@ -243,6 +248,129 @@ class LogisticRegressionConfig(BaseSettings):
     )
 
 
+class FeatureEngineeringConfig(BaseSettings):
+    """Feature engineering configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
+
+    enable_interaction_features: bool = Field(
+        default=True,
+        alias="FEATURE_ENGINEERING_INTERACTION_ENABLED",
+        description="Enable interaction feature generation",
+    )
+    enable_polynomial_features: bool = Field(
+        default=True,
+        alias="FEATURE_ENGINEERING_POLYNOMIAL_ENABLED",
+        description="Enable polynomial feature generation",
+    )
+    polynomial_degree: int = Field(
+        default=2,
+        alias="FEATURE_ENGINEERING_POLYNOMIAL_DEGREE",
+        description="Degree for polynomial features",
+    )
+
+
+class RandomForestConfig(BaseSettings):
+    """Random Forest model configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
+
+    n_estimators: int = Field(
+        default=100,
+        alias="RANDOM_FOREST_N_ESTIMATORS",
+        description="Number of trees",
+    )
+    max_depth: int = Field(
+        default=10,
+        alias="RANDOM_FOREST_MAX_DEPTH",
+        description="Maximum tree depth",
+    )
+    min_samples_split: int = Field(
+        default=5,
+        alias="RANDOM_FOREST_MIN_SAMPLES_SPLIT",
+        description="Minimum samples to split",
+    )
+    min_samples_leaf: int = Field(
+        default=2,
+        alias="RANDOM_FOREST_MIN_SAMPLES_LEAF",
+        description="Minimum samples per leaf",
+    )
+    class_weight: str = Field(
+        default="balanced",
+        alias="RANDOM_FOREST_CLASS_WEIGHT",
+        description="Class weight strategy",
+    )
+
+
+class GradientBoostingConfig(BaseSettings):
+    """Gradient Boosting model configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
+
+    n_estimators: int = Field(
+        default=100,
+        alias="GRADIENT_BOOSTING_N_ESTIMATORS",
+        description="Number of boosting stages",
+    )
+    learning_rate: float = Field(
+        default=0.1,
+        alias="GRADIENT_BOOSTING_LEARNING_RATE",
+        description="Learning rate",
+    )
+    max_depth: int = Field(
+        default=5,
+        alias="GRADIENT_BOOSTING_MAX_DEPTH",
+        description="Maximum tree depth",
+    )
+    min_samples_split: int = Field(
+        default=5,
+        alias="GRADIENT_BOOSTING_MIN_SAMPLES_SPLIT",
+        description="Minimum samples to split",
+    )
+    min_samples_leaf: int = Field(
+        default=2,
+        alias="GRADIENT_BOOSTING_MIN_SAMPLES_LEAF",
+        description="Minimum samples per leaf",
+    )
+    subsample: float = Field(
+        default=0.8,
+        alias="GRADIENT_BOOSTING_SUBSAMPLE",
+        description="Subsample ratio",
+    )
+
+
+class VotingEnsembleConfig(BaseSettings):
+    """Voting Ensemble configuration."""
+
+    model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
+
+    voting: str = Field(
+        default="soft",
+        alias="VOTING_ENSEMBLE_VOTING",
+        description="Voting method (hard or soft)",
+    )
+    enable_xgboost: bool = Field(
+        default=True,
+        alias="VOTING_ENSEMBLE_XGBOOST_ENABLED",
+        description="Include XGBoost in ensemble",
+    )
+    enable_logistic_regression: bool = Field(
+        default=True,
+        alias="VOTING_ENSEMBLE_LOGISTIC_REGRESSION_ENABLED",
+        description="Include Logistic Regression in ensemble",
+    )
+    enable_random_forest: bool = Field(
+        default=True,
+        alias="VOTING_ENSEMBLE_RANDOM_FOREST_ENABLED",
+        description="Include Random Forest in ensemble",
+    )
+    enable_gradient_boosting: bool = Field(
+        default=True,
+        alias="VOTING_ENSEMBLE_GRADIENT_BOOSTING_ENABLED",
+        description="Include Gradient Boosting in ensemble",
+    )
+
+
 class HyperparameterTuningConfig(BaseSettings):
     """Hyperparameter tuning configuration."""
 
@@ -386,7 +514,7 @@ class LLMConfig(BaseSettings):
         alias="OPENAI_API_KEY",
         description="OpenAI API key",
     )
-    model: str = Field(
+    model_name: str = Field(
         default="gpt-4", alias="OPENAI_MODEL", description="OpenAI model name"
     )
     temperature: float = Field(
@@ -412,6 +540,10 @@ class Config(BaseSettings):
     training: TrainingConfig = TrainingConfig()
     xgboost: XGBoostConfig = XGBoostConfig()
     logistic_regression: LogisticRegressionConfig = LogisticRegressionConfig()
+    feature_engineering: FeatureEngineeringConfig = FeatureEngineeringConfig()
+    random_forest: RandomForestConfig = RandomForestConfig()
+    gradient_boosting: GradientBoostingConfig = GradientBoostingConfig()
+    voting_ensemble: VotingEnsembleConfig = VotingEnsembleConfig()
     hyperparameter_tuning: HyperparameterTuningConfig = HyperparameterTuningConfig()
     drift_detection: DriftDetectionConfig = DriftDetectionConfig()
     model_promotion: ModelPromotionConfig = ModelPromotionConfig()

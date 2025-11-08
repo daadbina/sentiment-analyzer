@@ -6,6 +6,7 @@ Handles model artifact storage and retrieval.
 
 import logging
 import os
+import tempfile
 from typing import Dict, Any, Optional
 from datetime import datetime
 import pickle
@@ -43,7 +44,7 @@ class ArtifactManager:
         model: BaseModel,
         model_name: str,
         version: str,
-        local_path: str = "/tmp",
+        local_path: str = None,
     ) -> Dict[str, Any]:
         """
         Save model artifact to S3 and MLflow.
@@ -67,6 +68,10 @@ class ArtifactManager:
             try:
                 logger.info(f"Saving model artifact: {model_name} v{version}")
 
+                # Use system temp directory if local_path not provided
+                if local_path is None:
+                    local_path = tempfile.gettempdir()
+
                 # Create local file
                 local_file = os.path.join(local_path, f"{model_name}_{version}.pkl")
                 model.save_model(local_file)
@@ -80,10 +85,9 @@ class ArtifactManager:
 
                 # Generate metadata
                 metadata = generate_model_metadata(
+                    model_path=local_file,
                     model_name=model_name,
-                    version=version,
-                    model_type=model.model_type,
-                    checksum=checksum,
+                    model_version=version,
                 )
 
                 # Store in registry
@@ -94,11 +98,8 @@ class ArtifactManager:
                     "metadata": metadata,
                 }
 
-                # Clean up local file
-                if os.path.exists(local_file):
-                    os.remove(local_file)
-
                 logger.info(f"Model artifact saved: {s3_key}")
+                # Return metadata with file_path so caller can use it before cleanup
                 return metadata
 
             except Exception as e:
@@ -112,7 +113,7 @@ class ArtifactManager:
         self,
         model_name: str,
         version: str,
-        local_path: str = "/tmp",
+        local_path: str = None,
     ) -> BaseModel:
         """
         Load model artifact from S3.
@@ -131,6 +132,10 @@ class ArtifactManager:
         with tracer.start_as_current_span("load_model_artifact"):
             try:
                 logger.info(f"Loading model artifact: {model_name} v{version}")
+
+                # Use system temp directory if local_path not provided
+                if local_path is None:
+                    local_path = tempfile.gettempdir()
 
                 # Get S3 key
                 s3_key = f"models/{model_name}/{version}/model.pkl"

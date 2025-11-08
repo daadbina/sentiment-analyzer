@@ -60,15 +60,18 @@ class LabelRetriever:
             try:
                 logger.info(f"Retrieving labels from {start_date} to {end_date}")
 
-                # Query labels from PostgreSQL
+                # Query labels from PostgreSQL ground_truth table
+                # Ground truth table contains event realization labels with group_id mapping
                 query = """
                     SELECT
-                        article_id,
-                        sentiment,
-                        confidence,
+                        event_id,
+                        group_id,
+                        label_realized,
+                        label_confidence,
                         created_at
                     FROM ground_truth
                     WHERE created_at >= $1 AND created_at <= $2
+                    AND group_id IS NOT NULL
                     ORDER BY created_at DESC
                 """
 
@@ -98,14 +101,14 @@ class LabelRetriever:
                 else:
                     logger.info("No null values found in labels")
 
-                # Check sentiment distribution
-                if 'sentiment' in label_df.columns:
-                    sentiment_dist = label_df['sentiment'].value_counts()
-                    logger.info(f"Sentiment distribution:\n{sentiment_dist}")
+                # Check label realization distribution
+                if 'label_realized' in label_df.columns:
+                    realization_dist = label_df['label_realized'].value_counts()
+                    logger.info(f"Label realization distribution:\n{realization_dist}")
 
                 # Check confidence statistics
-                if 'confidence' in label_df.columns:
-                    logger.info(f"Confidence statistics:\n{label_df['confidence'].describe()}")
+                if 'label_confidence' in label_df.columns:
+                    logger.info(f"Label confidence statistics:\n{label_df['label_confidence'].describe()}")
 
                 return label_df
 
@@ -125,10 +128,10 @@ class LabelRetriever:
         entity_ids: List[str],
     ) -> pd.DataFrame:
         """
-        Retrieve labels for specific entities.
+        Retrieve labels for specific group entities.
 
         Args:
-            entity_ids: List of entity IDs (article IDs)
+            entity_ids: List of group IDs (semantic group IDs)
 
         Returns:
             DataFrame with labels
@@ -140,29 +143,30 @@ class LabelRetriever:
             span.set_attribute("num_entities", len(entity_ids))
 
             try:
-                logger.info(f"Retrieving labels for {len(entity_ids)} entities")
+                logger.info(f"Retrieving labels for {len(entity_ids)} group entities")
 
                 # Create placeholders for SQL IN clause
                 placeholders = ", ".join(f"${i+1}" for i in range(len(entity_ids)))
                 query = f"""
-                    SELECT 
-                        article_id,
-                        sentiment,
-                        confidence,
+                    SELECT
+                        event_id,
+                        group_id,
+                        label_realized,
+                        label_confidence,
                         created_at
                     FROM ground_truth
-                    WHERE article_id IN ({placeholders})
+                    WHERE group_id IN ({placeholders})
                     ORDER BY created_at DESC
                 """
 
                 rows = await self.postgres_client.fetch_all(query, *entity_ids)
 
                 if not rows:
-                    logger.warning(f"No labels found for {len(entity_ids)} entities")
+                    logger.warning(f"No labels found for {len(entity_ids)} group entities")
                     return pd.DataFrame()
 
                 label_df = pd.DataFrame(rows)
-                logger.info(f"Retrieved {len(label_df)} labels for entities")
+                logger.info(f"Retrieved {len(label_df)} labels for group entities")
 
                 return label_df
 
@@ -195,8 +199,8 @@ class LabelRetriever:
                         stage="label_validation",
                     )
 
-                # Check for required columns
-                required_cols = ["article_id", "sentiment"]
+                # Check for required columns (from ground_truth table schema)
+                required_cols = ["event_id", "group_id", "label_realized", "label_confidence"]
                 missing_cols = [c for c in required_cols if c not in label_df.columns]
 
                 if missing_cols:
@@ -208,16 +212,22 @@ class LabelRetriever:
                 # Check for null values in critical columns
                 null_counts = label_df[required_cols].isnull().sum()
                 if null_counts.sum() > 0:
-                    logger.warning(f"Found null values in labels: {null_counts}")
+                    logger.warning(f"Found null values in labels:\n{null_counts[null_counts > 0]}")
 
-                # Check sentiment values are valid
-                valid_sentiments = {"positive", "negative", "neutral"}
-                invalid_sentiments = (
-                    set(label_df["sentiment"].unique()) - valid_sentiments
-                )
-                if invalid_sentiments:
+                # Check label_realized values are binary (0 or 1)
+                valid_labels = {0, 1}
+                invalid_labels = set(label_df["label_realized"].unique()) - valid_labels
+                if invalid_labels:
                     logger.warning(
-                        f"Found invalid sentiment values: {invalid_sentiments}"
+                        f"Found invalid label_realized values: {invalid_labels}. Expected 0 or 1."
+                    )
+
+                # Check label_confidence values are in valid range [0, 1]
+                confidence_min = label_df["label_confidence"].min()
+                confidence_max = label_df["label_confidence"].max()
+                if confidence_min < 0 or confidence_max > 1:
+                    logger.warning(
+                        f"Found out-of-range label_confidence values: min={confidence_min}, max={confidence_max}. Expected [0, 1]."
                     )
 
                 logger.info("Label validation passed")

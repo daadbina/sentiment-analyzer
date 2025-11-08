@@ -54,6 +54,45 @@ class S3Client:
                 details={"bucket": self.config.bucket, "region": self.config.region},
             )
 
+    def ensure_bucket_exists(self) -> None:
+        """
+        Ensure the configured bucket exists, create if not.
+
+        Raises:
+            ExternalServiceError: If bucket creation fails
+        """
+        if not self.client:
+            raise ExternalServiceError(
+                "S3 client not initialized",
+                service_name="S3",
+            )
+
+        try:
+            # Check if bucket exists
+            self.client.head_bucket(Bucket=self.config.bucket)
+            logger.info(f"Bucket {self.config.bucket} exists")
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                # Bucket doesn't exist, create it
+                try:
+                    logger.info(f"Creating bucket {self.config.bucket}")
+                    self.client.create_bucket(Bucket=self.config.bucket)
+                    logger.info(f"Bucket {self.config.bucket} created successfully")
+                except Exception as create_error:
+                    logger.error(f"Failed to create bucket: {create_error}")
+                    raise ExternalServiceError(
+                        f"Failed to create bucket: {create_error}",
+                        service_name="S3",
+                        details={"bucket": self.config.bucket},
+                    )
+            else:
+                logger.error(f"Failed to check bucket: {e}")
+                raise ExternalServiceError(
+                    f"Failed to check bucket: {e}",
+                    service_name="S3",
+                    details={"bucket": self.config.bucket},
+                )
+
     def health_check(self) -> bool:
         """
         Check S3 connection health.
@@ -70,6 +109,9 @@ class S3Client:
             response = self.client.list_buckets()
             buckets = [b['Name'] for b in response.get('Buckets', [])]
             logger.info(f"S3 health check passed - available buckets: {buckets}")
+
+            # Ensure our bucket exists
+            self.ensure_bucket_exists()
             return True
         except ClientError as e:
             logger.warning(f"S3 health check warning (non-critical): {e}")

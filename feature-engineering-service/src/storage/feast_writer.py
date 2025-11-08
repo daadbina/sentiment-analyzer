@@ -32,9 +32,15 @@ class FeastWriter:
         """
         try:
             # Prepare feature data with metadata
+            # Use datetime object with UTC timezone, not ISO string
+            import pandas as pd
+            from datetime import datetime
+            import pytz
+
+            timestamp = pd.Timestamp(datetime.now(pytz.UTC))
             feature_data = {
                 "group_id": group_id,
-                "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+                "timestamp": timestamp,
                 **features,
             }
 

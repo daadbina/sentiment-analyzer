@@ -62,7 +62,8 @@ class FeastClient:
 
         try:
             # Prepare feature data with timestamp
-            timestamp = datetime.now(pytz.UTC).isoformat()
+            # Use datetime object with UTC timezone, not ISO string
+            timestamp = pd.Timestamp(datetime.now(pytz.UTC))
             feature_data = {
                 "group_id": group_id,
                 "timestamp": timestamp,
@@ -71,6 +72,9 @@ class FeastClient:
 
             # Create DataFrame for Feast write
             df = pd.DataFrame([feature_data])
+
+            # Ensure timestamp column has UTC timezone
+            df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True)
 
             logger.debug(
                 "Prepared feature DataFrame for Feast write",
@@ -88,6 +92,52 @@ class FeastClient:
                 push_source_name=push_source_name,
                 df=df,
             )
+
+            # Also manually write to parquet file for file offline store
+            # This ensures the data is available for historical feature retrieval
+            try:
+                from pathlib import Path
+                import os
+
+                # Get the absolute path to the repo
+                repo_path = Path(self.config.feast.repo_path).resolve()
+                offline_store_dir = repo_path.parent / "feast" / "data"
+                offline_store_dir.mkdir(parents=True, exist_ok=True)
+                parquet_path = offline_store_dir / "semantic_groups.parquet"
+
+                logger.debug(
+                    "Parquet write details",
+                    repo_path=str(repo_path),
+                    offline_store_dir=str(offline_store_dir),
+                    parquet_path=str(parquet_path),
+                    dir_exists=offline_store_dir.exists(),
+                )
+
+                # Read existing parquet file if it exists, otherwise create new
+                if parquet_path.exists():
+                    existing_df = pd.read_parquet(str(parquet_path))
+                    # Append new data
+                    df_combined = pd.concat([existing_df, df], ignore_index=True)
+                    # Remove duplicates based on group_id and timestamp, keeping the latest
+                    df_combined = df_combined.sort_values('timestamp').drop_duplicates(
+                        subset=['group_id'], keep='last'
+                    )
+                else:
+                    df_combined = df
+
+                # Write to parquet with proper schema
+                df_combined.to_parquet(str(parquet_path), index=False, engine='pyarrow')
+                logger.debug(
+                    "Features written to parquet file",
+                    parquet_path=str(parquet_path),
+                    rows=len(df_combined),
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to write to parquet file",
+                    error=str(e),
+                    group_id=group_id,
+                )
 
             logger.info(
                 "Features written to Feast offline store",

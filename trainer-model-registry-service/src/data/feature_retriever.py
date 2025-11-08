@@ -67,16 +67,26 @@ class FeatureRetriever:
 
                 # Create entity dataframe with timestamps
                 # Use group_id as entity (semantic groups from feature-engineering-service)
+                # Ensure timestamps are datetime objects for Feast
+                # Convert end_date to pandas Timestamp with UTC timezone to match Feast expectations
+                if isinstance(end_date, str):
+                    end_date_ts = pd.Timestamp(end_date, tz='UTC')
+                else:
+                    end_date_ts = pd.Timestamp(end_date, tz='UTC')
+
                 entity_df = pd.DataFrame(
                     {
                         "group_id": entity_ids,
-                        "timestamp": [end_date] * len(entity_ids),
+                        "timestamp": [end_date_ts] * len(entity_ids),
                     }
                 )
 
                 logger.debug(f"Entity dataframe shape: {entity_df.shape}")
                 logger.debug(f"Entity dataframe dtypes:\n{entity_df.dtypes}")
                 logger.debug(f"Entity dataframe sample:\n{entity_df.head()}")
+                logger.debug(f"Timestamp column type: {type(entity_df['timestamp'].iloc[0])}")
+                logger.debug(f"Timestamp value: {entity_df['timestamp'].iloc[0]}")
+                logger.debug(f"Timestamp tzinfo: {entity_df['timestamp'].iloc[0].tzinfo}")
 
                 # Get features from Feast
                 feature_list = features or self._get_default_features()
@@ -86,13 +96,17 @@ class FeatureRetriever:
                 ]
 
                 logger.info(f"Requesting {len(formatted_features)} features from Feast")
-                logger.debug(f"Formatted features: {formatted_features}")
+                logger.info(f"Formatted features: {formatted_features}")
+                logger.info(f"Entity dataframe shape: {entity_df.shape}")
+                logger.info(f"Entity dataframe:\n{entity_df}")
 
+                logger.info("Calling feast_client.get_features()")
                 feature_df = self.feast_client.get_features(
                     entity_df=entity_df,
                     features=formatted_features,
                     timestamp_column="timestamp",
                 )
+                logger.info("feast_client.get_features() returned successfully")
 
                 logger.info(
                     f"Retrieved {feature_df.shape[0]} rows with "

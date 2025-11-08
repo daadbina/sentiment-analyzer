@@ -1,7 +1,7 @@
 """
 Data preprocessing for model training.
 
-Handles missing values, scaling, and feature selection.
+Handles missing values, scaling, feature selection, and feature engineering.
 """
 
 import logging
@@ -15,6 +15,7 @@ from sklearn.feature_selection import SelectKBest, f_classif
 from src.config import config
 from src.exceptions import DataPreparationError
 from src.utils.trace import get_tracer
+from src.data.feature_engineer import FeatureEngineer
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -23,18 +24,32 @@ tracer = get_tracer(__name__)
 class DataPreprocessor:
     """Preprocesses data for model training."""
 
-    def __init__(self, scaling_method: str = "standard"):
+    def __init__(self, scaling_method: str = "standard", enable_feature_engineering: bool = True):
         """
         Initialize data preprocessor.
 
         Args:
             scaling_method: Scaling method (standard or minmax)
+            enable_feature_engineering: Whether to enable feature engineering
         """
         self.scaling_method = scaling_method
         self.scaler = None
         self.imputer = None
         self.feature_selector = None
-        logger.info(f"Data preprocessor initialized with {scaling_method} scaling")
+        self.feature_engineer = None
+        self.enable_feature_engineering = enable_feature_engineering
+
+        if enable_feature_engineering:
+            self.feature_engineer = FeatureEngineer(
+                enable_interaction_features=config.feature_engineering.enable_interaction_features,
+                enable_polynomial_features=config.feature_engineering.enable_polynomial_features,
+                polynomial_degree=config.feature_engineering.polynomial_degree,
+            )
+
+        logger.info(
+            f"Data preprocessor initialized with {scaling_method} scaling, "
+            f"feature_engineering={enable_feature_engineering}"
+        )
 
     def preprocess(
         self,
@@ -67,6 +82,15 @@ class DataPreprocessor:
                 logger.debug(f"Input feature columns: {list(X.columns)}")
                 logger.debug(f"Input feature dtypes:\n{X.dtypes}")
 
+                # Filter to only numeric columns (exclude entity IDs and other non-numeric columns)
+                numeric_cols = X.select_dtypes(include=['number']).columns.tolist()
+                if len(numeric_cols) < X.shape[1]:
+                    non_numeric_cols = [col for col in X.columns if col not in numeric_cols]
+                    logger.info(f"Excluding non-numeric columns: {non_numeric_cols}")
+                    X = X[numeric_cols]
+
+                logger.info(f"Using {len(numeric_cols)} numeric features for training")
+
                 # Check for null values before preprocessing
                 null_before = X.isnull().sum()
                 if null_before.sum() > 0:
@@ -77,6 +101,13 @@ class DataPreprocessor:
                 # Handle missing values
                 X = self._handle_missing_values(X, fit=fit)
                 logger.debug(f"Shape after handling missing values: {X.shape}")
+
+                # Feature engineering (before scaling)
+                if self.enable_feature_engineering and self.feature_engineer is not None:
+                    X_before_fe = X.shape[1]
+                    X = self.feature_engineer.engineer_features(X, fit=fit)
+                    logger.info(f"Feature engineering: {X_before_fe} → {X.shape[1]} features")
+                    logger.debug(f"Shape after feature engineering: {X.shape}")
 
                 # Scale features
                 X = self._scale_features(X, fit=fit)
@@ -223,13 +254,20 @@ class DataPreprocessor:
                 variances = X.var()
                 constant_features = variances[variances == 0].index.tolist()
 
+                logger.info(f"Feature variance analysis: {len(X.columns)} total features")
+                logger.debug(f"Feature variances:\n{variances}")
+
                 if constant_features:
                     logger.warning(
-                        f"Removing {len(constant_features)} constant features"
+                        f"Removing {len(constant_features)} constant features: {constant_features}"
                     )
+                    logger.warning(f"Constant feature values:\n{X[constant_features].iloc[0] if len(X) > 0 else 'N/A'}")
                     X = X.drop(columns=constant_features)
+                else:
+                    logger.info("No constant features found")
 
-                logger.debug(f"Remaining features: {X.shape[1]}")
+                logger.info(f"After constant feature removal: {X.shape[1]} features remaining")
+                logger.debug(f"Remaining features: {list(X.columns)}")
                 return X
 
             except Exception as e:

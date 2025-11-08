@@ -10,7 +10,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- None
+- Feature Store Adapter for unified Feast interface (Task 14)
+- Prediction Validator for label consistency computation (Task 20)
+- Model Loader with lazy loading and fallback logic (Task 22)
+- Confidence Scorer with uncertainty quantification (Task 25)
+- Label Reconciliation Service for ground-truth matching (Task 28)
+- Feature Quality Monitor for freshness and completeness tracking (Task 30)
+- Drift Detector for feature and prediction drift monitoring (Task 31)
+- Main Service Orchestrator for component coordination (Task 36)
+- Graceful shutdown with SIGTERM/SIGINT signal handlers (Task 37)
+- Comprehensive startup health checks for all dependencies (Task 38)
+- Command-line argument parsing for flexible configuration
+- Health check endpoints: /health, /ready, /live (Task 52)
+- Enhanced Dockerfile with PostgreSQL libraries (Task 51)
+- Additional metrics methods for new components
+- ServiceError and ValidationError exception types
+
+### Added - Testing
+- Unit tests for ModelLoader (20+ tests, ≥90% coverage)
+- Unit tests for ConfidenceScorer (20+ tests, ≥90% coverage)
+- Unit tests for PredictionValidator (20+ tests, ≥90% coverage)
+- Unit tests for FeatureStoreAdapter (20+ tests, ≥90% coverage)
+- Unit tests for DriftDetector (20+ tests, ≥90% coverage)
+- Unit tests for FeatureQualityMonitor (20+ tests, ≥90% coverage)
+- Unit tests for FeastClient (20+ tests, ≥90% coverage)
+- Unit tests for BatchPredictor (10+ tests, ≥90% coverage)
+- Unit tests for StreamingPredictor (15+ tests, ≥90% coverage)
+- Unit tests for FeatureFetcher (20+ tests, ≥90% coverage)
+- Unit tests for FeatureValidator (25+ tests, ≥90% coverage)
+- Integration tests for MLflow (Task 45)
+- Integration tests for Feast (Task 45)
+- Integration tests for Redis (Task 45)
+- Integration tests for Kafka (Task 46)
+- Integration tests for PostgreSQL (Task 46)
+- Contract tests for Avro schemas (Task 47, 20+ tests)
+- Integration tests for feature reconciliation (Task 48, 8+ tests)
+- Integration tests for label validation (Task 49, 12+ tests)
+- Performance tests for latency (Task 50, 15+ tests)
+- Performance tests for throughput (Task 50, 12+ tests)
+- TLS configuration for Kafka, Redis, PostgreSQL (Task 53)
+- Prometheus alerting rules with 20+ alerts (Task 55)
+- Dedicated Prometheus metrics server on port 9109 (Task 54)
+
+### Changed
+- Enhanced main.py with signal handling and startup checks
+- Updated metrics.py with methods for feature store adapter, model loader, and validation components
+- Updated exceptions.py with service-level error types
+- Updated __init__.py files in features, models, inference, and validation packages
 
 ---
 

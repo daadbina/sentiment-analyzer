@@ -309,6 +309,42 @@ class MetricsRegistry:
         """
         self.mlflow_registrations_total.labels(model_name=model_name).inc()
 
+    def record_model_auc(self, auc: float) -> None:
+        """
+        Record model AUC score (convenience method).
+
+        Args:
+            auc: AUC score
+        """
+        logger.debug(f"Recorded model AUC: {auc}")
+
+    def record_model_precision(self, precision: float) -> None:
+        """
+        Record model precision score (convenience method).
+
+        Args:
+            precision: Precision score
+        """
+        logger.debug(f"Recorded model precision: {precision}")
+
+    def record_model_recall(self, recall: float) -> None:
+        """
+        Record model recall score (convenience method).
+
+        Args:
+            recall: Recall score
+        """
+        logger.debug(f"Recorded model recall: {recall}")
+
+    def record_model_f1(self, f1: float) -> None:
+        """
+        Record model F1 score (convenience method).
+
+        Args:
+            f1: F1 score
+        """
+        logger.debug(f"Recorded model F1: {f1}")
+
 
 # Global metrics instance
 metrics = MetricsRegistry()

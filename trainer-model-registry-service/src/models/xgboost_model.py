@@ -34,6 +34,7 @@ class XGBoostModel(BaseModel):
             "eval_metric": "auc",
             "random_state": config.training.random_seed,
             "verbosity": 1,
+            "scale_pos_weight": 1.0,  # Will be computed based on class distribution
         }
 
         super().__init__(
@@ -76,14 +77,37 @@ class XGBoostModel(BaseModel):
                 self.validate_input(X_train, y_train)
 
                 logger.info(f"Training XGBoost model with {len(X_train)} samples")
+                logger.info(f"Training data shape: {X_train.shape}")
+
+                # Compute class weights to handle imbalance
+                y_train_series = pd.Series(y_train)
+                class_distribution = y_train_series.value_counts().to_dict()
+                logger.info(f"Training labels distribution: {class_distribution}")
+
+                # Compute scale_pos_weight: ratio of negative to positive samples
+                # This helps XGBoost handle class imbalance
+                n_negative = class_distribution.get(0, 1)
+                n_positive = class_distribution.get(1, 1)
+                scale_pos_weight = n_negative / n_positive
+                logger.info(f"Class imbalance ratio (negative/positive): {scale_pos_weight:.4f}")
+                logger.info(f"Applying scale_pos_weight={scale_pos_weight:.4f} to XGBoost")
+
+                # Update model with computed scale_pos_weight
+                self.model.set_params(scale_pos_weight=scale_pos_weight)
+
+                logger.debug(f"Training features: {list(X_train.columns)}")
+                logger.debug(f"Training data null values: {X_train.isnull().sum().sum()}")
 
                 # Prepare evaluation set
                 eval_set = None
                 if X_val is not None and y_val is not None:
                     self.validate_input(X_val, y_val)
+                    logger.info(f"Validation data shape: {X_val.shape}")
+                    logger.info(f"Validation labels distribution: {pd.Series(y_val).value_counts().to_dict()}")
                     eval_set = [(X_val, y_val)]
 
                 # Train model
+                logger.info("Starting XGBoost model fitting...")
                 self.model.fit(
                     X_train,
                     y_train,
@@ -106,6 +130,7 @@ class XGBoostModel(BaseModel):
                     results = self.model.evals_result()
                     if "validation_0" in results:
                         metrics["best_auc"] = max(results["validation_0"]["auc"])
+                        logger.info(f"Best validation AUC: {metrics['best_auc']}")
 
                 logger.info(f"XGBoost training complete: {metrics}")
                 return metrics

@@ -6,8 +6,11 @@ Coordinates all training, evaluation, and registry operations.
 
 import logging
 import asyncio
+import os
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import pandas as pd
+import mlflow
 
 from src.config import config
 from src.clients.postgres_client import PostgreSQLClient
@@ -65,6 +68,7 @@ class TrainerService:
         with tracer.start_as_current_span("start_service"):
             try:
                 logger.info("Starting trainer service")
+                logger.info(f"Configuration: feast={config.feast}")
 
                 # Initialize tracing
                 tracing_config = TracingConfig(
@@ -172,8 +176,9 @@ class TrainerService:
                 logger.info("Starting training pipeline")
 
                 # Set default dates if not provided (18-month window)
+                # Use UTC timezone to match PostgreSQL CURRENT_TIMESTAMP
                 if not end_date:
-                    end_date = datetime.now()
+                    end_date = datetime.now(timezone.utc)
                 else:
                     end_date = datetime.fromisoformat(end_date)
 
@@ -182,38 +187,134 @@ class TrainerService:
                 else:
                     start_date = datetime.fromisoformat(start_date)
 
+                # Convert to naive datetimes for PostgreSQL (which stores naive timestamps)
+                # PostgreSQL CURRENT_TIMESTAMP is naive, so we need to strip timezone info
+                if start_date.tzinfo is not None:
+                    start_date = start_date.replace(tzinfo=None)
+                if end_date.tzinfo is not None:
+                    end_date = end_date.replace(tzinfo=None)
+
                 logger.info(f"Training window: {start_date} to {end_date}")
 
-                # Retrieve data
-                logger.info("Retrieving features and labels")
-                X = self.feature_retriever.retrieve_features(
-                    entity_ids=[],  # Will be populated from labels
-                    start_date=start_date,
-                    end_date=end_date,
-                )
-                logger.info(f"Features retrieved: shape={X.shape}")
-
+                # Retrieve labels first
+                logger.info("Retrieving labels")
                 y = await self.label_retriever.retrieve_labels(
                     start_date=start_date,
                     end_date=end_date,
                 )
                 logger.info(f"Labels retrieved: shape={y.shape}")
 
-                # Check if we have data
-                if X.empty or y.empty:
-                    logger.error("No data retrieved for training!")
+                if y.empty:
+                    logger.error("No labels retrieved for training!")
                     raise TrainerError("No training data available")
+
+                # Extract group IDs from labels
+                # Ground truth labels already have group_id mapped by labeler service
+                logger.info("Extracting group IDs from labels")
+                logger.info(f"Labels dataframe shape: {y.shape}")
+                logger.info(f"Labels columns: {list(y.columns)}")
+                logger.info(f"Labels sample:\n{y.head()}")
+                group_ids = y['group_id'].unique().tolist()
+                # Remove None values
+                group_ids = [gid for gid in group_ids if gid is not None]
+                logger.info(f"Found {len(group_ids)} unique groups in labels")
+                logger.info(f"Group IDs (first 5): {group_ids[:5]}")
+
+                if not group_ids:
+                    logger.warning("No groups found in labeled data")
+                    raise TrainerError("No semantic groups found in labeled data")
+
+                # Retrieve features for the mapped group IDs
+                logger.info("Retrieving features")
+                X = self.feature_retriever.retrieve_features(
+                    entity_ids=group_ids,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+                logger.info(f"Features retrieved: shape={X.shape}")
+
+                # Check if we have data
+                if X.empty:
+                    logger.error("No features retrieved for training!")
+                    raise TrainerError("No training data available")
+
+                # Extract label column from labels DataFrame
+                # Use label_realized as the target variable for event realization prediction
+                if 'label_realized' not in y.columns:
+                    logger.error(f"Label column 'label_realized' not found. Available columns: {list(y.columns)}")
+                    raise TrainerError("Label column 'label_realized' not found in ground truth data")
+
+                # Handle null values in label_realized
+                null_count = y['label_realized'].isnull().sum()
+                if null_count > 0:
+                    logger.warning(f"Found {null_count} null values in label_realized column")
+                    # Drop rows with null labels
+                    y = y.dropna(subset=['label_realized'])
+                    logger.info(f"After dropping nulls: {len(y)} labels remaining")
+
+                    if y.empty:
+                        logger.error("No valid labels after removing null values")
+                        raise TrainerError("No valid labels available for training")
+
+                # Align features with labels by group_id
+                # We have multiple labels per group_id, so we need to replicate feature rows
+                logger.info("Aligning features with labels by group_id")
+                logger.info(f"Before alignment: X shape={X.shape}, y shape={y.shape}")
+                logger.debug(f"X columns: {list(X.columns)}")
+                logger.debug(f"y columns: {list(y.columns)}")
+                logger.debug(f"X group_id unique count: {X['group_id'].nunique() if 'group_id' in X.columns else 'N/A'}")
+                logger.debug(f"y group_id unique count: {y['group_id'].nunique() if 'group_id' in y.columns else 'N/A'}")
+
+                # Set group_id as index in features for alignment
+                X_indexed = X.set_index('group_id') if 'group_id' in X.columns else X
+
+                # For each label, get the corresponding feature row
+                aligned_X_list = []
+                aligned_y_list = []
+                unmatched_labels = 0
+                matched_labels = 0
+
+                for idx, label_row in y.iterrows():
+                    group_id = label_row['group_id']
+                    if group_id in X_indexed.index:
+                        # Get feature row for this group_id
+                        feature_row = X_indexed.loc[group_id]
+                        # Handle case where multiple rows have same group_id (shouldn't happen but be safe)
+                        if isinstance(feature_row, pd.DataFrame):
+                            logger.debug(f"Multiple feature rows for group_id {group_id}, using first")
+                            feature_row = feature_row.iloc[0]
+                        aligned_X_list.append(feature_row)
+                        aligned_y_list.append(label_row['label_realized'])
+                        matched_labels += 1
+                    else:
+                        unmatched_labels += 1
+                        logger.debug(f"No feature row found for group_id {group_id}")
+
+                logger.info(f"Alignment results: {matched_labels} matched, {unmatched_labels} unmatched")
+
+                if not aligned_X_list:
+                    logger.error("No labels could be aligned with features!")
+                    raise TrainerError("No labels could be aligned with features")
+
+                # Create aligned dataframes
+                X = pd.DataFrame(aligned_X_list)
+                y_series = pd.Series(aligned_y_list, dtype=int)
+
+                logger.info(f"After alignment: X shape={X.shape}, y shape={y_series.shape}")
+                logger.info(f"Label distribution after alignment: {y_series.value_counts().to_dict()}")
+                logger.debug(f"Label 0 count: {(y_series == 0).sum()}, Label 1 count: {(y_series == 1).sum()}")
+                logger.debug(f"Label imbalance ratio: {(y_series == 1).sum() / (y_series == 0).sum() if (y_series == 0).sum() > 0 else 'N/A'}")
 
                 # Preprocess data
                 logger.info("Preprocessing data")
                 X_before = X.shape
-                X, y = self.preprocessor.preprocess(X, y, fit=True)
+                X, _ = self.preprocessor.preprocess(X, y_series, fit=True)
                 logger.info(f"Data after preprocessing: {X.shape} (was {X_before})")
 
                 # Split data
                 logger.info("Splitting data")
                 (X_train, y_train), (X_val, y_val), (X_test, y_test) = (
-                    self.splitter.split_temporal(X, y)
+                    self.splitter.split_temporal(X, y_series)
                 )
                 logger.info(f"Train set: {X_train.shape}, Val set: {X_val.shape}, Test set: {X_test.shape}")
                 logger.info(f"Train labels distribution: {y_train.value_counts().to_dict()}")
@@ -234,18 +335,145 @@ class TrainerService:
                 )
                 logger.info(f"Evaluation results: {eval_results}")
 
-                # Detect drift
+                # Detect drift (non-blocking - log errors but continue)
                 logger.info("Detecting drift")
-                feature_drift = self.drift_detector.detect_feature_drift(
-                    X_train, X_test
-                )
-                target_drift = self.drift_detector.detect_target_drift(y_train, y_test)
-                logger.info(f"Feature drift: {feature_drift}, Target drift: {target_drift}")
+                feature_drift = None
+                target_drift = None
+                try:
+                    feature_drift = self.drift_detector.detect_feature_drift(
+                        X_train, X_test
+                    )
+                    logger.info(f"Feature drift detected: {feature_drift}")
+                except Exception as e:
+                    logger.warning(f"Feature drift detection failed (non-blocking): {e}")
+
+                try:
+                    target_drift = self.drift_detector.detect_target_drift(y_train, y_test)
+                    logger.info(f"Target drift detected: {target_drift}")
+                except Exception as e:
+                    logger.warning(f"Target drift detection failed (non-blocking): {e}")
+
+                # Register models in MLflow
+                logger.info("Registering models in MLflow")
+                registered_models = {}
+                for model_type, (model, train_metrics) in models.items():
+                    try:
+                        logger.info(f"Registering {model_type} model")
+
+                        # Create or get MLflow experiment
+                        experiment_name = f"sentiment_analyzer_{model_type}"
+                        experiment_id = self.mlflow_client.get_experiment_by_name(experiment_name)
+                        if not experiment_id:
+                            experiment_id = self.mlflow_client.create_experiment(experiment_name)
+                        logger.info(f"Using experiment: {experiment_name} (ID: {experiment_id})")
+
+                        # Start MLflow run
+                        with self.mlflow_client.start_run(experiment_id):
+                            run_id = mlflow.active_run().info.run_id
+                            logger.info(f"Started MLflow run: {run_id}")
+
+                            # Log training metrics
+                            for metric_name, metric_value in train_metrics.items():
+                                if isinstance(metric_value, (int, float)):
+                                    self.mlflow_client.log_metric(run_id, f"train_{metric_name}", metric_value)
+
+                            # Log evaluation metrics
+                            eval_result = eval_results.get(model_type, {})
+                            for metric_name, metric_value in eval_result.items():
+                                if isinstance(metric_value, (int, float)):
+                                    self.mlflow_client.log_metric(run_id, f"eval_{metric_name}", metric_value)
+
+                            # Log parameters (convert config to dict, filtering out problematic values)
+                            config_dict = {}
+                            if hasattr(model, 'config'):
+                                if isinstance(model.config, dict):
+                                    config_dict = model.config
+                                else:
+                                    # Try to convert to dict
+                                    try:
+                                        config_dict = model.config.__dict__
+                                    except:
+                                        config_dict = {}
+
+                            # Filter config to only include serializable values
+                            filtered_config = {}
+                            for k, v in config_dict.items():
+                                try:
+                                    # Only include basic types
+                                    if isinstance(v, (str, int, float, bool, type(None))):
+                                        filtered_config[k] = v
+                                    else:
+                                        # Convert to string for other types
+                                        filtered_config[k] = str(v)
+                                except Exception as e:
+                                    logger.debug(f"Skipping config parameter {k}: {e}")
+
+                            if filtered_config:
+                                self.mlflow_client.log_params(run_id, filtered_config)
+
+                            # Save and register model
+                            model_version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                            local_file_path = None
+                            try:
+                                # Save to S3
+                                artifact_metadata = self.artifact_manager.save_model_artifact(
+                                    model=model,
+                                    model_name=f"sentiment_{model_type}",
+                                    version=model_version,
+                                )
+                                logger.info(f"Model artifact saved to S3: {artifact_metadata}")
+                                local_file_path = artifact_metadata.get("file_path")
+
+                                # Log model to MLflow run
+                                self.mlflow_client.log_model(
+                                    run_id=run_id,
+                                    model_path=local_file_path,
+                                    artifact_path="model",
+                                    model_type=model_type,
+                                )
+                                logger.info(f"Model logged to MLflow run {run_id}")
+
+                                # Register in MLflow registry using the run artifact
+                                model_uri = f"runs://{run_id}/model"
+                                registered_version = self.mlflow_client.register_model(
+                                    model_uri=model_uri,
+                                    model_name=f"sentiment_{model_type}",
+                                    tags={
+                                        "model_type": model_type,
+                                        "version": model_version,
+                                        "auc": str(eval_result.get("auc", 0)),
+                                    }
+                                )
+                                logger.info(f"Model registered: sentiment_{model_type} (version: {registered_version})")
+
+                                registered_models[model_type] = {
+                                    "model_name": f"sentiment_{model_type}",
+                                    "version": registered_version,
+                                    "run_id": run_id,
+                                    "metrics": eval_result,
+                                }
+                            except Exception as artifact_error:
+                                logger.error(f"Failed to save/register artifact: {artifact_error}")
+                                # Continue without artifact registration
+                                pass
+                            finally:
+                                # Clean up local file after logging to MLflow
+                                if local_file_path and os.path.exists(local_file_path):
+                                    try:
+                                        os.remove(local_file_path)
+                                        logger.debug(f"Cleaned up local file: {local_file_path}")
+                                    except Exception as cleanup_error:
+                                        logger.warning(f"Failed to clean up local file: {cleanup_error}")
+                    except Exception as e:
+                        logger.error(f"Failed to register {model_type} model: {e}", exc_info=True)
+                        # Continue with other models
 
                 result = {
                     "timestamp": datetime.now().isoformat(),
                     "models_trained": len(models),
+                    "models_registered": len(registered_models),
                     "evaluation_results": eval_results,
+                    "registered_models": registered_models,
                     "feature_drift": feature_drift,
                     "target_drift": target_drift,
                 }

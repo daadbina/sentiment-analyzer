@@ -364,6 +364,21 @@
   - Drift detection results
 - [x] Verified logging captures null values, distributions, and logical issues
 
+### Feast Feature View Registration ⏳ PENDING (2025-11-08)
+- [ ] Register feature view in Feast registry:
+  - [ ] Run `feast apply` in feature-engineering-service
+  - [ ] Run `feast apply` in trainer-model-registry-service
+  - [ ] Verify feature view exists: `feast feature-views list`
+  - [ ] Verify entities exist: `feast entities list`
+- [ ] Fix feature-engineering-service Feast writer:
+  - [ ] Implement actual write to Feast offline store (Delta Lake)
+  - [ ] Write features to `/data/delta/semantic_groups` path
+  - [ ] Verify features are persisted in Feast
+- [ ] Align Feast registry paths:
+  - [ ] Both services use same registry.db location
+  - [ ] Both services use same project name: `sentiment_analyzer`
+  - [ ] Both services use same offline store: Delta Lake at `/data/delta`
+
 ### Git Workflow ⏳ PENDING (User requested: "dont merge yet")
 - [ ] Create final commit with all changes
 - [ ] Push to feature branch

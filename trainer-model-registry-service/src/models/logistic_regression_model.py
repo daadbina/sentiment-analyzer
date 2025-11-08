@@ -31,6 +31,7 @@ class LogisticRegressionModel(BaseModel):
             "max_iter": config.logistic_regression.max_iter,
             "random_state": config.training.random_seed,
             "n_jobs": -1,
+            "class_weight": "balanced",  # Automatically handle class imbalance
         }
 
         super().__init__(
@@ -76,7 +77,13 @@ class LogisticRegressionModel(BaseModel):
                     f"Training Logistic Regression model with {len(X_train)} samples"
                 )
                 logger.info(f"Training data shape: {X_train.shape}")
-                logger.info(f"Training labels distribution: {pd.Series(y_train).value_counts().to_dict()}")
+
+                # Log class distribution and weights
+                y_train_series = pd.Series(y_train)
+                class_distribution = y_train_series.value_counts().to_dict()
+                logger.info(f"Training labels distribution: {class_distribution}")
+                logger.info("Using class_weight='balanced' to handle class imbalance")
+
                 logger.debug(f"Training features: {list(X_train.columns)}")
                 logger.debug(f"Training data null values: {X_train.isnull().sum().sum()}")
 

@@ -95,9 +95,9 @@ class LLMBaselineModel(BaseModel):
         """
         Make predictions using LLM baseline heuristic.
 
-        Since features are numeric Feast features (not text), use a simple heuristic:
-        - Compute weighted sum of features
-        - Apply threshold to get binary prediction
+        Since features are numeric Feast features (not text), use an improved heuristic:
+        - Get prediction probabilities using weighted feature approach
+        - Apply threshold at 0.5 to get binary predictions
 
         Args:
             X: Features for prediction (numeric Feast features)
@@ -118,29 +118,12 @@ class LLMBaselineModel(BaseModel):
 
                 logger.debug(f"Making LLM baseline predictions for {len(X)} samples using numeric features")
 
-                # Use simple heuristic: average of features as proxy for sentiment
-                # This is a baseline approach since we don't have text features
-                predictions = []
-                for idx, row in X.iterrows():
-                    # Get numeric features
-                    numeric_values = pd.to_numeric(row, errors='coerce')
-                    numeric_values = numeric_values.dropna()
-
-                    if len(numeric_values) == 0:
-                        # No numeric features, default to 0
-                        predictions.append(0)
-                        logger.debug(f"Row {idx}: No numeric features, defaulting to 0")
-                        continue
-
-                    # Use mean of features as heuristic
-                    # Normalize to [0, 1] range
-                    feature_mean = numeric_values.mean()
-                    # Threshold at 0.5 (after normalization)
-                    prediction = 1 if feature_mean > 0.5 else 0
-                    predictions.append(prediction)
+                # Get probabilities and apply threshold
+                probabilities = self.predict_proba(X)
+                predictions = (probabilities[:, 1] > 0.5).astype(int)
 
                 logger.debug(f"Made predictions for {len(X)} samples")
-                return np.array(predictions)
+                return predictions
 
             except Exception as e:
                 logger.error(f"LLM prediction failed: {e}")
@@ -153,9 +136,11 @@ class LLMBaselineModel(BaseModel):
         """
         Get prediction probabilities using LLM baseline heuristic.
 
-        Since features are numeric Feast features (not text), use a simple heuristic:
-        - Compute weighted sum of features
-        - Use as probability estimate
+        Since features are numeric Feast features (not text), use an improved heuristic:
+        - Normalize features to [0, 1] range
+        - Weight features by their variance (more variance = more informative)
+        - Use weighted average as probability estimate
+        - Apply sigmoid transformation for better calibration
 
         Args:
             X: Features for prediction (numeric Feast features)
@@ -176,23 +161,39 @@ class LLMBaselineModel(BaseModel):
 
                 logger.debug(f"Getting probabilities for {len(X)} samples using numeric features")
 
+                # Compute feature statistics for normalization and weighting
+                numeric_X = X.select_dtypes(include=[np.number])
+
+                if numeric_X.empty:
+                    logger.warning("No numeric features found, using default probabilities")
+                    return np.array([[0.5, 0.5]] * len(X))
+
+                # Normalize features to [0, 1] range
+                X_min = numeric_X.min()
+                X_max = numeric_X.max()
+                X_range = X_max - X_min
+                X_range[X_range == 0] = 1  # Avoid division by zero
+                X_normalized = (numeric_X - X_min) / X_range
+
+                # Compute feature weights based on variance
+                feature_variance = numeric_X.var()
+                feature_weights = feature_variance / feature_variance.sum()
+                logger.debug(f"Feature weights (top 5): {feature_weights.nlargest(5).to_dict()}")
+
+                # Compute weighted average for each sample
                 probabilities = []
-                for idx, row in X.iterrows():
-                    # Get numeric features
-                    numeric_values = pd.to_numeric(row, errors='coerce')
-                    numeric_values = numeric_values.dropna()
+                for idx, row in X_normalized.iterrows():
+                    # Weighted average of normalized features
+                    weighted_avg = (row * feature_weights).sum()
 
-                    if len(numeric_values) == 0:
-                        # No numeric features, default to [0.5, 0.5]
-                        probabilities.append([0.5, 0.5])
-                        logger.debug(f"Row {idx}: No numeric features, defaulting to [0.5, 0.5]")
-                        continue
+                    # Apply sigmoid transformation for better probability calibration
+                    # sigmoid(x) = 1 / (1 + exp(-x))
+                    # Map weighted_avg from [0, 1] to [-3, 3] for sigmoid
+                    sigmoid_input = (weighted_avg - 0.5) * 6
+                    prob_positive = 1 / (1 + np.exp(-sigmoid_input))
+                    prob_negative = 1 - prob_positive
 
-                    # Use mean of features as probability estimate
-                    # Clip to [0, 1] range
-                    feature_mean = np.clip(numeric_values.mean(), 0, 1)
-                    # Return [prob_negative, prob_positive]
-                    probabilities.append([1 - feature_mean, feature_mean])
+                    probabilities.append([prob_negative, prob_positive])
 
                 logger.debug(f"Got probabilities for {len(X)} samples")
                 return np.array(probabilities)

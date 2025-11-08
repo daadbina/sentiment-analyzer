@@ -361,3 +361,55 @@ class CircuitBreakerError(GraphError):
             details["failure_count"] = failure_count
         super().__init__(message, details, trace_id)
 
+
+class AnalyticsError(GraphError):
+    """
+    Exception raised during analytics operations.
+    Used for centrality, clustering, and graph analytics failures.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        analytics_type: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+        trace_id: Optional[str] = None,
+    ):
+        """
+        Initialize AnalyticsError.
+
+        Args:
+            message: Error message
+            analytics_type: Type of analytics (centrality, clustering, metrics)
+            details: Additional error details
+            trace_id: Trace ID for correlation
+        """
+        self.analytics_type = analytics_type
+        details = details or {}
+        if analytics_type:
+            details["analytics_type"] = analytics_type
+        super().__init__(message, details, trace_id)
+
+
+class BackupError(GraphError):
+    """
+    Exception raised during backup operations.
+    Used for backup creation, restore, and management failures.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        details: Optional[Dict[str, Any]] = None,
+        trace_id: Optional[str] = None,
+    ):
+        """
+        Initialize BackupError.
+
+        Args:
+            message: Error message
+            details: Additional error details
+            trace_id: Trace ID for correlation
+        """
+        super().__init__(message, details, trace_id)
+

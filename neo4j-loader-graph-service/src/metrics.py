@@ -65,6 +65,55 @@ graph_clustering_detection_duration_seconds = Histogram(
     buckets=(1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0, 900.0),
 )
 
+# Analytics Metrics
+graph_analytics_duration_seconds = Histogram(
+    "graph_analytics_duration_seconds",
+    "Duration of graph analytics operations in seconds",
+    labelnames=["analytics_type"],
+    buckets=(1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0),
+)
+
+graph_centrality_computation_total = Counter(
+    "graph_centrality_computation_total",
+    "Total number of centrality computations",
+    labelnames=["centrality_type"],
+)
+
+graph_clustering_computation_total = Counter(
+    "graph_clustering_computation_total",
+    "Total number of clustering computations",
+    labelnames=["algorithm"],
+)
+
+graph_analytics_nodes_processed = Counter(
+    "graph_analytics_nodes_processed",
+    "Total number of nodes processed in analytics",
+    labelnames=["analytics_type"],
+)
+
+# Validation Orphan Metrics
+graph_validation_orphans_detected_total = Counter(
+    "graph_validation_orphans_detected_total",
+    "Total number of orphaned nodes detected",
+)
+
+# Query Cache Metrics
+graph_query_cache_hits_total = Counter(
+    "graph_query_cache_hits_total",
+    "Total number of query cache hits",
+)
+
+graph_query_cache_misses_total = Counter(
+    "graph_query_cache_misses_total",
+    "Total number of query cache misses",
+)
+
+graph_query_duration_seconds = Histogram(
+    "graph_query_duration_seconds",
+    "Duration of graph query execution in seconds",
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+)
+
 # Snapshot Metrics
 graph_snapshot_duration_seconds = Histogram(
     "graph_snapshot_duration_seconds",

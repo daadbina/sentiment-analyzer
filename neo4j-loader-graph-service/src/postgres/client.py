@@ -375,6 +375,122 @@ class PostgresClient:
         
         return audit_id
 
+    async def track_lineage(
+        self,
+        source_system: str,
+        source_topic: str,
+        node_id: str,
+        node_type: str,
+        source_offset: Optional[int] = None,
+        source_partition: Optional[int] = None,
+        transformation_applied: Optional[str] = None,
+        trace_id: Optional[str] = None,
+    ) -> int:
+        """
+        Track data lineage from source to Neo4j.
+
+        Args:
+            source_system: Source system name (e.g., 'kafka')
+            source_topic: Source topic name
+            node_id: Node ID in Neo4j
+            node_type: Node type
+            source_offset: Kafka offset
+            source_partition: Kafka partition
+            transformation_applied: Transformation description
+            trace_id: Trace ID for correlation
+
+        Returns:
+            Lineage record ID
+        """
+        query = """
+        INSERT INTO data_lineage (
+            source_system,
+            source_topic,
+            source_offset,
+            source_partition,
+            node_id,
+            node_type,
+            transformation_applied,
+            trace_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        """
+
+        params = [
+            source_system,
+            source_topic,
+            source_offset,
+            source_partition,
+            node_id,
+            node_type,
+            transformation_applied,
+            trace_id,
+        ]
+
+        lineage_id = await self.execute_insert(query, params, trace_id)
+
+        logger.debug(
+            "lineage_tracked",
+            lineage_id=lineage_id,
+            source_topic=source_topic,
+            node_id=node_id,
+            node_type=node_type,
+            trace_id=trace_id,
+        )
+
+        return lineage_id
+
+    async def get_latest_snapshot(self) -> Optional[Dict[str, Any]]:
+        """
+        Get the latest graph metadata snapshot.
+
+        Returns:
+            Latest snapshot data or None if no snapshots exist
+        """
+        query = """
+        SELECT * FROM graph_metadata
+        ORDER BY snapshot_timestamp DESC
+        LIMIT 1
+        """
+
+        results = await self.execute_query(query)
+
+        if results:
+            return results[0]
+
+        return None
+
+    async def get_node_lineage(
+        self,
+        node_id: str,
+        trace_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get lineage history for a specific node.
+
+        Args:
+            node_id: Node ID
+            trace_id: Trace ID for correlation
+
+        Returns:
+            List of lineage records
+        """
+        query = """
+        SELECT * FROM data_lineage
+        WHERE node_id = $1
+        ORDER BY created_at DESC
+        """
+
+        results = await self.execute_query(query, [node_id], trace_id)
+
+        logger.debug(
+            "node_lineage_retrieved",
+            node_id=node_id,
+            record_count=len(results),
+            trace_id=trace_id,
+        )
+
+        return results
+
 
 # Global PostgreSQL client instance
 postgres_client = PostgresClient()

@@ -410,14 +410,24 @@ class TrainerService:
                             if filtered_config:
                                 self.mlflow_client.log_params(run_id, filtered_config)
 
-                            # Save and register model
+                            # Log model directly to MLflow (uses configured artifact store)
                             model_version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                            artifact_metadata = self.artifact_manager.save_model_artifact(
-                                model=model,
-                                model_name=f"sentiment_{model_type}",
-                                version=model_version,
-                            )
-                            logger.info(f"Model artifact saved: {artifact_metadata}")
+                            try:
+                                # Use MLflow's sklearn flavor for all models
+                                import mlflow.sklearn
+                                mlflow.sklearn.log_model(
+                                    model.model,
+                                    artifact_path="model",
+                                    registered_model_name=f"sentiment_{model_type}"
+                                )
+                                logger.info(f"Model logged to MLflow: sentiment_{model_type}")
+                            except Exception as e:
+                                logger.warning(f"Could not log model with sklearn flavor: {e}, trying generic approach")
+                                # Fallback: log as generic Python model
+                                mlflow.log_artifact(
+                                    local_path=model.model,
+                                    artifact_path="model"
+                                )
 
                             # Register in MLflow registry
                             model_uri = f"runs://{run_id}/model"

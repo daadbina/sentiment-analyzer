@@ -91,6 +91,12 @@ graph_analytics_nodes_processed = Counter(
     labelnames=["analytics_type"],
 )
 
+graph_clusters_detected = Gauge(
+    "graph_clusters_detected",
+    "Number of clusters/communities detected in the graph",
+    labelnames=["algorithm"],
+)
+
 # Validation Orphan Metrics
 graph_validation_orphans_detected_total = Counter(
     "graph_validation_orphans_detected_total",

@@ -17,9 +17,9 @@ class Article(BaseModel):
     
     id: str = Field(
         ...,
-        description="Article ULID identifier",
+        description="Article identifier (ULID 26 chars or UUID 36 chars)",
         min_length=26,
-        max_length=26,
+        max_length=36,
     )
     
     canonical_url: str = Field(

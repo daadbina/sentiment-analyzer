@@ -67,7 +67,7 @@ class KafkaProducerClient:
         try:
             # Initialize schema registry client
             self._schema_registry_client = SchemaRegistryClient({
-                'url': config.kafka_schema_registry_url
+                'url': config.schema_registry_url
             })
             
             # Initialize Avro serializer
@@ -78,7 +78,7 @@ class KafkaProducerClient:
             
             # Initialize producer with idempotence enabled
             producer_config = {
-                'bootstrap.servers': config.kafka_bootstrap_servers,
+                'bootstrap.servers': config.kafka_brokers,
                 'client.id': f'{config.service_name}-producer',
                 'enable.idempotence': True,  # Exactly-once semantics
                 'acks': 'all',  # Wait for all replicas
@@ -86,25 +86,25 @@ class KafkaProducerClient:
                 'max.in.flight.requests.per.connection': 5,
                 'compression.type': 'snappy',
             }
-            
+
             self._producer = Producer(producer_config)
-            
+
             logger.info(
                 "kafka_producer_connected",
-                bootstrap_servers=config.kafka_bootstrap_servers,
+                bootstrap_servers=config.kafka_brokers,
                 topic=self._topic,
             )
-            
+
         except Exception as e:
             logger.error(
                 "kafka_producer_connection_failed",
                 error=str(e),
-                bootstrap_servers=config.kafka_bootstrap_servers,
+                bootstrap_servers=config.kafka_brokers,
             )
             raise GraphConnectionError(
                 message=f"Failed to connect Kafka producer: {str(e)}",
                 service="kafka",
-                host=config.kafka_bootstrap_servers,
+                host=config.kafka_brokers,
             ) from e
 
     def close(self) -> None:

@@ -238,6 +238,14 @@ class Config(BaseSettings):
         default="neo4j-loader-graph-service",
         description="Service name for logging and tracing",
     )
+    service_version: str = Field(
+        default="1.0.0",
+        description="Service version",
+    )
+    environment: str = Field(
+        default="development",
+        description="Deployment environment (development, staging, production)",
+    )
     log_level: str = Field(
         default="INFO",
         description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
@@ -315,6 +323,7 @@ class Config(BaseSettings):
             "enable.auto.commit": self.kafka_enable_auto_commit,
             "session.timeout.ms": self.kafka_session_timeout_ms,
             "max.poll.interval.ms": self.kafka_max_poll_interval_ms,
+            "schema.registry.url": self.schema_registry_url,
         }
 
     def get_kafka_producer_config(self) -> dict:

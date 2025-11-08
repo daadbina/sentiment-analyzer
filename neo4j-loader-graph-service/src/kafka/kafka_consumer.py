@@ -5,9 +5,12 @@ Consumes messages from 4 topics with Avro deserialization.
 
 from typing import Optional, Dict, Any, Callable, List
 from confluent_kafka import Consumer, KafkaError, KafkaException
-from confluent_kafka.avro import AvroConsumer
-from confluent_kafka.avro.serializer import SerializerError
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroDeserializer
+from confluent_kafka.serialization import SerializationContext, MessageField
 import structlog
+import traceback
+import time
 
 from ..config import config
 from ..exceptions import ConnectionError as GraphConnectionError
@@ -36,36 +39,57 @@ class KafkaConsumerClient:
 
     def __init__(self):
         """Initialize Kafka consumer."""
-        self._consumer: Optional[AvroConsumer] = None
+        self._consumer: Optional[Consumer] = None
+        self._deserializer: Optional[AvroDeserializer] = None
         self._is_running = False
         self._message_handlers: Dict[str, Callable] = {}
 
     def connect(self) -> None:
         """
         Establish connection to Kafka cluster.
-        
+
         Raises:
             GraphConnectionError: If connection fails
         """
         try:
-            consumer_config = config.get_kafka_consumer_config()
-            
-            self._consumer = AvroConsumer(consumer_config)
-            
+            # Initialize schema registry client
+            schema_registry_client = SchemaRegistryClient({
+                "url": config.schema_registry_url
+            })
+
+            # Initialize Avro deserializer
+            self._deserializer = AvroDeserializer(schema_registry_client)
+
+            # Build consumer configuration
+            consumer_config = {
+                "bootstrap.servers": config.kafka_brokers,
+                "group.id": config.consumer_group,
+                "auto.offset.reset": "earliest",
+                "enable.auto.commit": False,  # Manual commit for exactly-once
+                "max.poll.interval.ms": 300000,  # 5 minutes
+                "session.timeout.ms": 30000,  # 30 seconds
+                "heartbeat.interval.ms": 10000,  # 10 seconds
+            }
+
+            # Create regular Consumer (not AvroConsumer)
+            self._consumer = Consumer(consumer_config)
+
             # Subscribe to topics
             self._consumer.subscribe(self.TOPICS)
-            
+
             logger.info(
                 "kafka_consumer_connected",
                 topics=self.TOPICS,
                 group_id=config.consumer_group,
+                schema_registry=config.schema_registry_url,
             )
-            
+
         except Exception as e:
             logger.error(
                 "kafka_consumer_connection_failed",
                 error=str(e),
                 brokers=config.kafka_brokers,
+                traceback=traceback.format_exc(),
             )
             raise GraphConnectionError(
                 message=f"Failed to connect to Kafka: {str(e)}",
@@ -122,11 +146,21 @@ class KafkaConsumerClient:
         )
 
         try:
+            poll_count = 0
             while self._is_running:
                 if max_messages and messages_consumed >= max_messages:
                     break
 
                 msg = self._consumer.poll(timeout=timeout)
+                poll_count += 1
+
+                # Log polling activity every 100 polls
+                if poll_count % 100 == 0:
+                    logger.debug(
+                        "kafka_consumer_polling",
+                        poll_count=poll_count,
+                        messages_consumed=messages_consumed,
+                    )
 
                 if msg is None:
                     continue
@@ -150,22 +184,27 @@ class KafkaConsumerClient:
     def _process_message(self, msg) -> None:
         """
         Process a single Kafka message.
-        
+
         Args:
             msg: Kafka message
         """
         import time
         start_time = time.time()
-        
+
         topic = msg.topic()
         partition = msg.partition()
         offset = msg.offset()
-        
+
         try:
-            # Deserialize message (Avro)
-            message_value = msg.value()
+            # Deserialize message value using AvroDeserializer
+            ctx = SerializationContext(topic, MessageField.VALUE)
+            message_value = self._deserializer(msg.value(), ctx)
+
+            # Deserialize key if present
             message_key = msg.key()
-            
+            if message_key:
+                message_key = message_key.decode('utf-8') if isinstance(message_key, bytes) else message_key
+
             logger.debug(
                 "kafka_message_received",
                 topic=topic,
@@ -173,11 +212,20 @@ class KafkaConsumerClient:
                 offset=offset,
                 key=message_key,
             )
-            
+
             # Route to handler
             handler = self._message_handlers.get(topic)
             if handler:
-                handler(message_value)
+                # Extract trace_id from message headers if available
+                trace_id = None
+                if msg.headers():
+                    for key, value in msg.headers():
+                        if key == 'trace_id':
+                            trace_id = value.decode('utf-8') if isinstance(value, bytes) else value
+                            break
+
+                # Call handler with topic, message, and trace_id
+                handler(topic, message_value, trace_id=trace_id)
             else:
                 logger.warning(
                     "no_handler_for_topic",
@@ -185,10 +233,10 @@ class KafkaConsumerClient:
                     partition=partition,
                     offset=offset,
                 )
-            
+
             # Commit offset
             self._consumer.commit(asynchronous=False)
-            
+
             # Record metrics
             kafka_messages_consumed_total.labels(topic=topic).inc()
             duration = time.time() - start_time
@@ -196,7 +244,7 @@ class KafkaConsumerClient:
                 topic=topic,
                 message_type=topic,
             ).observe(duration)
-            
+
             logger.debug(
                 "kafka_message_processed",
                 topic=topic,
@@ -204,15 +252,7 @@ class KafkaConsumerClient:
                 offset=offset,
                 duration_seconds=duration,
             )
-            
-        except SerializerError as e:
-            logger.error(
-                "kafka_deserialization_error",
-                topic=topic,
-                partition=partition,
-                offset=offset,
-                error=str(e),
-            )
+
         except Exception as e:
             logger.error(
                 "kafka_message_processing_error",
@@ -220,6 +260,7 @@ class KafkaConsumerClient:
                 partition=partition,
                 offset=offset,
                 error=str(e),
+                traceback=traceback.format_exc(),
             )
 
     def _handle_error(self, error: KafkaError) -> None:

@@ -101,19 +101,15 @@ class FeastClient:
 
             # Try to retrieve from online store first (faster, more reliable)
             # If that fails, fall back to offline store
-            print(f"[FEAST_CLIENT] get_features called with {len(features)} features and {len(entity_df)} entities")
             try:
-                print("[FEAST_CLIENT] Attempting to retrieve features from online store")
                 logger.info("Attempting to retrieve features from online store")
                 feature_df = self._get_features_from_online_store(entity_df, features)
-                print(f"[FEAST_CLIENT] Retrieved {len(feature_df)} rows from online store")
                 logger.info(f"Retrieved {len(feature_df)} rows from online store")
-                logger.info(f"Feature columns: {list(feature_df.columns)}")
-                logger.info(f"Feature dtypes:\n{feature_df.dtypes}")
-                logger.info(f"Feature sample:\n{feature_df.head()}")
+                logger.debug(f"Feature columns: {list(feature_df.columns)}")
+                logger.debug(f"Feature dtypes:\n{feature_df.dtypes}")
+                logger.debug(f"Feature sample:\n{feature_df.head()}")
                 return feature_df
             except Exception as e:
-                print(f"[FEAST_CLIENT] Exception in online store retrieval: {e}")
                 logger.warning(f"Failed to retrieve from online store: {e}, falling back to offline store")
                 import traceback
                 logger.warning(f"Traceback: {traceback.format_exc()}")
@@ -169,13 +165,11 @@ class FeastClient:
         import redis
         import json
 
-        print(f"[ONLINE_STORE] _get_features_from_online_store called")
         # Connect to Redis
         redis_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
         # Extract entity IDs
         entity_ids = entity_df['group_id'].tolist()
-        print(f"[ONLINE_STORE] Retrieving features for {len(entity_ids)} entities from Redis")
         logger.info(f"Retrieving features for {len(entity_ids)} entities from Redis")
         logger.info(f"Requested features: {features}")
 
@@ -191,15 +185,11 @@ class FeastClient:
 
             try:
                 value = redis_client.get(feature_key)
-                if i == 0:
-                    print(f"[ONLINE_STORE] First entity: {entity_id}, key: {feature_key}, value exists: {value is not None}")
                 if value is not None:
                     found_count += 1
                     try:
                         features_dict = json.loads(value)
-                        if i == 0:
-                            print(f"[ONLINE_STORE] First entity features: {list(features_dict.keys())}")
-                        logger.info(f"Found features for {entity_id}: {list(features_dict.keys())[:5]}...")
+                        logger.debug(f"Found features for {entity_id}: {list(features_dict.keys())[:5]}...")
                         # Extract requested features
                         for feature in features:
                             # Feature name format: semantic_group_features:feature_name
@@ -214,9 +204,7 @@ class FeastClient:
                         for feature in features:
                             row_data[feature] = None
                 else:
-                    if i == 0:
-                        print(f"[ONLINE_STORE] First entity: {entity_id}, key: {feature_key}, NO VALUE FOUND")
-                    logger.info(f"No features found for entity {entity_id} (key: {feature_key})")
+                    logger.debug(f"No features found for entity {entity_id} (key: {feature_key})")
                     for feature in features:
                         row_data[feature] = None
             except Exception as e:

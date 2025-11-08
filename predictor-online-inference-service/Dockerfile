@@ -48,11 +48,13 @@ RUN useradd -m -u 1000 predictor && \
 USER predictor
 
 # Expose ports
-EXPOSE 8000 9090
+# 8000: FastAPI application
+# 9109: Prometheus metrics
+EXPOSE 8000 9109
 
-# Health check
+# Health check (using /live endpoint for liveness)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+    CMD curl -f http://localhost:8000/live || exit 1
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

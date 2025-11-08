@@ -131,8 +131,13 @@ async def perform_startup_checks(config) -> bool:
         try:
             kafka_producer = KafkaProducerClient(config.kafka)
             await kafka_producer.connect()
-            await kafka_producer.close()
-            logger.info("✓ Kafka topics verified")
+            is_healthy = await kafka_producer.health_check()
+            await kafka_producer.disconnect()
+            if is_healthy:
+                logger.info("✓ Kafka topics verified")
+            else:
+                logger.error("✗ Kafka topic check failed: unhealthy")
+                return False
         except Exception as e:
             logger.error(f"✗ Kafka topic check failed: {e}")
             return False

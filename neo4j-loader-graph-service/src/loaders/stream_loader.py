@@ -291,15 +291,23 @@ class StreamLoader:
         
         duration = time.time() - start_time
         self.last_flush_time = time.time()
-        
-        logger.info(
-            "all_buffers_flushed",
-            total_nodes=total_nodes,
-            total_relationships=total_relationships,
-            duration_seconds=duration,
-            trace_id=trace_id,
-        )
-        
+
+        # Only log at INFO level when there's actual data to flush
+        if total_nodes > 0 or total_relationships > 0:
+            logger.info(
+                "all_buffers_flushed",
+                total_nodes=total_nodes,
+                total_relationships=total_relationships,
+                duration_seconds=duration,
+                trace_id=trace_id,
+            )
+        else:
+            # Use DEBUG level for empty flushes to avoid log clutter
+            logger.debug(
+                "all_buffers_flushed_empty",
+                trace_id=trace_id,
+            )
+
         return {
             "nodes_created": total_nodes,
             "relationships_created": total_relationships,

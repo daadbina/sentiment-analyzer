@@ -671,7 +671,19 @@ class LabelerService:
                         )
 
                         # Write to outbox
-                        await self.outbox_manager.write_batch(enriched_btc)
+                        outbox_batch = []
+                        for label in enriched_btc:
+                            event_id = label.get("event_id")
+                            trace_id = label.get("trace_id")
+                            outbox_batch.append({
+                                "aggregate_id": event_id,
+                                "aggregate_type": "btc_price",
+                                "event_type": "label_created",
+                                "payload": label,
+                                "trace_id": trace_id
+                            })
+
+                        await self.outbox_manager.write_events_batch(outbox_batch)
                         logger.info(
                             f"Wrote {len(enriched_btc)} BTC labels to outbox",
                             operation="_fetch_btc_background",

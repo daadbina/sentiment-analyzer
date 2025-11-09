@@ -3,10 +3,18 @@ Main entry point for Neo4j Loader Graph Service.
 """
 
 import sys
+import logging
 import structlog
 
 from .service.orchestrator import orchestrator
 from .config import config
+
+# Configure Python's logging to output to stdout
+logging.basicConfig(
+    format="%(message)s",
+    stream=sys.stdout,
+    level=logging.INFO,
+)
 
 # Configure structured logging
 structlog.configure(
@@ -32,7 +40,7 @@ logger = structlog.get_logger(__name__)
 def main() -> int:
     """
     Main entry point.
-    
+
     Returns:
         Exit code
     """
@@ -43,17 +51,18 @@ def main() -> int:
             neo4j_uri=config.neo4j_uri,
             kafka_brokers=config.kafka_brokers,
         )
-        
+
         # Run service
         orchestrator.run()
-        
+
         return 0
-        
+
     except Exception as e:
         logger.error("service_failed", error=str(e), exc_info=True)
         return 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    exit_code = main()
+    sys.exit(exit_code)
 

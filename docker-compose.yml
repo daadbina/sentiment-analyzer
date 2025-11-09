@@ -1,0 +1,690 @@
+version: '3.8'
+
+# Optimized for slow internet with multi-stage builds and layer caching
+
+networks:
+  sentiment-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+
+volumes:
+  # Infrastructure volumes
+  redis_data:
+  qdrant_data:
+  neo4j_data:
+  neo4j_logs:
+  mlflow_data:
+  mlflow_postgres_data:
+  prometheus_data:
+  grafana_data:
+  jaeger_data:
+  loki_data:
+  # Delta Lake volumes
+  delta_lake_data:
+  # Model cache volumes
+  model_cache:
+
+services:
+  # ============================================================================
+  # INFRASTRUCTURE SERVICES
+  # ============================================================================
+
+  # Redis - Caching and feature store online storage
+  redis:
+    image: redis:7-alpine
+    container_name: sentiment-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      sentiment-network:
+        ipv4_address: 172.25.0.10
+
+  # Qdrant - Vector database for embeddings
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: sentiment-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      sentiment-network:
+        ipv4_address: 172.25.0.11
+
+  # Neo4j - Graph database
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: sentiment-neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    environment:
+      - NEO4J_AUTH=neo4j/sentiment_password_2024
+      - NEO4J_dbms_memory_heap_initial__size=512m
+      - NEO4J_dbms_memory_heap_max__size=2g
+      - NEO4J_dbms_memory_pagecache_size=1g
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "sentiment_password_2024", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      sentiment-network:
+        ipv4_address: 172.25.0.12
+
+  # MLflow PostgreSQL backend
+  mlflow-postgres:
+    image: postgres:15-alpine
+    container_name: sentiment-mlflow-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=mlflow
+      - POSTGRES_USER=mlflow
+      - POSTGRES_PASSWORD=mlflow_password_2024
+    volumes:
+      - mlflow_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      sentiment-network:
+        ipv4_address: 172.25.0.13
+
+  # MLflow - Model registry and tracking
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.9.2
+    container_name: sentiment-mlflow
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow_data:/mlflow
+      - model_cache:/models
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=postgresql://mlflow:mlflow_password_2024@mlflow-postgres:5432/mlflow
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=/mlflow/artifacts
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://mlflow:mlflow_password_2024@mlflow-postgres:5432/mlflow
+      --default-artifact-root /mlflow/artifacts
+      --host 0.0.0.0
+      --port 5000
+    depends_on:
+      mlflow-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      sentiment-network:
+        ipv4_address: 172.25.0.14
+
+  # Prometheus - Metrics collection
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    container_name: sentiment-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      sentiment-network:
+        ipv4_address: 172.25.0.15
+
+  # Grafana - Metrics visualization
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: sentiment-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin_password_2024
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      sentiment-network:
+        ipv4_address: 172.25.0.16
+
+  # Jaeger - Distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    container_name: sentiment-jaeger
+    restart: unless-stopped
+    ports:
+      - "5775:5775/udp"  # Zipkin compact
+      - "6831:6831/udp"  # Jaeger compact
+      - "6832:6832/udp"  # Jaeger binary
+      - "5778:5778"      # Serve configs
+      - "16686:16686"    # UI
+      - "14268:14268"    # Jaeger collector
+      - "14250:14250"    # gRPC
+      - "9411:9411"      # Zipkin
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - SPAN_STORAGE_TYPE=badger
+      - BADGER_EPHEMERAL=false
+      - BADGER_DIRECTORY_VALUE=/badger/data
+      - BADGER_DIRECTORY_KEY=/badger/key
+    volumes:
+      - jaeger_data:/badger
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:14269/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      sentiment-network:
+        ipv4_address: 172.25.0.17
+
+  # Loki - Log aggregation
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: sentiment-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml:ro
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      sentiment-network:
+        ipv4_address: 172.25.0.18
+
+  # ============================================================================
+  # MICROSERVICES
+  # ============================================================================
+
+  # 1. Crawler Service (Python 3.13)
+  crawler-service:
+    build:
+      context: ./crawler-service
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: sentiment-crawler
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+      - "9101:9101"
+    env_file:
+      - .env.docker
+    environment:
+      - SERVICE_NAME=crawler-service
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./crawler-service/src:/app/src:ro
+      - delta_lake_data:/data/delta_lake
+    depends_on:
+      redis:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+      jaeger:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:9101/metrics', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sentiment-network
+
+  # 2. Ingest Validator Service (Python 3.11)
+  ingest-validator-service:
+    build:
+      context: ./ingest-validator-service
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: sentiment-ingest-validator
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+      - "9102:9102"
+    env_file:
+      - .env.docker
+    environment:
+      - SERVICE_NAME=ingest-validator-service
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - delta_lake_data:/data/delta_lake
+    depends_on:
+      redis:
+        condition: service_healthy
+      crawler-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sentiment-network
+
+  # 3. Canonicalizer Normalizer Service (Python 3.11)
+  canonicalizer-normalizer-service:
+    build:
+      context: ./canonicalizer-normalizer-service
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: sentiment-canonicalizer
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+      - "9103:9103"
+    env_file:
+      - .env.docker
+    environment:
+      - SERVICE_NAME=canonicalizer-normalizer-service
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - delta_lake_data:/data/delta_lake
+    depends_on:
+      redis:
+        condition: service_healthy
+      ingest-validator-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sentiment-network
+
+  # 4. NER Entity Linking Service (Python 3.11)
+  ner-entity-linking-service:
+    build:
+      context: ./ner-entity-linking-service
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: sentiment-ner
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+      - "9104:9104"
+    env_file:
+      - .env.docker
+    environment:
+      - SERVICE_NAME=ner-entity-linking-service
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - model_cache:/models
+    depends_on:
+      redis:
+        condition: service_healthy
+      canonicalizer-normalizer-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - sentiment-network
+
+  # 5. Embedding Service (Python 3.11)
+  embedding-service:
+    build:
+      context: ./embedding-service
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: sentiment-embedding
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+      - "9105:9105"
+    env_file:
+      - .env.docker
+    environment:
+      - SERVICE_NAME=embedding-service
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - MODEL_DEVICE=cpu
+    volumes:
+      - model_cache:/models
+      - delta_lake_data:/data/delta_lake
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      ner-entity-linking-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - sentiment-network
+
+  # 6. Clustering Semantic Grouping Service (Python 3.11)
+  clustering-semantic-grouping-service:
+    build:
+      context: ./clustering-semantic-grouping-service
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: sentiment-clustering
+    restart: unless-stopped
+    ports:
+      - "8005:8005"
+      - "9106:9106"
+    env_file:
+      - .env.docker
+    environment:
+      - SERVICE_NAME=clustering-semantic-grouping-service
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+    volumes:
+      - delta_lake_data:/data/delta_lake
+    depends_on:
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      embedding-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sentiment-network
+
+  # 7. Feature Engineering Service (Python 3.11)
+  feature-engineering-service:
+    build:
+      context: ./feature-engineering-service
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: sentiment-feature-engineering
+    restart: unless-stopped
+    ports:
+      - "8006:8006"
+      - "9107:9107"
+    env_file:
+      - .env.docker
+    environment:
+      - SERVICE_NAME=feature-engineering-service
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - delta_lake_data:/data/delta_lake
+      - ./feast:/feast
+    depends_on:
+      redis:
+        condition: service_healthy
+      clustering-semantic-grouping-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sentiment-network
+
+  # 8. Labeler Ground Truth Ingest Service (Python 3.11)
+  labeler-ground-truth-ingest-service:
+    build:
+      context: ./labeler-ground-truth-ingest-service
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: sentiment-labeler
+    restart: unless-stopped
+    ports:
+      - "8007:8007"
+      - "9108:9108"
+    env_file:
+      - .env.docker
+    environment:
+      - SERVICE_NAME=labeler-ground-truth-ingest-service
+    volumes:
+      - delta_lake_data:/data/delta_lake
+    depends_on:
+      feature-engineering-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sentiment-network
+
+  # 9. Trainer Model Registry Service (Python 3.11)
+  trainer-model-registry-service:
+    build:
+      context: ./trainer-model-registry-service
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: sentiment-trainer
+    restart: unless-stopped
+    ports:
+      - "8008:8008"
+      - "9109:9109"
+    env_file:
+      - .env.docker
+    environment:
+      - SERVICE_NAME=trainer-model-registry-service
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - model_cache:/models
+      - delta_lake_data:/data/delta_lake
+      - ./feast:/feast
+    depends_on:
+      redis:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      labeler-ground-truth-ingest-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - sentiment-network
+
+  # 10. Neo4j Loader Graph Service (Python 3.11)
+  neo4j-loader-graph-service:
+    build:
+      context: ./neo4j-loader-graph-service
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: sentiment-neo4j-loader
+    restart: unless-stopped
+    ports:
+      - "8009:8009"
+      - "9110:9110"
+    env_file:
+      - .env.docker
+    environment:
+      - SERVICE_NAME=neo4j-loader-graph-service
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=sentiment_password_2024
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      clustering-semantic-grouping-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sentiment-network
+
+  # 11. Predictor Online Inference Service (Python 3.11)
+  predictor-online-inference-service:
+    build:
+      context: ./predictor-online-inference-service
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: sentiment-predictor
+    restart: unless-stopped
+    ports:
+      - "8010:8010"
+      - "9111:9111"
+    env_file:
+      - .env.docker
+    environment:
+      - SERVICE_NAME=predictor-online-inference-service
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    volumes:
+      - model_cache:/models
+      - ./feast:/feast
+    depends_on:
+      redis:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      trainer-model-registry-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - sentiment-network
+
+  # 12. API Analytics Service (Python 3.11)
+  api-analytics-service:
+    build:
+      context: ./api-analytics-service
+      dockerfile: Dockerfile
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    container_name: sentiment-api
+    restart: unless-stopped
+    ports:
+      - "8011:8011"
+      - "9112:9112"
+    env_file:
+      - .env.docker
+    environment:
+      - SERVICE_NAME=api-analytics-service
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=sentiment_password_2024
+    depends_on:
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      predictor-online-inference-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8011/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - sentiment-network
+

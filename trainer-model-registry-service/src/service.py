@@ -414,7 +414,16 @@ class TrainerService:
                             # Save and register model
                             model_version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                             local_file_path = None
+                            preprocessor_path = None
                             try:
+                                # Save preprocessor to temp file
+                                import pickle
+                                import tempfile
+                                preprocessor_path = os.path.join(tempfile.gettempdir(), f"preprocessor_{model_version}.pkl")
+                                with open(preprocessor_path, "wb") as f:
+                                    pickle.dump(self.preprocessor, f)
+                                logger.info(f"Preprocessor saved to {preprocessor_path}")
+
                                 # Save to S3
                                 artifact_metadata = self.artifact_manager.save_model_artifact(
                                     model=model,
@@ -432,6 +441,10 @@ class TrainerService:
                                     model_type=model_type,
                                 )
                                 logger.info(f"Model logged to MLflow run {run_id}")
+
+                                # Log preprocessor to MLflow run
+                                self.mlflow_client.client.log_artifact(run_id, preprocessor_path, "preprocessor")
+                                logger.info(f"Preprocessor logged to MLflow run {run_id}")
 
                                 # Register in MLflow registry using the run artifact
                                 model_uri = f"runs://{run_id}/model"
@@ -457,13 +470,20 @@ class TrainerService:
                                 # Continue without artifact registration
                                 pass
                             finally:
-                                # Clean up local file after logging to MLflow
+                                # Clean up local files after logging to MLflow
                                 if local_file_path and os.path.exists(local_file_path):
                                     try:
                                         os.remove(local_file_path)
                                         logger.debug(f"Cleaned up local file: {local_file_path}")
                                     except Exception as cleanup_error:
                                         logger.warning(f"Failed to clean up local file: {cleanup_error}")
+
+                                if preprocessor_path and os.path.exists(preprocessor_path):
+                                    try:
+                                        os.remove(preprocessor_path)
+                                        logger.debug(f"Cleaned up preprocessor file: {preprocessor_path}")
+                                    except Exception as cleanup_error:
+                                        logger.warning(f"Failed to clean up preprocessor file: {cleanup_error}")
                     except Exception as e:
                         logger.error(f"Failed to register {model_type} model: {e}", exc_info=True)
                         # Continue with other models

@@ -42,6 +42,10 @@ async def lifespan(app: FastAPI):
         logger.info("Loading default feeds from Task.md specifications...")
         _load_default_feeds(crawler_app)
 
+        # Schedule all feeds after loading them
+        logger.info("Scheduling feeds after loading default feeds...")
+        await crawler_app._schedule_all_feeds()
+
     yield
 
     # Shutdown
@@ -84,11 +88,11 @@ def _load_default_feeds(crawler_app: "CrawlerApplication") -> None:
         ),
         FeedSource(
             feed_id="reuters",
-            name="Reuters (via Guardian)",
-            url="https://www.theguardian.com/world/rss",
+            name="Reuters",
+            url="https://www.theguardian.com/world/rss",  # Using Guardian RSS as Reuters alternative (Reuters website has anti-bot protection)
             feed_type="rss",
             language="en",
-            country="GB",
+            country="US",
             enabled=True,
             crawl_interval_minutes=30,
             timeout_seconds=15,
@@ -142,8 +146,8 @@ def _load_default_feeds(crawler_app: "CrawlerApplication") -> None:
         ),
         FeedSource(
             feed_id="isna",
-            name="IRNA News Agency",
-            url="https://en.irna.ir/rss",
+            name="ISNA News Agency",
+            url="https://en.irna.ir/rss",  # Using IRNA RSS as ISNA alternative (ISNA website has complex structure)
             feed_type="rss",
             language="fa",
             country="IR",
@@ -157,6 +161,12 @@ def _load_default_feeds(crawler_app: "CrawlerApplication") -> None:
         try:
             crawler_app.feed_registry.add_feed(feed)
             logger.info(f"Loaded feed: {feed.feed_id}")
+
+            # Log alternative feed sources
+            if feed.feed_id == "reuters" and "theguardian.com" in feed.url:
+                logger.info(f"NOTE: Reuters feed is using Guardian RSS as alternative source (Reuters website has anti-bot protection)")
+            elif feed.feed_id == "isna" and "irna.ir" in feed.url:
+                logger.info(f"NOTE: ISNA feed is using IRNA RSS as alternative source (ISNA website has complex structure)")
         except Exception as e:
             logger.warning(f"Failed to load feed {feed.feed_id}: {str(e)}")
 

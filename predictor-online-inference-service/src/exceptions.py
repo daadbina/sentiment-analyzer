@@ -289,7 +289,7 @@ class InferenceError(PredictionError):
             context["group_id"] = group_id
         if model_version:
             context["model_version"] = model_version
-        super().__init__(message, context, trace_id)
+        super().__init__(message, group_id=group_id, context=context, trace_id=trace_id)
 
 
 class InferenceTimeoutError(InferenceError):

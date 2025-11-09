@@ -126,13 +126,20 @@ class Article(BaseModel):
     def from_kafka_message(cls, message: dict) -> "Article":
         """
         Create Article from Kafka message.
-        
+
         Args:
             message: Kafka message dictionary
-            
+
         Returns:
             Article instance
         """
+        # Validate publisher_id: only accept if it's a valid ULID (26 chars)
+        # Otherwise set to None since it's optional
+        publisher_id = message.get("publisher_id")
+        if publisher_id and len(publisher_id) != 26:
+            # Invalid publisher_id format, set to None
+            publisher_id = None
+
         return cls(
             id=message["article_id"],
             canonical_url=message["canonical_url"],
@@ -144,7 +151,7 @@ class Article(BaseModel):
             country=message.get("country"),
             sentiment_score=message.get("sentiment_score"),
             checksum=message["checksum"],
-            publisher_id=message.get("publisher_id"),
+            publisher_id=publisher_id,
         )
     
     class Config:

@@ -1,5 +1,6 @@
 """Main clustering pipeline orchestrator."""
 
+import hashlib
 import logging
 from datetime import datetime
 from typing import List, Dict, Tuple
@@ -30,6 +31,33 @@ from .idempotency_manager import IdempotencyManager
 from .tracing import create_tracing_manager
 
 logger = logging.getLogger(__name__)
+
+
+def generate_deterministic_group_id(article_ids: List[str]) -> str:
+    """
+    Generate deterministic group_id from article_ids.
+
+    Same set of articles will always produce the same group_id.
+    This ensures clustering idempotency and prevents duplicate semantic groups.
+
+    Args:
+        article_ids: List of article IDs in the cluster
+
+    Returns:
+        UUID string (deterministic based on article_ids)
+    """
+    # Sort article_ids for deterministic ordering
+    sorted_ids = sorted(article_ids)
+
+    # Create hash from sorted article_ids
+    ids_str = "|".join(sorted_ids)
+    hash_bytes = hashlib.sha256(ids_str.encode()).digest()
+
+    # Convert first 16 bytes to UUID format (8-4-4-4-12 hex digits)
+    hex_str = hash_bytes[:16].hex()
+    uuid_str = f"{hex_str[0:8]}-{hex_str[8:12]}-{hex_str[12:16]}-{hex_str[16:20]}-{hex_str[20:32]}"
+
+    return uuid_str
 
 
 class PipelineOrchestrator:
@@ -247,9 +275,12 @@ class PipelineOrchestrator:
                     cluster_articles
                 )
 
+                # Extract article_ids for deterministic group_id generation
+                article_ids = [a.get("article_id") for a in cluster_articles]
+
                 cluster_record = {
-                    "group_id": str(uuid4()),
-                    "article_ids": [a.get("article_id") for a in cluster_articles],
+                    "group_id": generate_deterministic_group_id(article_ids),
+                    "article_ids": article_ids,
                     "article_count": len(cluster_articles),
                     "similarity_avg": float(report["metrics"].get("similarity_avg", 0.0)),
                     "similarity_min": float(report["metrics"].get("similarity_min", 0.0)),

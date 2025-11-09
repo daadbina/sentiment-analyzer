@@ -32,12 +32,11 @@ class MessageValidator:
             "entities",
         ],
         "predictions": [
-            "prediction_id",
             "group_id",
-            "probability",
-            "confidence",
-            "model_version",
             "domain",
+            "prediction_probability",
+            "prediction_confidence",
+            "model_version",
             "predicted_at",
         ],
         "news_canonical": [
@@ -149,30 +148,40 @@ class MessageValidator:
 
         # Validate each entity has required fields
         for idx, entity in enumerate(entities):
-            required_entity_fields = ["entity_id", "name", "type"]
+            # Log entity structure for debugging
+            logger.debug(
+                "validating_entity",
+                entity_index=idx,
+                entity_keys=list(entity.keys()) if isinstance(entity, dict) else None,
+                entity_sample=str(entity)[:200],  # First 200 chars
+            )
+
+            # Check for actual field names from upstream NER service
+            required_entity_fields = ["entity_id", "text", "entity_type"]
             missing_fields = [
                 field for field in required_entity_fields if field not in entity
             ]
             if missing_fields:
+                logger.error(
+                    "entity_validation_failed",
+                    entity_index=idx,
+                    missing_fields=missing_fields,
+                    available_fields=list(entity.keys()) if isinstance(entity, dict) else None,
+                    entity_sample=str(entity)[:200],
+                )
                 raise ValidationError(
                     message=f"Entity at index {idx} missing fields: {missing_fields}",
                     validation_type="entity_structure",
                     failed_constraints=missing_fields,
-                    details={"entity_index": idx},
+                    details={
+                        "entity_index": idx,
+                        "available_fields": list(entity.keys()) if isinstance(entity, dict) else None,
+                    },
                 )
 
     @staticmethod
     def _validate_predictions(message: Dict[str, Any]) -> None:
         """Validate predictions message."""
-        # Validate prediction_id format (ULID: 26 characters)
-        prediction_id = message.get("prediction_id")
-        if not isinstance(prediction_id, str) or len(prediction_id) != 26:
-            raise ValidationError(
-                message=f"prediction_id must be 26-character ULID, got {prediction_id}",
-                validation_type="field_format",
-                details={"field": "prediction_id", "value": prediction_id},
-            )
-
         # Validate group_id format (ULID: 26 characters or UUID: 36 characters)
         group_id = message.get("group_id")
         if not isinstance(group_id, str) or len(group_id) not in (26, 36):
@@ -182,22 +191,22 @@ class MessageValidator:
                 details={"field": "group_id", "value": group_id},
             )
 
-        # Validate probability range
-        probability = message.get("probability")
+        # Validate prediction_probability range
+        probability = message.get("prediction_probability")
         if not isinstance(probability, (int, float)) or not 0.0 <= probability <= 1.0:
             raise ValidationError(
-                message=f"probability must be between 0.0 and 1.0, got {probability}",
+                message=f"prediction_probability must be between 0.0 and 1.0, got {probability}",
                 validation_type="field_range",
-                details={"field": "probability", "value": probability},
+                details={"field": "prediction_probability", "value": probability},
             )
 
-        # Validate confidence range
-        confidence = message.get("confidence")
+        # Validate prediction_confidence range
+        confidence = message.get("prediction_confidence")
         if not isinstance(confidence, (int, float)) or not 0.0 <= confidence <= 1.0:
             raise ValidationError(
-                message=f"confidence must be between 0.0 and 1.0, got {confidence}",
+                message=f"prediction_confidence must be between 0.0 and 1.0, got {confidence}",
                 validation_type="field_range",
-                details={"field": "confidence", "value": confidence},
+                details={"field": "prediction_confidence", "value": confidence},
             )
 
         # Validate domain

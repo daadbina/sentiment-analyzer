@@ -44,9 +44,9 @@ class Prediction(BaseModel):
     
     group_id: str = Field(
         ...,
-        description="Associated group ULID identifier",
+        description="Associated group ULID (26 chars) or UUID (36 chars) identifier",
         min_length=26,
-        max_length=26,
+        max_length=36,
     )
     
     probability: float = Field(
@@ -126,22 +126,37 @@ class Prediction(BaseModel):
     def from_kafka_message(cls, message: dict) -> "Prediction":
         """
         Create Prediction from Kafka message.
-        
+
         Args:
             message: Kafka message dictionary
-            
+
         Returns:
             Prediction instance
         """
+        # Generate prediction_id from group_id and timestamp if not provided
+        import ulid
+        prediction_id = message.get("prediction_id")
+        if not prediction_id:
+            prediction_id = str(ulid.ULID())
+
+        # Parse predicted_at - handle both string and datetime
+        predicted_at = message.get("predicted_at")
+        if isinstance(predicted_at, str):
+            # Remove 'Z' suffix if present and parse
+            predicted_at = predicted_at.rstrip('Z')
+            predicted_at = datetime.fromisoformat(predicted_at)
+        elif not isinstance(predicted_at, datetime):
+            predicted_at = datetime.utcnow()
+
         return cls(
-            id=message["prediction_id"],
+            id=prediction_id,
             group_id=message["group_id"],
-            probability=message["probability"],
-            confidence=message["confidence"],
-            model_version=message["model_version"],
+            probability=message.get("prediction_probability", message.get("probability", 0.0)),
+            confidence=message.get("prediction_confidence", message.get("confidence", 0.0)),
+            model_version=message.get("model_version", "unknown"),
             domain=message["domain"],
             features=message.get("features", {}),
-            predicted_at=datetime.fromisoformat(message["predicted_at"]),
+            predicted_at=predicted_at,
         )
     
 

@@ -41,22 +41,22 @@ class ServiceOrchestrator:
         Start the service.
         """
         logger.info("service_starting", service="neo4j-loader-graph-service")
-        
+
         try:
             # Initialize service info metrics
             initialize_service_info(
                 version=config.service_version,
                 environment=config.environment
             )
-            
+
             # Connect to Neo4j
             logger.info("connecting_to_neo4j")
             neo4j_client.connect()
-            
+
             # Initialize Neo4j schema
             logger.info("initializing_neo4j_schema")
             schema_manager.initialize_schema()
-            
+
             # Connect to Kafka
             logger.info("connecting_to_kafka")
             kafka_consumer.connect()
@@ -64,20 +64,21 @@ class ServiceOrchestrator:
             # Register message handlers for all topics
             for topic in kafka_consumer.TOPICS:
                 kafka_consumer.register_handler(topic, message_router.route_message)
-            
+
             # Set running flag
             self.running = True
-            
+
             # Start background tasks
             self.flush_task = asyncio.create_task(self._flush_loop())
             self.analytics_task = asyncio.create_task(self._analytics_loop())
             self.consumer_task = asyncio.create_task(self._consumer_loop())
-            
+
             logger.info("service_started", service="neo4j-loader-graph-service")
-            
+
         except Exception as e:
             logger.error("service_start_failed", error=str(e))
             raise
+
 
     async def stop(self) -> None:
         """
@@ -135,13 +136,18 @@ class ServiceOrchestrator:
         Consumer loop for processing Kafka messages.
         """
         logger.info("consumer_loop_started")
-        
+
         try:
+            loop = asyncio.get_event_loop()
             while self.running:
-                # Consume messages (blocking with timeout)
-                kafka_consumer.consume_messages(timeout=1.0)
+                # Run blocking Kafka consumer in executor to avoid blocking event loop
+                await loop.run_in_executor(
+                    None,  # Use default executor
+                    kafka_consumer.consume_messages,
+                    1.0  # timeout
+                )
                 await asyncio.sleep(0.1)  # Small sleep to yield control
-                
+
         except asyncio.CancelledError:
             logger.info("consumer_loop_cancelled")
         except Exception as e:
@@ -152,12 +158,12 @@ class ServiceOrchestrator:
         """
         Periodic flush loop for stream buffers.
         """
-        logger.info("flush_loop_started", interval_seconds=config.stream_flush_interval)
-        
+        logger.info("flush_loop_started", interval_seconds=config.stream_flush_timeout)
+
         try:
             while self.running:
-                await asyncio.sleep(config.stream_flush_interval)
-                
+                await asyncio.sleep(config.stream_flush_timeout)
+
                 if stream_loader.should_flush():
                     logger.debug("flushing_stream_buffers")
                     stream_loader.flush_all()
@@ -174,21 +180,21 @@ class ServiceOrchestrator:
         """
         logger.info(
             "analytics_loop_started",
-            centrality_interval_hours=config.centrality_interval_hours,
-            clustering_interval_hours=config.clustering_interval_hours,
+            centrality_interval_hours=config.centrality_schedule_hours,
+            clustering_interval_hours=config.clustering_schedule_hours,
         )
-        
+
         last_centrality_time = time.time()
         last_clustering_time = time.time()
-        
+
         try:
             while self.running:
                 await asyncio.sleep(60)  # Check every minute
-                
+
                 current_time = time.time()
-                
+
                 # Check if centrality computation is due
-                centrality_interval_seconds = config.centrality_interval_hours * 3600
+                centrality_interval_seconds = config.centrality_schedule_hours * 3600
                 if (current_time - last_centrality_time) >= centrality_interval_seconds:
                     logger.info("running_centrality_computation")
                     try:
@@ -198,9 +204,9 @@ class ServiceOrchestrator:
                         last_centrality_time = current_time
                     except Exception as e:
                         logger.error("centrality_computation_failed", error=str(e))
-                
+
                 # Check if clustering detection is due
-                clustering_interval_seconds = config.clustering_interval_hours * 3600
+                clustering_interval_seconds = config.clustering_schedule_hours * 3600
                 if (current_time - last_clustering_time) >= clustering_interval_seconds:
                     logger.info("running_clustering_detection")
                     try:
@@ -292,6 +298,8 @@ class ServiceOrchestrator:
 
         except KeyboardInterrupt:
             logger.info("keyboard_interrupt_received")
+        except Exception as e:
+            raise
         finally:
             # Stop service
             loop.run_until_complete(self.stop())

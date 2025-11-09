@@ -1,4 +1,5 @@
-# Multi-stage build for embedding service
+# Multi-stage build for Embedding Service (Python 3.11)
+# Optimized for slow internet with layer caching
 
 # Stage 1: Builder
 FROM python:3.11-slim as builder
@@ -6,16 +7,21 @@ FROM python:3.11-slim as builder
 WORKDIR /build
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    gcc \
+    g++ \
     librdkafka-dev \
+    libpq-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# Copy requirements first for better caching
 COPY requirements.txt .
 
-# Create wheels
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels -r requirements.txt
+# Create wheels for all dependencies
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels -r requirements.txt
 
 # Stage 2: Runtime
 FROM python:3.11-slim
@@ -23,31 +29,48 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     librdkafka1 \
+    libpq5 \
+    curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user and directories
+RUN useradd -m -u 1000 embedding && \
+    mkdir -p /models /data/delta_lake && \
+    chown -R embedding:embedding /app /models /data
 
 # Copy wheels from builder
 COPY --from=builder /build/wheels /wheels
+COPY --from=builder /build/requirements.txt .
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache /wheels/*
+# Install Python dependencies from wheels
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt && \
+    rm -rf /wheels
 
 # Copy application code
-COPY embedding-service/ .
+COPY src/ ./src/
 
-# Create non-root user
-RUN useradd -m -u 1000 embedding && chown -R embedding:embedding /app
+# Set ownership
+RUN chown -R embedding:embedding /app
+
+# Switch to non-root user
 USER embedding
 
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8004/health || exit 1
 
 # Expose ports
-EXPOSE 8000 8001
+EXPOSE 8004 9105
 
 # Run service
-CMD ["python", "-m", "uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "src.main"]
 

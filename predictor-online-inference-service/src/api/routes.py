@@ -22,7 +22,7 @@ from ..metrics import MetricsCollector
 from ..models.model_manager import ModelManager
 from ..storage.prediction_cache import PredictionCache
 from ..storage.prediction_logger import PredictionLogger
-from ..utils.trace import TracingContext, trace_span
+from ..utils.trace import TracingContext, trace_span, generate_trace_id
 from .schemas import (
     BatchPredictionRequest,
     BatchPredictionResponse,
@@ -101,7 +101,7 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
     Raises:
         HTTPException: If prediction fails
     """
-    trace_id = TracingContext.generate_trace_id()
+    trace_id = generate_trace_id()
 
     with trace_span(
         "api_predict",
@@ -235,7 +235,7 @@ async def predict_batch(request: BatchPredictionRequest) -> BatchPredictionRespo
     Raises:
         HTTPException: If prediction fails
     """
-    trace_id = TracingContext.generate_trace_id()
+    trace_id = generate_trace_id()
 
     with trace_span(
         "api_predict_batch",

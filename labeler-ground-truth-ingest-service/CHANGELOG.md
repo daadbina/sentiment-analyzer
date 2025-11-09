@@ -18,6 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.0] - 2025-11-09
+
+### Fixed
+- **PostgreSQL Domain Column Size Error** (src/storage/postgres_writer.py)
+  - Fixed StringDataRightTruncationError: value too long for type character varying(50)
+  - Increased domain column from VARCHAR(50) to VARCHAR(255) in ground_truth table
+  - Added ALTER TABLE statement to update existing tables automatically
+  - Domain field stores extracted hostname from GDELT URLs which can exceed 50 characters
+  - Service now successfully writes all labels without truncation errors
+  - Error occurred after inserting 22,000 of 27,284 labels when encountering long domain names
+  - Resolves issue where hostnames like "subdomain.another-subdomain.example-domain.co.uk" exceeded 50 char limit
+
+---
+
 ## [0.7.0] - 2025-11-07
 
 ### Fixed

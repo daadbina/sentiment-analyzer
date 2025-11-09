@@ -1,0 +1,99 @@
+# Prometheus Configuration for Sentiment Analyzer v2
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'sentiment-analyzer-v2'
+    environment: 'production'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# Rule files
+# rule_files:
+#   - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Infrastructure services
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    metrics_path: /metrics
+
+  - job_name: 'neo4j'
+    static_configs:
+      - targets: ['neo4j:2004']
+    metrics_path: /metrics
+
+  # Microservices
+  - job_name: 'crawler-service'
+    static_configs:
+      - targets: ['crawler-service:9101']
+    metrics_path: /metrics
+
+  - job_name: 'ingest-validator-service'
+    static_configs:
+      - targets: ['ingest-validator-service:9102']
+    metrics_path: /metrics
+
+  - job_name: 'canonicalizer-normalizer-service'
+    static_configs:
+      - targets: ['canonicalizer-normalizer-service:9103']
+    metrics_path: /metrics
+
+  - job_name: 'ner-entity-linking-service'
+    static_configs:
+      - targets: ['ner-entity-linking-service:9104']
+    metrics_path: /metrics
+
+  - job_name: 'embedding-service'
+    static_configs:
+      - targets: ['embedding-service:9105']
+    metrics_path: /metrics
+
+  - job_name: 'clustering-semantic-grouping-service'
+    static_configs:
+      - targets: ['clustering-semantic-grouping-service:9106']
+    metrics_path: /metrics
+
+  - job_name: 'feature-engineering-service'
+    static_configs:
+      - targets: ['feature-engineering-service:9107']
+    metrics_path: /metrics
+
+  - job_name: 'labeler-ground-truth-ingest-service'
+    static_configs:
+      - targets: ['labeler-ground-truth-ingest-service:9108']
+    metrics_path: /metrics
+
+  - job_name: 'trainer-model-registry-service'
+    static_configs:
+      - targets: ['trainer-model-registry-service:9109']
+    metrics_path: /metrics
+
+  - job_name: 'neo4j-loader-graph-service'
+    static_configs:
+      - targets: ['neo4j-loader-graph-service:9110']
+    metrics_path: /metrics
+
+  - job_name: 'predictor-online-inference-service'
+    static_configs:
+      - targets: ['predictor-online-inference-service:9111']
+    metrics_path: /metrics
+
+  - job_name: 'api-analytics-service'
+    static_configs:
+      - targets: ['api-analytics-service:9112']
+    metrics_path: /metrics
+

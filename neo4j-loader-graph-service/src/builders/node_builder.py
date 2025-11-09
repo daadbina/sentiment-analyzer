@@ -21,22 +21,32 @@ class NodeBuilder:
     def build_article_node(message: Dict[str, Any]) -> Article:
         """
         Build Article node from news_canonical message.
-        
+
         Args:
             message: Kafka message from news_canonical topic
-            
+
         Returns:
             Article model instance
-            
+
         Raises:
             ValidationError: If article creation fails
         """
         try:
+            # Log incoming message structure for debugging
+            logger.debug(
+                "building_article_node",
+                article_id=message.get("article_id"),
+                publisher_id=message.get("publisher_id"),
+                publisher_id_length=len(message.get("publisher_id", "")) if message.get("publisher_id") else None,
+                message_keys=list(message.keys()),
+            )
+
             article = Article.from_kafka_message(message)
             logger.debug(
                 "article_node_built",
                 article_id=article.id,
                 source=article.source,
+                publisher_id=article.publisher_id,
             )
             return article
         except Exception as e:
@@ -44,6 +54,7 @@ class NodeBuilder:
                 "article_node_build_failed",
                 error=str(e),
                 message_keys=list(message.keys()),
+                publisher_id=message.get("publisher_id"),
             )
             raise ValidationError(
                 message=f"Failed to build Article node: {str(e)}",
@@ -90,24 +101,37 @@ class NodeBuilder:
     def build_entity_nodes(message: Dict[str, Any]) -> List[Entity]:
         """
         Build Entity nodes from entities_extracted message.
-        
+
         Args:
             message: Kafka message from entities_extracted topic
-            
+
         Returns:
             List of Entity model instances
-            
+
         Raises:
             ValidationError: If entity creation fails
         """
         try:
             entities = []
             entity_list = message.get("entities", [])
-            
-            for entity_data in entity_list:
+
+            logger.debug(
+                "building_entity_nodes",
+                article_id=message.get("article_id"),
+                entity_count=len(entity_list),
+                first_entity_keys=list(entity_list[0].keys()) if entity_list and isinstance(entity_list[0], dict) else None,
+            )
+
+            for idx, entity_data in enumerate(entity_list):
+                logger.debug(
+                    "building_entity_node",
+                    entity_index=idx,
+                    entity_keys=list(entity_data.keys()) if isinstance(entity_data, dict) else None,
+                    entity_sample=str(entity_data)[:200],
+                )
                 entity = Entity.from_kafka_message(entity_data)
                 entities.append(entity)
-            
+
             logger.debug(
                 "entity_nodes_built",
                 article_id=message.get("article_id"),
@@ -119,6 +143,7 @@ class NodeBuilder:
                 "entity_nodes_build_failed",
                 error=str(e),
                 message_keys=list(message.keys()),
+                entity_list_sample=str(entity_list[:2]) if entity_list else None,
             )
             raise ValidationError(
                 message=f"Failed to build Entity nodes: {str(e)}",

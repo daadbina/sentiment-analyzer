@@ -202,9 +202,24 @@ class KafkaConsumerClient:
                     # Commit offset after successful processing (exactly-once)
                     consumer.commit(asynchronous=False)
 
+                    # Log successful message consumption
+                    logger.debug(
+                        f"Successfully consumed and processed message: topic={msg.topic()}, "
+                        f"partition={msg.partition()}, offset={msg.offset()}"
+                    )
+
                 except SerializerError as e:
                     # Handle deserialization errors gracefully - skip invalid messages
                     self._skipped_messages_count += 1
+
+                    # Log first error with details to understand the issue
+                    if self._skipped_messages_count == 1:
+                        logger.error(
+                            f"First deserialization error - topic={self.config.input_topic}, "
+                            f"partition=0, offset=?, error={e}. "
+                            f"This may indicate schema mismatch or non-Avro messages in topic.",
+                            extra={"trace_id": trace_id},
+                        )
 
                     # Only log every 100 skipped messages to reduce log noise
                     if self._skipped_messages_count - self._last_skipped_log_count >= 100:

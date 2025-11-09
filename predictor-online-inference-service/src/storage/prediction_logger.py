@@ -58,6 +58,10 @@ class PredictionLogger:
                 - features: dict
             trace_id: Optional trace ID for distributed tracing
         """
+        logger.info(
+            f"DEBUG: log_prediction called: group_id={prediction.get('group_id')}",
+            extra={"trace_id": trace_id, "group_id": prediction.get("group_id")},
+        )
         with trace_span(
             "log_prediction",
             attributes={
@@ -66,10 +70,26 @@ class PredictionLogger:
             },
         ):
             # Store in PostgreSQL
+            logger.info(
+                f"DEBUG: About to store in PostgreSQL: group_id={prediction.get('group_id')}",
+                extra={"trace_id": trace_id},
+            )
             await self._store_in_postgres(prediction, trace_id)
+            logger.info(
+                f"DEBUG: Stored in PostgreSQL: group_id={prediction.get('group_id')}",
+                extra={"trace_id": trace_id},
+            )
 
             # Publish to Kafka
+            logger.info(
+                f"DEBUG: About to publish to Kafka: group_id={prediction.get('group_id')}",
+                extra={"trace_id": trace_id},
+            )
             await self._publish_to_kafka(prediction, trace_id)
+            logger.info(
+                f"DEBUG: Published to Kafka: group_id={prediction.get('group_id')}",
+                extra={"trace_id": trace_id},
+            )
 
     async def _store_in_postgres(
         self,
@@ -128,13 +148,12 @@ class PredictionLogger:
             trace_id: Optional trace ID for distributed tracing
         """
         try:
+            # Import the schema
+            from src.clients.kafka_producer import PREDICTION_SCHEMA
+
             await self.kafka_producer.produce_prediction(
-                group_id=prediction["group_id"],
-                domain=prediction["domain"],
-                prediction_probability=prediction["prediction_probability"],
-                prediction_confidence=prediction["prediction_confidence"],
-                model_version=prediction["model_version"],
-                features=prediction.get("features", {}),
+                prediction=prediction,
+                value_schema=PREDICTION_SCHEMA,
                 trace_id=trace_id,
             )
 

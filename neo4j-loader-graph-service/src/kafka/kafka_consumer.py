@@ -121,12 +121,12 @@ class KafkaConsumerClient:
         max_messages: Optional[int] = None,
     ) -> None:
         """
-        Consume messages from subscribed topics.
-        
+        Consume messages from subscribed topics for a single poll cycle.
+
         Args:
             timeout: Poll timeout in seconds
-            max_messages: Maximum number of messages to consume (None = infinite)
-            
+            max_messages: Maximum number of messages to consume in this call (None = single poll)
+
         Raises:
             GraphConnectionError: If consumer is not connected
         """
@@ -136,50 +136,45 @@ class KafkaConsumerClient:
                 service="kafka",
             )
 
-        self._is_running = True
         messages_consumed = 0
 
-        logger.info(
-            "kafka_consumer_started",
-            timeout=timeout,
-            max_messages=max_messages,
-        )
-
         try:
-            poll_count = 0
-            while self._is_running:
-                if max_messages and messages_consumed >= max_messages:
-                    break
+            # Single poll cycle - consume messages until timeout or max_messages reached
+            msg = self._consumer.poll(timeout=timeout)
 
-                msg = self._consumer.poll(timeout=timeout)
-                poll_count += 1
+            if msg is None:
+                # No message available
+                return
 
-                # Log polling activity every 100 polls
-                if poll_count % 100 == 0:
-                    logger.debug(
-                        "kafka_consumer_polling",
-                        poll_count=poll_count,
-                        messages_consumed=messages_consumed,
-                    )
+            if msg.error():
+                self._handle_error(msg.error())
+                return
 
-                if msg is None:
-                    continue
+            # Process message
+            import sys
+            self._process_message(msg)
+            messages_consumed += 1
 
-                if msg.error():
-                    self._handle_error(msg.error())
-                    continue
+            # If max_messages is set, continue polling until we reach it
+            if max_messages:
+                while messages_consumed < max_messages:
+                    msg = self._consumer.poll(timeout=0.1)  # Short timeout for additional messages
 
-                # Process message
-                self._process_message(msg)
-                messages_consumed += 1
+                    if msg is None:
+                        break
+
+                    if msg.error():
+                        self._handle_error(msg.error())
+                        continue
+
+                    self._process_message(msg)
+                    messages_consumed += 1
 
         except KeyboardInterrupt:
             logger.info("kafka_consumer_interrupted")
         except Exception as e:
             logger.error("kafka_consumer_error", error=str(e))
             raise
-        finally:
-            self._is_running = False
 
     def _process_message(self, msg) -> None:
         """

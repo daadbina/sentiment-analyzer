@@ -89,10 +89,7 @@ class FeatureEngineer:
 
         except Exception as e:
             logger.error(f"Feature engineering failed: {e}")
-            raise InferenceError(
-                f"Feature engineering failed: {e}",
-                stage="feature_engineering",
-            )
+            raise InferenceError(f"Feature engineering failed: {e}")
 
     def _generate_interaction_features(self, X: pd.DataFrame) -> pd.DataFrame:
         """
@@ -176,10 +173,7 @@ class FeatureEngineer:
                 X_poly = self.poly_transformer.fit_transform(X)
             else:
                 if self.poly_transformer is None:
-                    raise InferenceError(
-                        "Polynomial transformer not fitted",
-                        stage="polynomial_features",
-                    )
+                    raise InferenceError("Polynomial transformer not fitted")
                 X_poly = self.poly_transformer.transform(X)
 
             # Get feature names
@@ -212,5 +206,4 @@ class FeatureEngineer:
             "interaction_features": self.interaction_feature_names,
             "polynomial_features": self.polynomial_feature_names,
         }
-
 

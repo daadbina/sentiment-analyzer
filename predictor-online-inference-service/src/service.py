@@ -209,7 +209,7 @@ class PredictorService:
         self.drift_detector = DriftDetector(metrics=self.metrics, drift_threshold=0.05)
 
         # Initialize existing components
-        self.feature_fetcher = FeatureFetcher(self.feast_client)
+        self.feature_fetcher = FeatureFetcher(self.feast_client, self.redis_client)
 
         self.feature_validator = FeatureValidator(
             feature_freshness_threshold_seconds=self.config.validation.feature_freshness_threshold_seconds

@@ -130,10 +130,13 @@ class FeatureFetcher:
                     )
 
                 # Extract only the required features
+                # Add the semantic_group_features: prefix to match training data format
                 features = {}
                 for feature_name in REQUIRED_FEATURES:
                     if feature_name in feature_data:
-                        features[feature_name] = feature_data[feature_name]
+                        # Add prefix to match the format used during training
+                        prefixed_name = f"semantic_group_features:{feature_name}"
+                        features[prefixed_name] = feature_data[feature_name]
                     else:
                         logger.warning(
                             f"Missing feature: {feature_name} for group_id={group_id}",

@@ -125,11 +125,7 @@ class DataPreprocessor:
 
         except Exception as e:
             logger.error(f"Preprocessing failed: {e}", exc_info=True)
-            raise InferenceError(
-                f"Preprocessing failed: {e}",
-                stage="preprocessing",
-                details={"num_rows": len(X), "num_features": X.shape[1]},
-            )
+            raise InferenceError(f"Preprocessing failed: {e}")
 
     def _handle_missing_values(
         self,
@@ -159,10 +155,7 @@ class DataPreprocessor:
                     X_imputed = self.imputer.fit_transform(X)
                 else:
                     if self.imputer is None:
-                        raise InferenceError(
-                            "Imputer not fitted",
-                            stage="missing_values",
-                        )
+                        raise InferenceError("Imputer not fitted")
                     X_imputed = self.imputer.transform(X)
 
                 X = pd.DataFrame(X_imputed, columns=X.columns)
@@ -172,10 +165,7 @@ class DataPreprocessor:
 
         except Exception as e:
             logger.error(f"Failed to handle missing values: {e}")
-            raise InferenceError(
-                f"Failed to handle missing values: {e}",
-                stage="missing_values",
-            )
+            raise InferenceError(f"Failed to handle missing values: {e}")
 
     def _scale_features(
         self,
@@ -199,10 +189,7 @@ class DataPreprocessor:
                     X_scaled = self.scaler.fit_transform(X)
                 else:
                     if self.scaler is None:
-                        raise InferenceError(
-                            "Scaler not fitted",
-                            stage="scaling",
-                        )
+                        raise InferenceError("Scaler not fitted")
                     X_scaled = self.scaler.transform(X)
 
             elif self.scaling_method == "minmax":
@@ -211,10 +198,7 @@ class DataPreprocessor:
                     X_scaled = self.scaler.fit_transform(X)
                 else:
                     if self.scaler is None:
-                        raise InferenceError(
-                            "Scaler not fitted",
-                            stage="scaling",
-                        )
+                        raise InferenceError("Scaler not fitted")
                     X_scaled = self.scaler.transform(X)
             else:
                 raise ValueError(f"Unknown scaling method: {self.scaling_method}")
@@ -225,10 +209,7 @@ class DataPreprocessor:
 
         except Exception as e:
             logger.error(f"Failed to scale features: {e}")
-            raise InferenceError(
-                f"Failed to scale features: {e}",
-                stage="scaling",
-            )
+            raise InferenceError(f"Failed to scale features: {e}")
 
     def _remove_constant_features(self, X: pd.DataFrame) -> pd.DataFrame:
         """
@@ -263,10 +244,7 @@ class DataPreprocessor:
 
         except Exception as e:
             logger.error(f"Failed to remove constant features: {e}")
-            raise InferenceError(
-                f"Failed to remove constant features: {e}",
-                stage="feature_removal",
-            )
+            raise InferenceError(f"Failed to remove constant features: {e}")
 
     def select_features(
         self,
@@ -300,10 +278,7 @@ class DataPreprocessor:
                 ].tolist()
             else:
                 if self.feature_selector is None:
-                    raise InferenceError(
-                        "Feature selector not fitted",
-                        stage="feature_selection",
-                    )
+                    raise InferenceError("Feature selector not fitted")
                 X_selected = self.feature_selector.transform(X)
                 selected_features = X.columns[
                     self.feature_selector.get_support()
@@ -317,9 +292,4 @@ class DataPreprocessor:
 
         except Exception as e:
             logger.error(f"Feature selection failed: {e}")
-            raise InferenceError(
-                f"Feature selection failed: {e}",
-                stage="feature_selection",
-                details={"k": k},
-            )
-
+            raise InferenceError(f"Feature selection failed: {e}")

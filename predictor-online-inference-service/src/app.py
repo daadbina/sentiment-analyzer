@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
     )
 
     # Initialize components
-    feature_fetcher = FeatureFetcher(feast_client)
+    feature_fetcher = FeatureFetcher(feast_client, redis_client)
     feature_validator = FeatureValidator(
         feature_freshness_threshold_seconds=config.validation.feature_freshness_threshold_seconds
     )

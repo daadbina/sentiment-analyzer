@@ -339,7 +339,7 @@ class MLflowModelClient:
 
     async def _load_model_from_s3(self, model_name: str, version: str, run_id: str) -> Any:
         """
-        Load model from S3 using MLflow metadata.
+        Load model from MLflow registry using pyfunc.
 
         Args:
             model_name: Model name
@@ -352,74 +352,26 @@ class MLflowModelClient:
         Raises:
             ModelLoadError: If loading fails
         """
-        if not self.s3_client:
-            raise ModelLoadError("S3 client not configured")
-
         try:
-            # Get run to find artifact path
-            run = self._client.get_run(run_id)
-            artifact_uri = run.info.artifact_uri
-            logger.debug(f"Run artifact URI: {artifact_uri}")
+            # Use MLflow's pyfunc.load_model() to load models properly
+            # This handles all model flavors (sklearn, xgboost, etc.) correctly
+            model_uri = f"models:/{model_name}/{version}"
+            logger.info(f"Loading model from MLflow registry: {model_uri}")
 
-            # List artifacts to find model file
-            artifacts = self._client.list_artifacts(run_id, path="model")
-            logger.debug(f"Found {len(artifacts)} artifacts in model directory")
+            # Load model in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            model = await loop.run_in_executor(
+                None,
+                mlflow.pyfunc.load_model,
+                model_uri,
+            )
 
-            # Find the .pkl file
-            model_artifact = None
-            for artifact in artifacts:
-                if artifact.path.endswith('.pkl'):
-                    model_artifact = artifact
-                    break
-
-            if not model_artifact:
-                raise ModelLoadError(f"No .pkl file found in model artifacts for run {run_id}")
-
-            # Extract version from artifact filename
-            # Artifact path format: "model/sentiment_voting_ensemble_v20251108_112651.pkl"
-            artifact_path = model_artifact.path
-            artifact_filename = Path(artifact_path).name
-            logger.debug(f"Model artifact filename: {artifact_filename}")
-
-            # Extract version from filename: sentiment_voting_ensemble_v20251108_112651.pkl -> v20251108_112651
-            # Format: {model_name}_v{timestamp}.pkl
-            version_str = artifact_filename.replace(f"{model_name}_", "").replace(".pkl", "")
-            logger.debug(f"Extracted version string: {version_str}")
-
-            # Construct S3 key using trainer's format: models/{model_name}/{version}/model.pkl
-            s3_key = f"models/{model_name}/{version_str}/model.pkl"
-            logger.info(f"Downloading model from S3: s3://{self.s3_client.config.bucket}/{s3_key}")
-
-            # Download model to temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.pkl') as tmp_file:
-                tmp_path = tmp_file.name
-
-            try:
-                await self.s3_client.download_file(s3_key, tmp_path)
-
-                # Load model from pickle file
-                logger.debug(f"Loading model from {tmp_path}")
-                loop = asyncio.get_event_loop()
-                model = await loop.run_in_executor(
-                    None,
-                    self._load_pickle_model,
-                    tmp_path,
-                )
-
-                logger.info(f"Model loaded successfully from S3: {model_name} v{version}")
-                return model
-
-            finally:
-                # Clean up temporary file
-                try:
-                    Path(tmp_path).unlink()
-                    logger.debug(f"Cleaned up temporary file: {tmp_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to clean up temporary file {tmp_path}: {e}")
+            logger.info(f"Model loaded successfully from MLflow: {model_name} v{version}")
+            return model
 
         except Exception as e:
-            logger.error(f"Failed to load model from S3: {e}", exc_info=True)
-            raise ModelLoadError(f"Failed to load model from S3: {e}")
+            logger.error(f"Failed to load model from MLflow: {e}", exc_info=True)
+            raise ModelLoadError(f"Failed to load model from MLflow: {e}")
 
     def _load_pickle_model(self, file_path: str) -> Any:
         """
@@ -483,8 +435,17 @@ class MLflowModelClient:
             client = self._ensure_connected()
 
             # Get the run_id for this model version
-            # For simplicity, use the latest production model's run_id
-            if self._selected_model_info and "run_id" in self._selected_model_info:
+            if model_version:
+                # Get run_id for specific model version
+                model_name = self.config.model_name
+                versions = client.search_model_versions(f"name='{model_name}'")
+                matching_version = next((v for v in versions if v.version == model_version), None)
+                if not matching_version:
+                    raise ModelLoadError(f"Model version not found: {model_name} v{model_version}")
+                run_id = matching_version.run_id
+                logger.info(f"Found run_id for {model_name} v{model_version}: {run_id}")
+            elif self._selected_model_info and "run_id" in self._selected_model_info:
+                # Use selected model's run_id
                 run_id = self._selected_model_info["run_id"]
             else:
                 # Try to get production model

@@ -11,6 +11,8 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timedelta, timezone
 import pandas as pd
 import mlflow
+import mlflow.sklearn
+import mlflow.xgboost
 
 from src.config import config
 from src.clients.postgres_client import PostgreSQLClient
@@ -413,7 +415,6 @@ class TrainerService:
 
                             # Save and register model
                             model_version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                            local_file_path = None
                             preprocessor_path = None
                             try:
                                 # Save preprocessor to temp file
@@ -424,60 +425,115 @@ class TrainerService:
                                     pickle.dump(self.preprocessor, f)
                                 logger.info(f"Preprocessor saved to {preprocessor_path}")
 
-                                # Save to S3
+                                # Save to S3 (for backup)
                                 artifact_metadata = self.artifact_manager.save_model_artifact(
                                     model=model,
                                     model_name=f"sentiment_{model_type}",
                                     version=model_version,
                                 )
                                 logger.info(f"Model artifact saved to S3: {artifact_metadata}")
-                                local_file_path = artifact_metadata.get("file_path")
 
-                                # Log model to MLflow run
-                                self.mlflow_client.log_model(
-                                    run_id=run_id,
-                                    model_path=local_file_path,
-                                    artifact_path="model",
-                                    model_type=model_type,
-                                )
-                                logger.info(f"Model logged to MLflow run {run_id}")
+                                # Verify we're in an active MLflow run
+                                active_run = mlflow.active_run()
+                                if not active_run:
+                                    raise Exception("No active MLflow run found")
+                                logger.info(f"Active MLflow run: {active_run.info.run_id}")
+
+                                # Log and register model in one step using flavor-specific methods
+                                # Use registered_model_name parameter to register immediately
+                                model_name = f"sentiment_{model_type}"
+
+                                if model_type == "xgboost":
+                                    # Use mlflow.xgboost.log_model for XGBoost models
+                                    logger.info(f"Logging and registering XGBoost model to MLflow...")
+                                    model_info = mlflow.xgboost.log_model(
+                                        xgb_model=model.model,
+                                        artifact_path="model",
+                                        registered_model_name=model_name,
+                                    )
+                                    logger.info(f"XGBoost model logged and registered: {model_name}")
+                                elif model_type in ["logistic_regression", "random_forest", "gradient_boosting", "voting_ensemble"]:
+                                    # Use mlflow.sklearn.log_model for sklearn models
+                                    logger.info(f"Logging and registering sklearn model ({model_type}) to MLflow...")
+                                    model_info = mlflow.sklearn.log_model(
+                                        sk_model=model.model,
+                                        artifact_path="model",
+                                        registered_model_name=model_name,
+                                    )
+                                    logger.info(f"Sklearn model ({model_type}) logged and registered: {model_name}")
+                                elif model_type == "llm":
+                                    # Use mlflow.sklearn.log_model for LLM (it wraps sklearn)
+                                    logger.info(f"Logging and registering LLM model to MLflow...")
+                                    model_info = mlflow.sklearn.log_model(
+                                        sk_model=model.model,
+                                        artifact_path="model",
+                                        registered_model_name=model_name,
+                                    )
+                                    logger.info(f"LLM model logged and registered: {model_name}")
+                                else:
+                                    logger.warning(f"Unknown model type: {model_type}, using sklearn.log_model")
+                                    model_info = mlflow.sklearn.log_model(
+                                        sk_model=model.model,
+                                        artifact_path="model",
+                                        registered_model_name=model_name,
+                                    )
 
                                 # Log preprocessor to MLflow run
                                 self.mlflow_client.client.log_artifact(run_id, preprocessor_path, "preprocessor")
                                 logger.info(f"Preprocessor logged to MLflow run {run_id}")
 
-                                # Register in MLflow registry using the run artifact
-                                model_uri = f"runs://{run_id}/model"
-                                registered_version = self.mlflow_client.register_model(
-                                    model_uri=model_uri,
-                                    model_name=f"sentiment_{model_type}",
-                                    tags={
-                                        "model_type": model_type,
-                                        "version": model_version,
-                                        "auc": str(eval_result.get("auc", 0)),
-                                    }
-                                )
-                                logger.info(f"Model registered: sentiment_{model_type} (version: {registered_version})")
+                                # Get the registered model version
+                                # The model was registered during log_model() call above
+                                registered_versions = self.mlflow_client.client.search_model_versions(f"name='{model_name}'")
+                                if registered_versions:
+                                    # Get the latest version (highest version number)
+                                    latest_version = max(registered_versions, key=lambda v: int(v.version))
+                                    model_version_num = latest_version.version
+                                    model_run_id = latest_version.run_id
+                                    logger.info(f"Model registered: {model_name} (version: {model_version_num}, run_id: {model_run_id})")
+
+                                    # Set tags after registration
+                                    try:
+                                        self.mlflow_client.client.set_model_version_tag(
+                                            model_name,
+                                            model_version_num,
+                                            "model_type",
+                                            model_type,
+                                        )
+                                        self.mlflow_client.client.set_model_version_tag(
+                                            model_name,
+                                            model_version_num,
+                                            "version",
+                                            model_version,
+                                        )
+                                        self.mlflow_client.client.set_model_version_tag(
+                                            model_name,
+                                            model_version_num,
+                                            "auc",
+                                            str(eval_result.get("auc", 0)),
+                                        )
+                                        logger.info(f"Tags set for model {model_name} version {model_version_num}")
+                                    except Exception as tag_error:
+                                        logger.warning(f"Failed to set tags: {tag_error}")
+                                else:
+                                    logger.error(f"Failed to find registered model version for {model_name}")
+                                    model_version_num = "unknown"
+                                    model_run_id = run_id
 
                                 registered_models[model_type] = {
-                                    "model_name": f"sentiment_{model_type}",
-                                    "version": registered_version,
-                                    "run_id": run_id,
+                                    "model_name": model_name,
+                                    "version": str(model_version_num),
+                                    "run_id": model_run_id,
                                     "metrics": eval_result,
                                 }
                             except Exception as artifact_error:
                                 logger.error(f"Failed to save/register artifact: {artifact_error}")
+                                import traceback
+                                logger.error(f"Traceback: {traceback.format_exc()}")
                                 # Continue without artifact registration
                                 pass
                             finally:
-                                # Clean up local files after logging to MLflow
-                                if local_file_path and os.path.exists(local_file_path):
-                                    try:
-                                        os.remove(local_file_path)
-                                        logger.debug(f"Cleaned up local file: {local_file_path}")
-                                    except Exception as cleanup_error:
-                                        logger.warning(f"Failed to clean up local file: {cleanup_error}")
-
+                                # Clean up preprocessor file
                                 if preprocessor_path and os.path.exists(preprocessor_path):
                                     try:
                                         os.remove(preprocessor_path)

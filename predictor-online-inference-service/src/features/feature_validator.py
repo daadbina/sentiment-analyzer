@@ -136,7 +136,9 @@ class FeatureValidator:
         """
         missing = []
         for feature_name in REQUIRED_FEATURES:
-            if feature_name not in features:
+            # Check for prefixed feature name (as used during training)
+            prefixed_name = f"semantic_group_features:{feature_name}"
+            if prefixed_name not in features:
                 missing.append(feature_name)
         return missing
 
@@ -152,7 +154,9 @@ class FeatureValidator:
         """
         null_features = []
         for feature_name in REQUIRED_FEATURES:
-            if features.get(feature_name) is None:
+            # Check for prefixed feature name (as used during training)
+            prefixed_name = f"semantic_group_features:{feature_name}"
+            if features.get(prefixed_name) is None:
                 null_features.append(feature_name)
         return null_features
 

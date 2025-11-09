@@ -48,27 +48,33 @@ class BtcPriceExtractor(FeatureExtractor):
         actors: List[Actor],
     ) -> Dict[str, Any]:
         """Extract BTC price features for semantic group.
-        
+
         Args:
             group: Semantic group
             articles: Articles in group (not used for BTC features)
             actors: Actors mentioned in articles (not used for BTC features)
-            
+
         Returns:
             Dictionary of BTC price features
         """
+        logger.info("BTC extractor extract() method called")
         group_id = self.get_group_id(group)
-        
+        logger.info(f"BTC extractor processing group: {group_id}")
+
         # Get group creation timestamp
+        logger.info("BTC extractor: Getting group timestamp")
         created_at = self._get_group_timestamp(group)
+        logger.info(f"BTC extractor: Got timestamp: {created_at}")
         if not created_at:
             logger.warning(
                 f"No timestamp found for group, using default BTC features: group_id={group_id}"
             )
             return self._get_default_features()
-        
+
         # Query BTC data from btc_truth table with temporal alignment
+        logger.info(f"BTC extractor: Fetching BTC data for timestamp: {created_at.isoformat()}")
         btc_data = self._fetch_btc_data(created_at)
+        logger.info(f"BTC extractor: Fetched BTC data: {btc_data}")
         
         if not btc_data:
             logger.debug(

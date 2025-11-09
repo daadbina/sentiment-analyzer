@@ -145,7 +145,7 @@ class BatchPredictor:
             List of prediction dictionaries
         """
         # Check cache for existing predictions
-        cached_predictions = await self._get_cached_predictions(group_ids, trace_id)
+        cached_predictions = await self._get_cached_predictions(group_ids, domain, trace_id)
 
         # Identify groups needing prediction
         groups_to_predict = [gid for gid in group_ids if gid not in cached_predictions]
@@ -271,13 +271,15 @@ class BatchPredictor:
     async def _get_cached_predictions(
         self,
         group_ids: list[str],
+        domain: str,
         trace_id: str | None = None,
     ) -> dict[str, dict[str, Any]]:
         """
-        Get cached predictions for group IDs.
+        Get cached predictions for group IDs and domain.
 
         Args:
             group_ids: List of semantic group IDs
+            domain: Domain of predictions (btc/conflict/geopolitical)
             trace_id: Optional trace ID for distributed tracing
 
         Returns:
@@ -286,7 +288,7 @@ class BatchPredictor:
         cached: dict[str, dict[str, Any]] = {}
 
         # Fetch cached predictions concurrently
-        tasks = [self.prediction_cache.get_cached_prediction(gid, trace_id) for gid in group_ids]
+        tasks = [self.prediction_cache.get_cached_prediction(gid, domain, trace_id) for gid in group_ids]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for group_id, result in zip(group_ids, results, strict=False):

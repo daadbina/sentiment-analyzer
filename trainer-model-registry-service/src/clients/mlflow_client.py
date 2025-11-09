@@ -348,8 +348,12 @@ class MLflowClientWrapper:
         """
         Register model in MLflow registry.
 
+        NOTE: This method is deprecated. Use mlflow.register_model() directly in service.py
+        which properly sets run_id when models are logged using flavor-specific methods
+        (mlflow.sklearn.log_model, mlflow.xgboost.log_model).
+
         Args:
-            model_uri: URI of model artifact
+            model_uri: URI of model artifact (e.g., "runs://{run_id}/model")
             model_name: Name for registered model
             tags: Optional tags for model
 
@@ -366,8 +370,8 @@ class MLflowClientWrapper:
             )
 
         try:
-            # Use mlflow.register_model() instead of client.create_model_version()
-            # This properly sets the run_id field in the model version
+            # Use mlflow.register_model() which properly handles run_id
+            # when models are logged using flavor-specific methods
             model_version_obj = mlflow.register_model(
                 model_uri=model_uri,
                 name=model_name,

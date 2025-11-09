@@ -1,55 +1,72 @@
-# Multi-stage build for Neo4j Loader Graph Service
+# Multi-stage build for Neo4j Loader Graph Service (Python 3.11)
+# Optimized for slow internet with layer caching
+
+# Stage 1: Builder
 FROM python:3.11-slim as builder
 
-# Set working directory
-WORKDIR /app
+WORKDIR /build
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     gcc \
     g++ \
+    libpq-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --user -r requirements.txt
+# Create wheels for all dependencies
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels -r requirements.txt
 
-# Final stage
+# Stage 2: Runtime
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python dependencies from builder
-COPY --from=builder /root/.local /root/.local
+# Create non-root user
+RUN useradd -m -u 1000 neo4jloader && \
+    chown -R neo4jloader:neo4jloader /app
+
+# Copy wheels from builder
+COPY --from=builder /build/wheels /wheels
+COPY --from=builder /build/requirements.txt .
+
+# Install Python dependencies from wheels
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt && \
+    rm -rf /wheels
 
 # Copy application code
 COPY src/ ./src/
 
-# Set Python path
-ENV PYTHONPATH=/app
-ENV PATH=/root/.local/bin:$PATH
-
-# Create non-root user
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+# Set ownership
+RUN chown -R neo4jloader:neo4jloader /app
 
 # Switch to non-root user
-USER appuser
+USER neo4jloader
 
-# Expose metrics port
-EXPOSE 8000
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8009/health || exit 1
+
+# Expose ports
+EXPOSE 8009 9110
 
 # Run service
 CMD ["python", "-m", "src.main"]

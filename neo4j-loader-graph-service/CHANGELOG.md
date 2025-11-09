@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed handler signature to pass topic, message, and trace_id
 - Fixed Pydantic v2 protected namespace warning in Prediction model
 - Added missing graph_clusters_detected metric
+- Fixed publisher_id validation to only accept valid 26-character ULIDs, set to None for invalid values
+- Added comprehensive debug logging for entity validation to identify data structure issues
+- Fixed entity field name mapping: upstream sends "text" and "entity_type", mapped to "name" and "type" in Entity model
+- Updated message_validator.py to check for correct upstream field names: "text" and "entity_type" instead of "name" and "type"
+- Added entity type mapping in Entity.from_kafka_message() to handle upstream entity types (PERSON, ORGANIZATION, LOCATION)
 
 ### Added
 - Initial project structure and foundation

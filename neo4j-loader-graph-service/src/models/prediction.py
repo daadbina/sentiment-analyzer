@@ -44,9 +44,9 @@ class Prediction(BaseModel):
     
     group_id: str = Field(
         ...,
-        description="Associated group ULID identifier",
+        description="Associated group ULID (26 chars) or UUID (36 chars) identifier",
         min_length=26,
-        max_length=26,
+        max_length=36,
     )
     
     probability: float = Field(

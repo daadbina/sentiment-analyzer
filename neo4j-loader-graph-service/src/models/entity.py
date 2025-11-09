@@ -104,17 +104,40 @@ class Entity(BaseModel):
     def from_kafka_message(cls, entity_data: dict) -> "Entity":
         """
         Create Entity from Kafka message entity data.
-        
+
+        Maps upstream field names to model field names:
+        - "text" -> "name"
+        - "entity_type" -> "type"
+
         Args:
             entity_data: Entity dictionary from Kafka message
-            
+
         Returns:
             Entity instance
         """
+        # Map entity_type to EntityType enum
+        # Upstream sends: PERSON, ORGANIZATION, LOCATION, etc.
+        # Model expects: PERSON, ORG, GPE, MONEY, DATE, EVENT
+        entity_type_str = entity_data.get("entity_type", "").upper()
+
+        # Map common entity types to our enum
+        type_mapping = {
+            "PERSON": EntityType.PERSON,
+            "ORGANIZATION": EntityType.ORGANIZATION,
+            "ORG": EntityType.ORGANIZATION,
+            "LOCATION": EntityType.LOCATION,
+            "GPE": EntityType.LOCATION,
+            "MONEY": EntityType.MONEY,
+            "DATE": EntityType.DATE,
+            "EVENT": EntityType.EVENT,
+        }
+
+        entity_type = type_mapping.get(entity_type_str, EntityType.ORGANIZATION)
+
         return cls(
             id=entity_data["entity_id"],
-            name=entity_data["name"],
-            type=EntityType(entity_data["type"]),
+            name=entity_data["text"],  # Map "text" to "name"
+            type=entity_type,
             aliases=entity_data.get("aliases", []),
             wikidata_id=entity_data.get("wikidata_id"),
         )

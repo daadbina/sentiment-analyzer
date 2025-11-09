@@ -271,9 +271,9 @@ class TestRequiredFeatures:
     def test_required_features_defined(self):
         """Test that required features are defined."""
         assert len(REQUIRED_FEATURES) > 0
-        assert "feature_num_sources" in REQUIRED_FEATURES
-        assert "feature_sentiment_mean" in REQUIRED_FEATURES
-        assert "feature_credibility_mean" in REQUIRED_FEATURES
-        assert "feature_entities" in REQUIRED_FEATURES
-        assert "feature_time_density" in REQUIRED_FEATURES
+        assert "semantic_group_features:num_sources" in REQUIRED_FEATURES
+        assert "semantic_group_features:sentiment_mean" in REQUIRED_FEATURES
+        assert "semantic_group_features:source_credibility_avg" in REQUIRED_FEATURES
+        assert "semantic_group_features:entity_count" in REQUIRED_FEATURES
+        assert "semantic_group_features:temporal_concentration" in REQUIRED_FEATURES
 

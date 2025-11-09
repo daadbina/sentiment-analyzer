@@ -58,6 +58,10 @@ class PredictionLogger:
                 - features: dict
             trace_id: Optional trace ID for distributed tracing
         """
+        logger.info(
+            f"DEBUG: log_prediction called: group_id={prediction.get('group_id')}",
+            extra={"trace_id": trace_id, "group_id": prediction.get("group_id")},
+        )
         with trace_span(
             "log_prediction",
             attributes={
@@ -66,10 +70,26 @@ class PredictionLogger:
             },
         ):
             # Store in PostgreSQL
+            logger.info(
+                f"DEBUG: About to store in PostgreSQL: group_id={prediction.get('group_id')}",
+                extra={"trace_id": trace_id},
+            )
             await self._store_in_postgres(prediction, trace_id)
+            logger.info(
+                f"DEBUG: Stored in PostgreSQL: group_id={prediction.get('group_id')}",
+                extra={"trace_id": trace_id},
+            )
 
             # Publish to Kafka
+            logger.info(
+                f"DEBUG: About to publish to Kafka: group_id={prediction.get('group_id')}",
+                extra={"trace_id": trace_id},
+            )
             await self._publish_to_kafka(prediction, trace_id)
+            logger.info(
+                f"DEBUG: Published to Kafka: group_id={prediction.get('group_id')}",
+                extra={"trace_id": trace_id},
+            )
 
     async def _store_in_postgres(
         self,

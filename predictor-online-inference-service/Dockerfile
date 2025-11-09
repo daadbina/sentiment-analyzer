@@ -1,64 +1,73 @@
-# Multi-stage build for predictor-online-inference-service
+# Multi-stage build for Predictor Online Inference Service (Python 3.11)
+# Optimized for slow internet with layer caching
+
+# Stage 1: Builder
 FROM python:3.11-slim as builder
 
-# Set working directory
-WORKDIR /app
+WORKDIR /build
 
-# Install system dependencies (including PostgreSQL client libraries)
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     g++ \
-    make \
     libpq-dev \
-    curl \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Create wheels for all dependencies
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels -r requirements.txt
 
-# Final stage
+# Stage 2: Runtime
 FROM python:3.11-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install runtime dependencies (including PostgreSQL runtime libraries)
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python dependencies from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Create non-root user and directories
+RUN useradd -m -u 1000 predictor && \
+    mkdir -p /models /feast && \
+    chown -R predictor:predictor /app /models /feast
+
+# Copy wheels from builder
+COPY --from=builder /build/wheels /wheels
+COPY --from=builder /build/requirements.txt .
+
+# Install Python dependencies from wheels
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt && \
+    rm -rf /wheels
 
 # Copy application code
 COPY src/ ./src/
 
-# Create non-root user
-RUN useradd -m -u 1000 predictor && \
-    chown -R predictor:predictor /app
+# Set ownership
+RUN chown -R predictor:predictor /app
 
 # Switch to non-root user
 USER predictor
 
-# Expose ports
-# 8000: FastAPI application
-# 9109: Prometheus metrics
-EXPOSE 8000 9109
-
-# Health check (using /live endpoint for liveness)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/live || exit 1
-
 # Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8010/health || exit 1
+
+# Expose ports
+EXPOSE 8010 9111
 
 # Run application
 CMD ["python", "-m", "src.main"]

@@ -27,7 +27,7 @@ asyncpg==0.29.0
 # gRPC
 grpcio==1.59.3
 grpcio-tools==1.59.3
-protobuf==4.25.3
+protobuf>=4.21.6,<5.0
 
 # Monitoring & observability
 prometheus-client==0.19.0

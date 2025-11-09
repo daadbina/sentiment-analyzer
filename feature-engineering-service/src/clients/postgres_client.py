@@ -184,6 +184,37 @@ class PostgresClient:
             logger.error("Error retrieving all actors", error=str(e))
             raise PostgresError(f"Error retrieving all actors: {str(e)}")
 
+    def execute_query_sync(
+        self, query: str, *params
+    ) -> List[Dict[str, Any]]:
+        """Execute a synchronous query with parameters.
+
+        Args:
+            query: SQL query string
+            *params: Query parameters
+
+        Returns:
+            List of result dictionaries
+        """
+        if not self.connection:
+            raise PostgresError("Not connected to PostgreSQL")
+
+        try:
+            cursor = self.connection.cursor(cursor_factory=RealDictCursor)
+            cursor.execute(query, params)
+            results = cursor.fetchall()
+            cursor.close()
+
+            logger.debug(
+                "Query executed",
+                result_count=len(results)
+            )
+            return results
+
+        except Exception as e:
+            logger.error("Error executing query", error=str(e))
+            raise PostgresError(f"Error executing query: {str(e)}")
+
     def close(self):
         """Close connection."""
         if self.connection:

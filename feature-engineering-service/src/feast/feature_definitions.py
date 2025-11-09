@@ -83,6 +83,11 @@ def create_semantic_group_source(push_source_name: str = "semantic_group_feature
             "intra_cluster_similarity_mean": [0.0],
             "intra_cluster_similarity_std": [0.0],
             "embedding_drift_score": [0.0],
+            # BTC price features (4)
+            "btc_change_pct_10h": [0.0],
+            "btc_volatility_score": [0.0],
+            "btc_volume": [0.0],
+            "btc_label_spike": [False],
         })
 
         # Ensure timestamp is datetime64[ns, UTC] type
@@ -115,7 +120,7 @@ def create_semantic_group_feature_view(
         ttl_days: Time-to-live in days
 
     Returns:
-        FeatureView with all 24 semantic group features
+        FeatureView with all 28 semantic group features (24 base + 4 BTC)
     """
     logger.debug("Creating semantic group feature view", push_source_name=push_source_name, ttl_days=ttl_days)
 
@@ -127,7 +132,7 @@ def create_semantic_group_feature_view(
     source = create_semantic_group_source(push_source_name)
     logger.debug("Push source created", source_name=source.name)
 
-    logger.debug("Creating FeatureView with 24 features")
+    logger.debug("Creating FeatureView with 28 features (24 base + 4 BTC)")
     return FeatureView(
         name="semantic_group_features",
         entities=[group_id],
@@ -166,8 +171,13 @@ def create_semantic_group_feature_view(
             Field(name="intra_cluster_similarity_mean", dtype=Float32),
             Field(name="intra_cluster_similarity_std", dtype=Float32),
             Field(name="embedding_drift_score", dtype=Float32),
+            # BTC price features (4)
+            Field(name="btc_change_pct_10h", dtype=Float32),
+            Field(name="btc_volatility_score", dtype=Float32),
+            Field(name="btc_volume", dtype=Float32),
+            Field(name="btc_label_spike", dtype=Int32),  # Boolean stored as Int32
         ],
         source=source,
-        description="Semantic group features for news realization prediction",
+        description="Semantic group features for news realization and BTC price prediction",
     )
 

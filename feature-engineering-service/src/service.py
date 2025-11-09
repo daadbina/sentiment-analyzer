@@ -17,6 +17,7 @@ from .extractors import (
     EntityExtractor,
     ContentExtractor,
     EmbeddingExtractor,
+    BtcPriceExtractor,
     Article,
 )
 from .transformers import FeatureAggregator, FeatureNormalizer
@@ -57,6 +58,7 @@ class FeatureEngineeringService:
             EntityExtractor(),
             ContentExtractor(),
             EmbeddingExtractor(),
+            BtcPriceExtractor(self.postgres_client),  # BTC price features
         ]
 
         # Initialize transformers

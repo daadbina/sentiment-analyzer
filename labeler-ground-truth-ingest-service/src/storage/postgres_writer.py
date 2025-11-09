@@ -74,7 +74,7 @@ class PostgreSQLWriter:
                     event_id VARCHAR(255) NOT NULL,
                     group_id VARCHAR(255),
                     description TEXT,
-                    domain VARCHAR(50),
+                    domain VARCHAR(255),
                     time_window VARCHAR(255),
                     realization_metric VARCHAR(255),
                     threshold FLOAT,
@@ -93,6 +93,17 @@ class PostgreSQLWriter:
                     UNIQUE(event_id, label_source)
                 )
             """)
+
+            # Alter existing table to increase domain column size if needed
+            # This is safe to run multiple times - PostgreSQL will ignore if already correct size
+            try:
+                await conn.execute("""
+                    ALTER TABLE ground_truth
+                    ALTER COLUMN domain TYPE VARCHAR(255)
+                """)
+            except Exception:
+                # Column might not exist yet or already correct size - safe to ignore
+                pass
 
             # Create reconciliation_log table
             await conn.execute("""

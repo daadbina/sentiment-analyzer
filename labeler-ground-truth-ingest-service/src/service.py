@@ -12,6 +12,7 @@ from ulid import ULID
 from src.config import config
 from src.clients.api_clients import ACLEDFetcher, GDELTFetcher, BinanceFetcher, CCXTFetcher
 from src.clients.kafka_producer import KafkaProducerClient
+from src.clients.kafka_consumer import SemanticGroupConsumer
 from src.storage.delta_lake_writer import DeltaLakeWriter
 from src.storage.postgres_writer import PostgreSQLWriter
 from src.storage.audit_logger import AuditLogger
@@ -48,6 +49,7 @@ class LabelerService:
         self.ccxt_fetcher = CCXTFetcher()  # Fallback for crypto data
 
         self.kafka_producer = KafkaProducerClient()
+        self.kafka_consumer = SemanticGroupConsumer()  # Add Kafka consumer for semantic groups
         self.delta_lake_writer = DeltaLakeWriter()
         self.postgres_writer = PostgreSQLWriter()
 
@@ -68,6 +70,7 @@ class LabelerService:
 
         self.running = False
         self.semantic_groups: List[Dict[str, Any]] = []
+        self.semantic_groups_task: Optional[asyncio.Task] = None  # Background task for consuming semantic groups
 
         logger.info(
             f"Labeler service initialized",
@@ -87,6 +90,9 @@ class LabelerService:
             # Connect to Kafka producer
             await self.kafka_producer.connect()
 
+            # Connect to Kafka consumer for semantic groups
+            await self.kafka_consumer.connect()
+
             # Connect to PostgreSQL
             await self.postgres_writer.connect()
             await self.postgres_writer._ensure_tables()
@@ -97,6 +103,14 @@ class LabelerService:
 
             # Initialize outbox table
             await self.outbox_manager.initialize()
+
+            # Start background task to consume semantic groups from Kafka
+            self.running = True
+            self.semantic_groups_task = asyncio.create_task(self._consume_semantic_groups_background())
+            logger.info(
+                "Started background task to consume semantic groups from Kafka",
+                operation="start"
+            )
 
             # Initialize audit logger with database pool
             self.audit_logger.db_pool = self.postgres_writer.pool
@@ -143,6 +157,17 @@ class LabelerService:
         self.running = False
 
         try:
+            # Cancel background semantic groups consumer task
+            if self.semantic_groups_task and not self.semantic_groups_task.done():
+                self.semantic_groups_task.cancel()
+                try:
+                    await self.semantic_groups_task
+                except asyncio.CancelledError:
+                    logger.info(
+                        "Background semantic groups consumer task cancelled",
+                        operation="shutdown"
+                    )
+
             # Clean up outbox (published events older than 7 days)
             try:
                 await self.outbox_manager.cleanup_published_events(days_old=7)
@@ -153,6 +178,7 @@ class LabelerService:
                 )
 
             await self.kafka_producer.disconnect()
+            await self.kafka_consumer.disconnect()
             await self.postgres_writer.disconnect()
 
             logger.info(
@@ -511,36 +537,102 @@ class LabelerService:
 
         return all_reconciled
 
-    async def consume_semantic_groups(self):
-        """Fetch semantic groups from PostgreSQL.
+    async def _consume_semantic_groups_background(self):
+        """Background task to continuously consume semantic groups from Kafka.
 
-        Per design spec (labeler-ground-truth-ingest-service.md line 16):
-        Input: External APIs (ACLED, GDELT, CoinGecko), PostgreSQL `semantic_groups` table
-
-        The labeler queries PostgreSQL for semantic groups, not Kafka.
-        Kafka semantic_groups topic is for downstream consumers (feature-engineering-service).
+        This ensures the labeler always has the latest semantic groups for reconciliation,
+        even when clustering creates new groups while labeler is running.
         """
+        logger.info(
+            "Starting background semantic groups consumer",
+            operation="_consume_semantic_groups_background"
+        )
+
+        # Initial load from PostgreSQL
         try:
-            # Fetch semantic groups from PostgreSQL
             groups = await self.postgres_writer.fetch_semantic_groups()
             if groups:
                 self.semantic_groups = groups
                 logger.info(
-                    f"Updated semantic groups from PostgreSQL",
-                    operation="consume_semantic_groups",
+                    f"Initial load: Fetched {len(groups)} semantic groups from PostgreSQL",
+                    operation="_consume_semantic_groups_background",
                     group_count=len(groups)
-                )
-            else:
-                logger.info(
-                    "No semantic groups available in PostgreSQL",
-                    operation="consume_semantic_groups"
                 )
         except Exception as e:
             logger.error(
-                f"Failed to fetch semantic groups from PostgreSQL: {str(e)}",
-                operation="consume_semantic_groups",
+                f"Failed to fetch initial semantic groups from PostgreSQL: {str(e)}",
+                operation="_consume_semantic_groups_background",
                 error_type=type(e).__name__
             )
+
+        # Continuously consume from Kafka
+        while self.running:
+            try:
+                # Consume messages from Kafka with very short timeout to avoid blocking
+                # Use timeout_ms=1000 (1 second) and max_messages=10 for quick, non-blocking polls
+                new_groups = await self.kafka_consumer.consume_batch(
+                    timeout_ms=1000,  # 1 second - short timeout to avoid blocking
+                    max_messages=10   # Small batch to process quickly
+                )
+
+                if new_groups:
+                    # Update semantic groups list
+                    # Create a dict for fast lookup by group_id
+                    groups_dict = {g['group_id']: g for g in self.semantic_groups}
+
+                    # Add or update groups
+                    for group in new_groups:
+                        groups_dict[group['group_id']] = group
+
+                    # Update the list
+                    self.semantic_groups = list(groups_dict.values())
+
+                    logger.info(
+                        f"Updated semantic groups from Kafka",
+                        operation="_consume_semantic_groups_background",
+                        new_groups=len(new_groups),
+                        total_groups=len(self.semantic_groups)
+                    )
+
+                # Small sleep to avoid tight loop (only when no messages)
+                if not new_groups:
+                    await asyncio.sleep(2.0)  # Sleep longer when no messages
+                else:
+                    await asyncio.sleep(0.1)  # Quick loop when receiving messages
+
+            except asyncio.CancelledError:
+                logger.info(
+                    "Background semantic groups consumer cancelled",
+                    operation="_consume_semantic_groups_background"
+                )
+                break
+            except Exception as e:
+                logger.error(
+                    f"Error consuming semantic groups from Kafka: {str(e)}",
+                    operation="_consume_semantic_groups_background",
+                    error_type=type(e).__name__
+                )
+                # Continue running despite errors
+                await asyncio.sleep(5.0)
+
+        logger.info(
+            "Background semantic groups consumer stopped",
+            operation="_consume_semantic_groups_background"
+        )
+
+    async def consume_semantic_groups(self):
+        """Fetch semantic groups from PostgreSQL (legacy method for compatibility).
+
+        NOTE: This method is now deprecated. Semantic groups are continuously
+        updated by the background task _consume_semantic_groups_background().
+        This method is kept for backward compatibility but does nothing.
+        """
+        # Background task handles semantic groups updates
+        logger.debug(
+            f"consume_semantic_groups called (no-op, background task handles updates). Current count: {len(self.semantic_groups)}",
+            operation="consume_semantic_groups",
+            group_count=len(self.semantic_groups)
+        )
 
     async def process_labels(self):
         """Main label processing pipeline."""

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1] - 2025-11-09
+
+### Added - BTC Price Feature Integration
+- **Feature Fetcher Enhancement** - Updated src/features/feature_fetcher.py:
+  - Increased feature count from 24 to 28 (added 4 BTC price features)
+  - Added BTC features to REQUIRED_FEATURES list: btc_change_pct_10h, btc_volatility_score, btc_volume, btc_label_spike
+  - BTC features fetched from Redis online store for real-time predictions
+  - BTC features fetched from Feast offline store for historical predictions
+  - Comprehensive logging for BTC feature retrieval
+  - Handles missing BTC features gracefully with warnings
+
+### Expected Impact
+- **BTC Price Prediction**: Models can now predict with BTC price context
+- **Feature Diversity**: Increased from 24 to 28 features for richer predictions
+- **Real-Time BTC Impact**: Enables real-time BTC price impact predictions based on news sentiment
+- **Architecture Compliance**: Implements Dataset 7 (Bitcoin & Financial Prices) from Architecture.md
+- **Task Completion**: Addresses Phase 3 BTC price prediction requirement from Task.md
+
+### Technical Details
+- BTC features integrated seamlessly with existing 24 semantic group features
+- Feature fetcher uses same prefix format: semantic_group_features:btc_*
+- Redis online store provides low-latency BTC feature access (<10ms)
+- Feast offline store provides historical BTC features for batch predictions
+- Feature freshness checks include BTC features
+- Feature quality monitoring includes BTC features
+
 ## [Unreleased]
 
 ### Added

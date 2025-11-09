@@ -38,6 +38,7 @@ class DataPreprocessor:
         self.feature_selector = None
         self.feature_engineer = None
         self.enable_feature_engineering = enable_feature_engineering
+        self.constant_features_ = None  # Store constant features identified during fit
 
         if enable_feature_engineering:
             self.feature_engineer = FeatureEngineer(
@@ -114,7 +115,7 @@ class DataPreprocessor:
                 logger.debug(f"Shape after scaling: {X.shape}")
 
                 # Remove constant features
-                X = self._remove_constant_features(X)
+                X = self._remove_constant_features(X, fit=fit)
                 logger.debug(f"Shape after removing constant features: {X.shape}")
 
                 # Log final statistics
@@ -238,36 +239,54 @@ class DataPreprocessor:
                     stage="scaling",
                 )
 
-    def _remove_constant_features(self, X: pd.DataFrame) -> pd.DataFrame:
+    def _remove_constant_features(self, X: pd.DataFrame, fit: bool = True) -> pd.DataFrame:
         """
         Remove constant features (zero variance).
 
         Args:
             X: Feature dataframe
+            fit: Whether to identify constant features (True) or use previously identified ones (False)
 
         Returns:
             Dataframe with constant features removed
         """
         with tracer.start_as_current_span("remove_constant_features"):
             try:
-                # Calculate variance
-                variances = X.var()
-                constant_features = variances[variances == 0].index.tolist()
+                if fit:
+                    # Calculate variance and identify constant features
+                    variances = X.var()
+                    constant_features = variances[variances == 0].index.tolist()
 
-                logger.info(f"Feature variance analysis: {len(X.columns)} total features")
-                logger.debug(f"Feature variances:\n{variances}")
+                    # Store for later use during inference
+                    self.constant_features_ = constant_features
 
-                if constant_features:
-                    logger.warning(
-                        f"Removing {len(constant_features)} constant features: {constant_features}"
-                    )
-                    logger.warning(f"Constant feature values:\n{X[constant_features].iloc[0] if len(X) > 0 else 'N/A'}")
-                    X = X.drop(columns=constant_features)
+                    logger.info(f"Feature variance analysis: {len(X.columns)} total features")
+                    logger.debug(f"Feature variances:\n{variances}")
+
+                    if constant_features:
+                        logger.warning(
+                            f"Removing {len(constant_features)} constant features: {constant_features}"
+                        )
+                        logger.warning(f"Constant feature values:\n{X[constant_features].iloc[0] if len(X) > 0 else 'N/A'}")
+                        X = X.drop(columns=constant_features)
+                    else:
+                        logger.info("No constant features found")
+
+                    logger.info(f"After constant feature removal: {X.shape[1]} features remaining")
+                    logger.debug(f"Remaining features: {list(X.columns)}")
                 else:
-                    logger.info("No constant features found")
+                    # Use previously identified constant features
+                    if self.constant_features_ is not None and len(self.constant_features_) > 0:
+                        # Only drop features that exist in current dataframe
+                        features_to_drop = [f for f in self.constant_features_ if f in X.columns]
+                        if features_to_drop:
+                            logger.info(f"Removing {len(features_to_drop)} constant features identified during training")
+                            X = X.drop(columns=features_to_drop)
+                        else:
+                            logger.info("No constant features to remove (none found in current data)")
+                    else:
+                        logger.info("No constant features were identified during training")
 
-                logger.info(f"After constant feature removal: {X.shape[1]} features remaining")
-                logger.debug(f"Remaining features: {list(X.columns)}")
                 return X
 
             except Exception as e:

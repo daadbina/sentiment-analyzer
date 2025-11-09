@@ -330,7 +330,7 @@ class PostgreSQLWriter:
                     # Prepare batch data for btc_truth table
                     batch_data = []
                     for label in batch:
-                        # Parse timestamp from ISO string to datetime (offset-naive for PostgreSQL)
+                        # Parse timestamp from ISO string to datetime (offset-naive UTC for PostgreSQL)
                         def parse_iso_timestamp(ts_str):
                             if not ts_str:
                                 return None
@@ -338,9 +338,11 @@ class PostgreSQLWriter:
                                 if isinstance(ts_str, str):
                                     ts_clean = ts_str.replace("Z", "+00:00")
                                     dt = datetime.fromisoformat(ts_clean)
-                                    # Convert to offset-naive for PostgreSQL
+                                    # Convert to UTC and then to offset-naive for PostgreSQL
+                                    # PostgreSQL will interpret offset-naive timestamps as UTC
                                     if dt.tzinfo is not None:
-                                        dt = dt.replace(tzinfo=None)
+                                        from datetime import timezone
+                                        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
                                     return dt
                                 return ts_str  # Already a datetime
                             except:

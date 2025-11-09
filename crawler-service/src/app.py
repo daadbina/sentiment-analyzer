@@ -42,6 +42,10 @@ async def lifespan(app: FastAPI):
         logger.info("Loading default feeds from Task.md specifications...")
         _load_default_feeds(crawler_app)
 
+        # Schedule all feeds after loading them
+        logger.info("Scheduling feeds after loading default feeds...")
+        await crawler_app._schedule_all_feeds()
+
     yield
 
     # Shutdown

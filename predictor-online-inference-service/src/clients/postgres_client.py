@@ -161,16 +161,21 @@ class PostgresClient:
                 features_json = json.dumps(features) if isinstance(features, dict) else features
 
                 async with pool.acquire() as conn:
-                    await conn.execute(
-                        query,
-                        group_id,
-                        domain,
-                        prediction_probability,
-                        prediction_confidence,
-                        model_version,
-                        features_json,
-                        datetime.utcnow(),
-                        trace_id,
+                    # Add timeout to prevent hanging
+                    import asyncio
+                    await asyncio.wait_for(
+                        conn.execute(
+                            query,
+                            group_id,
+                            domain,
+                            prediction_probability,
+                            prediction_confidence,
+                            model_version,
+                            features_json,
+                            datetime.utcnow(),
+                            trace_id,
+                        ),
+                        timeout=5.0,  # 5 second timeout
                     )
 
                 # Record latency

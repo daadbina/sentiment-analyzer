@@ -196,25 +196,22 @@ class ModelManager:
                     },
                 )
 
-                # Make prediction in thread pool to avoid blocking the event loop
-                loop = asyncio.get_event_loop()
-                prediction = await loop.run_in_executor(_thread_pool, model.predict, input_data)
+                # Make prediction synchronously (model.predict_proba is CPU-bound but fast)
+                # Note: For GradientBoostingClassifier, predict_proba() is typically fast (<100ms)
+                # and doesn't benefit from threading due to GIL overhead
+                logger.info(f"Starting model prediction", extra={"trace_id": trace_id})
 
-                # Extract probability and confidence
-                if isinstance(prediction, np.ndarray):
-                    if prediction.ndim == 2:  # type: ignore[attr-defined]
-                        # Binary classification: [[prob_class_0, prob_class_1]]
-                        probability = float(prediction[0][1])  # type: ignore[index]
-                    else:
-                        # Single value
-                        probability = float(prediction[0])  # type: ignore[index]
+                # Use predict_proba to get probabilities instead of predict which returns class labels
+                if hasattr(model, 'predict_proba'):
+                    prediction_proba = model.predict_proba(input_data)
+                    logger.info(f"Model prediction completed: shape={prediction_proba.shape}", extra={"trace_id": trace_id})
+                    # Binary classification: [[prob_class_0, prob_class_1]]
+                    probability = float(prediction_proba[0][1])
                 else:
-                    # Handle PyFuncOutput or other types - convert to numpy first
-                    pred_array = np.asarray(prediction)
-                    if pred_array.ndim == 2:
-                        probability = float(pred_array[0][1])
-                    else:
-                        probability = float(pred_array[0]) if pred_array.size > 0 else float(prediction)  # type: ignore[arg-type]
+                    # Fallback to predict if predict_proba is not available
+                    prediction = model.predict(input_data)
+                    logger.info(f"Model prediction completed (no predict_proba)", extra={"trace_id": trace_id})
+                    probability = float(prediction[0]) if isinstance(prediction, np.ndarray) else float(prediction)
 
                 # Calculate confidence (distance from 0.5)
                 confidence = abs(probability - 0.5) * 2.0

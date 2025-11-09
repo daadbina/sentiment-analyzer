@@ -189,11 +189,18 @@ class KafkaProducerClient:
                     callback=delivery_callback,
                 )
 
-                # Poll to trigger callbacks
-                producer.poll(0)
+                # Poll in a loop to trigger callbacks
+                # The callback is only triggered when poll() is called
+                max_polls = 100  # Maximum number of polls
+                poll_count = 0
+                while not delivery_future.done() and poll_count < max_polls:
+                    producer.poll(0.1)  # Poll with 100ms timeout
+                    poll_count += 1
+                    if poll_count % 10 == 0:
+                        logger.debug(f"Still polling: count={poll_count}", extra={"trace_id": trace_id})
 
-                # Wait for delivery confirmation
-                msg = await delivery_future
+                # Wait for delivery confirmation with timeout
+                msg = await asyncio.wait_for(delivery_future, timeout=5.0)
 
                 # Record metrics
                 kafka_messages_produced_total.labels(topic=topic).inc()

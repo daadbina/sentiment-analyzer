@@ -3,7 +3,7 @@
 
 param(
     [Parameter(Mandatory=$false)]
-    [ValidateSet("start", "stop", "status", "restart", "crawl", "clustering", "flush-kafka", "flush-redis", "flush-qdrant", "flush-database", "flush-all")]
+    [ValidateSet("start", "stop", "status", "restart", "crawl", "clustering", "flush-kafka", "flush-redis", "flush-qdrant", "flush-database", "flush-neo4j", "flush-s3", "flush-mlflow", "flush-feast", "flush-deltalake", "flush-schema-registry", "flush-all", "inspect-all")]
     [string]$Action = "start",
 
     [Parameter(Mandatory=$false)]
@@ -47,7 +47,17 @@ $postgresHost = "154.53.166.231"
 $postgresPort = 5432
 $postgresUser = "adminsentiment"
 $postgresPassword = "wp2400!!!!"
-$postgresDb = "sentiment_analyzer"
+$postgresDb = "sentiment"
+$schemaRegistryUrl = "http://154.53.166.231:8081"
+$neo4jHost = "localhost"
+$neo4jPort = 7687
+$neo4jUser = "neo4j"
+$neo4jPassword = "wqPamir2600"
+$s3Endpoint = "http://154.53.166.231:9900"
+$s3AccessKey = "minioadmin"
+$s3SecretKey = "minioadmin"
+$mlflowUrl = "http://localhost:5000"
+$deltaLakePath = "data/delta_lake"
 
 function Flush-Redis {
     Write-Host "Flushing Redis..." -ForegroundColor Yellow
@@ -243,50 +253,52 @@ function Flush-Database {
     Write-Host "Flushing PostgreSQL database..." -ForegroundColor Yellow
     try {
         # Create a Python script to flush the database
-        $pythonScript = @"
+        $pythonScript = @'
 import psycopg2
 import sys
 
 try:
     conn = psycopg2.connect(
-        host='$postgresHost',
-        port=$postgresPort,
-        user='$postgresUser',
-        password='$postgresPassword',
-        database='$postgresDb'
+        host='POSTGRES_HOST_PLACEHOLDER',
+        port=POSTGRES_PORT_PLACEHOLDER,
+        user='POSTGRES_USER_PLACEHOLDER',
+        password='POSTGRES_PASSWORD_PLACEHOLDER',
+        database='POSTGRES_DB_PLACEHOLDER'
     )
 
     cursor = conn.cursor()
 
-    # List of tables to truncate
-    tables = [
-        'articles',
-        'entities',
-        'embeddings',
-        'clusters',
-        'features',
-        'labels',
-        'models',
-        'predictions'
-    ]
+    # Get all schemas (excluding system schemas)
+    cursor.execute("""
+        SELECT schema_name
+        FROM information_schema.schemata
+        WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+        ORDER BY schema_name
+    """)
+    schemas = [row[0] for row in cursor.fetchall()]
+
+    print(f'    Found schemas: {schemas}')
 
     truncated_count = 0
-    for table in tables:
-        try:
-            # First check if table exists
-            cursor.execute(f"SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = '{table}');")
-            exists = cursor.fetchone()[0]
+    for schema in schemas:
+        # Get all tables in this schema
+        cursor.execute(f"""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = '{schema}'
+            AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+        """)
+        tables = [row[0] for row in cursor.fetchall()]
 
-            if exists:
-                cursor.execute(f'TRUNCATE TABLE {table} CASCADE;')
-                print(f'    Truncated table: {table}')
+        for table in tables:
+            try:
+                cursor.execute(f'TRUNCATE TABLE "{schema}"."{table}" CASCADE;')
+                print(f'    Truncated {schema}.{table}')
                 truncated_count += 1
-            else:
-                print(f'    [INFO] Table {table} does not exist (skipped)')
-        except Exception as e:
-            # Rollback on error to clear transaction state
-            conn.rollback()
-            print(f'    [WARN] Could not truncate table {table}: {str(e).strip()}')
+            except Exception as e:
+                conn.rollback()
+                print(f'    [WARN] Could not truncate {schema}.{table}: {str(e).strip()}')
 
     conn.commit()
     cursor.close()
@@ -302,7 +314,14 @@ try:
 except Exception as e:
     print(f'  [ERROR] Database connection failed: {e}')
     sys.exit(1)
-"@
+'@
+
+        # Replace placeholders
+        $pythonScript = $pythonScript.Replace('POSTGRES_HOST_PLACEHOLDER', $postgresHost)
+        $pythonScript = $pythonScript.Replace('POSTGRES_PORT_PLACEHOLDER', $postgresPort)
+        $pythonScript = $pythonScript.Replace('POSTGRES_USER_PLACEHOLDER', $postgresUser)
+        $pythonScript = $pythonScript.Replace('POSTGRES_PASSWORD_PLACEHOLDER', $postgresPassword)
+        $pythonScript = $pythonScript.Replace('POSTGRES_DB_PLACEHOLDER', $postgresDb)
 
         # Save the script to a temporary file
         $tempScript = "development/flush_db.py"
@@ -327,6 +346,381 @@ except Exception as e:
     catch {
         Write-Host "  [ERROR] Database flush failed: $_" -ForegroundColor Red
         return $false
+    }
+}
+
+function Flush-Neo4j {
+    Write-Host "Flushing Neo4j database..." -ForegroundColor Yellow
+    try {
+        # Create a Python script to flush Neo4j
+        $pythonScript = @'
+from neo4j import GraphDatabase
+import sys
+
+try:
+    driver = GraphDatabase.driver(
+        'NEO4J_URI_PLACEHOLDER',
+        auth=('NEO4J_USER_PLACEHOLDER', 'NEO4J_PASSWORD_PLACEHOLDER')
+    )
+
+    with driver.session() as session:
+        # Delete all nodes and relationships
+        result = session.run('MATCH (n) DETACH DELETE n')
+        summary = result.consume()
+
+        # Verify database is empty
+        count_result = session.run('MATCH (n) RETURN count(n) as count')
+        count = count_result.single()['count']
+
+        if count == 0:
+            print('  [OK] Neo4j database flushed')
+            print(f'  [OK] Neo4j validation passed (0 nodes)')
+            sys.exit(0)
+        else:
+            print(f'  [ERROR] Neo4j validation failed (found {count} nodes)')
+            sys.exit(1)
+
+    driver.close()
+
+except Exception as e:
+    print(f'  [ERROR] Neo4j connection failed: {e}')
+    sys.exit(1)
+'@
+
+        # Replace placeholders
+        $neo4jUri = "bolt://$neo4jHost`:$neo4jPort"
+        $pythonScript = $pythonScript.Replace('NEO4J_URI_PLACEHOLDER', $neo4jUri)
+        $pythonScript = $pythonScript.Replace('NEO4J_USER_PLACEHOLDER', $neo4jUser)
+        $pythonScript = $pythonScript.Replace('NEO4J_PASSWORD_PLACEHOLDER', $neo4jPassword)
+
+        # Save the script to a temporary file
+        $tempScript = "development/flush_neo4j.py"
+        $pythonScript | Out-File -FilePath $tempScript -Encoding UTF8 -Force
+
+        # Run the Python script
+        $output = & python $tempScript 2>&1
+        $exitCode = $LASTEXITCODE
+
+        # Display output
+        $output | ForEach-Object { Write-Host $_ }
+
+        # Clean up
+        Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
+
+        if ($exitCode -eq 0) {
+            return $true
+        } else {
+            return $false
+        }
+    }
+    catch {
+        Write-Host "  [ERROR] Neo4j flush failed: $_" -ForegroundColor Red
+        return $false
+    }
+}
+
+function Flush-S3 {
+    Write-Host "Flushing S3/MinIO..." -ForegroundColor Yellow
+    try {
+        # Create a Python script to flush S3
+        $pythonScript = @'
+import boto3
+import sys
+
+try:
+    s3_client = boto3.client(
+        's3',
+        endpoint_url='S3_ENDPOINT_PLACEHOLDER',
+        aws_access_key_id='S3_ACCESS_KEY_PLACEHOLDER',
+        aws_secret_access_key='S3_SECRET_KEY_PLACEHOLDER',
+        region_name='us-east-1'
+    )
+
+    # List all buckets
+    response = s3_client.list_buckets()
+    buckets = [b['Name'] for b in response.get('Buckets', [])]
+
+    deleted_objects = 0
+    for bucket in buckets:
+        try:
+            # List all objects in bucket
+            objects = s3_client.list_objects_v2(Bucket=bucket)
+
+            if 'Contents' in objects:
+                # Delete all objects
+                delete_keys = [{'Key': obj['Key']} for obj in objects['Contents']]
+                if delete_keys:
+                    s3_client.delete_objects(
+                        Bucket=bucket,
+                        Delete={'Objects': delete_keys}
+                    )
+                    deleted_objects += len(delete_keys)
+                    print(f'    Deleted {len(delete_keys)} objects from bucket: {bucket}')
+
+            # Delete the bucket
+            s3_client.delete_bucket(Bucket=bucket)
+            print(f'    Deleted bucket: {bucket}')
+
+        except Exception as e:
+            print(f'    [WARN] Could not delete bucket {bucket}: {str(e).strip()}')
+
+    print(f'  [OK] S3/MinIO flushed ({deleted_objects} objects, {len(buckets)} buckets)')
+    sys.exit(0)
+
+except Exception as e:
+    print(f'  [ERROR] S3 connection failed: {e}')
+    sys.exit(1)
+'@
+
+        # Replace placeholders
+        $pythonScript = $pythonScript.Replace('S3_ENDPOINT_PLACEHOLDER', $s3Endpoint)
+        $pythonScript = $pythonScript.Replace('S3_ACCESS_KEY_PLACEHOLDER', $s3AccessKey)
+        $pythonScript = $pythonScript.Replace('S3_SECRET_KEY_PLACEHOLDER', $s3SecretKey)
+
+        # Save the script to a temporary file
+        $tempScript = "development/flush_s3.py"
+        $pythonScript | Out-File -FilePath $tempScript -Encoding UTF8 -Force
+
+        # Run the Python script
+        $output = & python $tempScript 2>&1
+        $exitCode = $LASTEXITCODE
+
+        # Display output
+        $output | ForEach-Object { Write-Host $_ }
+
+        # Clean up
+        Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
+
+        if ($exitCode -eq 0) {
+            return $true
+        } else {
+            return $false
+        }
+    }
+    catch {
+        Write-Host "  [ERROR] S3 flush failed: $_" -ForegroundColor Red
+        return $false
+    }
+}
+
+function Flush-MLflow {
+    Write-Host "Flushing MLflow..." -ForegroundColor Yellow
+    try {
+        # Create a Python script to flush MLflow
+        $pythonScript = @'
+import mlflow
+import sys
+
+try:
+    # Set tracking URI
+    mlflow.set_tracking_uri('MLFLOW_URL_PLACEHOLDER')
+
+    # Get all experiments
+    experiments = mlflow.search_experiments()
+
+    deleted_count = 0
+    for exp in experiments:
+        exp_id = exp.experiment_id
+        exp_name = exp.name
+
+        # Skip default experiment
+        if exp_name == 'Default':
+            continue
+
+        try:
+            # Delete experiment
+            mlflow.delete_experiment(exp_id)
+            print(f'    Deleted experiment: {exp_name}')
+            deleted_count += 1
+        except Exception as e:
+            print(f'    [WARN] Could not delete experiment {exp_name}: {str(e).strip()}')
+
+    print(f'  [OK] MLflow flushed ({deleted_count} experiments)')
+    sys.exit(0)
+
+except Exception as e:
+    print(f'  [ERROR] MLflow connection failed: {e}')
+    sys.exit(1)
+'@
+
+        # Replace placeholders
+        $pythonScript = $pythonScript.Replace('MLFLOW_URL_PLACEHOLDER', $mlflowUrl)
+
+        # Save the script to a temporary file
+        $tempScript = "development/flush_mlflow.py"
+        $pythonScript | Out-File -FilePath $tempScript -Encoding UTF8 -Force
+
+        # Run the Python script
+        $output = & python $tempScript 2>&1
+        $exitCode = $LASTEXITCODE
+
+        # Display output
+        $output | ForEach-Object { Write-Host $_ }
+
+        # Clean up
+        Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
+
+        if ($exitCode -eq 0) {
+            return $true
+        } else {
+            return $false
+        }
+    }
+    catch {
+        Write-Host "  [ERROR] MLflow flush failed: $_" -ForegroundColor Red
+        return $false
+    }
+}
+
+function Flush-Feast {
+    Write-Host "Flushing Feast feature store..." -ForegroundColor Yellow
+    try {
+        $feastPaths = @(
+            "data/feast",
+            "feast",
+            "feature-engineering-service/data/feast"
+        )
+
+        $deleted = $false
+        foreach ($path in $feastPaths) {
+            if (Test-Path $path) {
+                Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Host "    Deleted: $path" -ForegroundColor Gray
+                $deleted = $true
+            }
+        }
+
+        if ($deleted) {
+            Write-Host "  [OK] Feast feature store flushed" -ForegroundColor Green
+            return $true
+        } else {
+            Write-Host "  [OK] Feast feature store is clean (no directories found)" -ForegroundColor Green
+            return $true
+        }
+    }
+    catch {
+        Write-Host "  [ERROR] Feast flush failed: $_" -ForegroundColor Red
+        return $false
+    }
+}
+
+function Flush-DeltaLake {
+    Write-Host "Flushing Delta Lake..." -ForegroundColor Yellow
+    try {
+        $deltaLakePaths = @(
+            "data/delta_lake",
+            "data/feast/offline_store",
+            "feature-engineering-service/data/feast/offline_store"
+        )
+
+        $deleted = $false
+        foreach ($path in $deltaLakePaths) {
+            if (Test-Path $path) {
+                Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                Write-Host "    Deleted: $path" -ForegroundColor Gray
+                $deleted = $true
+            }
+        }
+
+        if ($deleted) {
+            Write-Host "  [OK] Delta Lake flushed" -ForegroundColor Green
+            return $true
+        } else {
+            Write-Host "  [OK] Delta Lake is clean (no directories found)" -ForegroundColor Green
+            return $true
+        }
+    }
+    catch {
+        Write-Host "  [ERROR] Delta Lake flush failed: $_" -ForegroundColor Red
+        return $false
+    }
+}
+
+function Flush-SchemaRegistry {
+    Write-Host "Flushing Schema Registry..." -ForegroundColor Yellow
+    try {
+        # Create a Python script to flush Schema Registry
+        $pythonScript = @'
+import requests
+import sys
+
+try:
+    # Get all subjects
+    response = requests.get('SCHEMA_REGISTRY_URL_PLACEHOLDER/subjects', timeout=5)
+    subjects = response.json()
+
+    deleted_count = 0
+    for subject in subjects:
+        try:
+            # Step 1: Soft delete (required before hard delete)
+            soft_delete_response = requests.delete(
+                f'SCHEMA_REGISTRY_URL_PLACEHOLDER/subjects/{subject}',
+                timeout=5
+            )
+
+            # Step 2: Hard delete (permanent)
+            hard_delete_response = requests.delete(
+                f'SCHEMA_REGISTRY_URL_PLACEHOLDER/subjects/{subject}?permanent=true',
+                timeout=5
+            )
+
+            if hard_delete_response.status_code in [200, 204]:
+                print(f'    Deleted subject: {subject}')
+                deleted_count += 1
+            else:
+                print(f'    [WARN] Could not delete subject {subject}: HTTP {hard_delete_response.status_code}')
+        except Exception as e:
+            print(f'    [WARN] Could not delete subject {subject}: {str(e).strip()}')
+
+    print(f'  [OK] Schema Registry flushed ({deleted_count} subjects)')
+    sys.exit(0)
+
+except Exception as e:
+    print(f'  [ERROR] Schema Registry connection failed: {e}')
+    sys.exit(1)
+'@
+
+        # Replace placeholders
+        $pythonScript = $pythonScript.Replace('SCHEMA_REGISTRY_URL_PLACEHOLDER', $schemaRegistryUrl)
+
+        # Save the script to a temporary file
+        $tempScript = "development/flush_schema_registry.py"
+        $pythonScript | Out-File -FilePath $tempScript -Encoding UTF8 -Force
+
+        # Run the Python script
+        $output = & python $tempScript 2>&1
+        $exitCode = $LASTEXITCODE
+
+        # Display output
+        $output | ForEach-Object { Write-Host $_ }
+
+        # Clean up
+        Remove-Item -Path $tempScript -Force -ErrorAction SilentlyContinue
+
+        if ($exitCode -eq 0) {
+            return $true
+        } else {
+            return $false
+        }
+    }
+    catch {
+        Write-Host "  [ERROR] Schema Registry flush failed: $_" -ForegroundColor Red
+        return $false
+    }
+}
+
+function Inspect-AllDataStores {
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "INSPECTING ALL DATA STORES" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    # Run the inspection script
+    $inspectScript = "development/inspect_all_datastores.py"
+    if (Test-Path $inspectScript) {
+        & python $inspectScript
+    } else {
+        Write-Host "[ERROR] Inspection script not found: $inspectScript" -ForegroundColor Red
     }
 }
 
@@ -366,7 +760,13 @@ function Start-AllServices {
     $dbOk = Flush-Database
     Write-Host ""
 
-    if (-not ($redisOk -and $qdrantOk -and $kafkaOk -and $dbOk)) {
+    $neo4jOk = Flush-Neo4j
+    Write-Host ""
+
+    $schemaRegistryOk = Flush-SchemaRegistry
+    Write-Host ""
+
+    if (-not ($redisOk -and $qdrantOk -and $kafkaOk -and $dbOk -and $neo4jOk -and $schemaRegistryOk)) {
         Write-Host "========================================" -ForegroundColor Red
         Write-Host "WARNING: Some services failed to flush" -ForegroundColor Red
         Write-Host "========================================" -ForegroundColor Red
@@ -374,6 +774,8 @@ function Start-AllServices {
         Write-Host "Qdrant: $(if ($qdrantOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($qdrantOk) { 'Green' } else { 'Red' })
         Write-Host "Kafka: $(if ($kafkaOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($kafkaOk) { 'Green' } else { 'Red' })
         Write-Host "Database: $(if ($dbOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($dbOk) { 'Green' } else { 'Red' })
+        Write-Host "Neo4j: $(if ($neo4jOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($neo4jOk) { 'Green' } else { 'Red' })
+        Write-Host "Schema Registry: $(if ($schemaRegistryOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($schemaRegistryOk) { 'Green' } else { 'Red' })
         Write-Host ""
         Write-Host "Continuing with service startup..." -ForegroundColor Yellow
         Write-Host ""
@@ -793,6 +1195,49 @@ switch ($Action) {
         Flush-Database
         Write-Host ""
     }
+    "flush-neo4j" {
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host "FLUSHING NEO4J" -ForegroundColor Cyan
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host ""
+        Flush-Neo4j
+        Write-Host ""
+    }
+    "flush-s3" {
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host "FLUSHING S3/MINIO" -ForegroundColor Cyan
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host ""
+        Flush-S3
+        Write-Host ""
+    }
+    "flush-mlflow" {
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host "FLUSHING MLFLOW" -ForegroundColor Cyan
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host ""
+        Flush-MLflow
+        Write-Host ""
+    }
+    "flush-feast" {
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host "FLUSHING FEAST" -ForegroundColor Cyan
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host ""
+        Flush-Feast
+        Write-Host ""
+    }
+    "flush-schema-registry" {
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host "FLUSHING SCHEMA REGISTRY" -ForegroundColor Cyan
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host ""
+        Flush-SchemaRegistry
+        Write-Host ""
+    }
+    "inspect-all" {
+        Inspect-AllDataStores
+    }
     "flush-all" {
         Write-Host "========================================" -ForegroundColor Cyan
         Write-Host "FLUSHING ALL EXTERNAL SERVICES" -ForegroundColor Cyan
@@ -811,6 +1256,24 @@ switch ($Action) {
         $dbOk = Flush-Database
         Write-Host ""
 
+        $neo4jOk = Flush-Neo4j
+        Write-Host ""
+
+        $schemaRegistryOk = Flush-SchemaRegistry
+        Write-Host ""
+
+        $s3Ok = Flush-S3
+        Write-Host ""
+
+        $mlflowOk = Flush-MLflow
+        Write-Host ""
+
+        $feastOk = Flush-Feast
+        Write-Host ""
+
+        $deltaLakeOk = Flush-DeltaLake
+        Write-Host ""
+
         Write-Host "========================================" -ForegroundColor Cyan
         Write-Host "FLUSH SUMMARY" -ForegroundColor Cyan
         Write-Host "========================================" -ForegroundColor Cyan
@@ -818,7 +1281,16 @@ switch ($Action) {
         Write-Host "Qdrant: $(if ($qdrantOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($qdrantOk) { 'Green' } else { 'Red' })
         Write-Host "Kafka: $(if ($kafkaOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($kafkaOk) { 'Green' } else { 'Red' })
         Write-Host "Database: $(if ($dbOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($dbOk) { 'Green' } else { 'Red' })
+        Write-Host "Neo4j: $(if ($neo4jOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($neo4jOk) { 'Green' } else { 'Red' })
+        Write-Host "Schema Registry: $(if ($schemaRegistryOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($schemaRegistryOk) { 'Green' } else { 'Red' })
+        Write-Host "S3/MinIO: $(if ($s3Ok) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($s3Ok) { 'Green' } else { 'Red' })
+        Write-Host "MLflow: $(if ($mlflowOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($mlflowOk) { 'Green' } else { 'Red' })
+        Write-Host "Feast: $(if ($feastOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($feastOk) { 'Green' } else { 'Red' })
+        Write-Host "Delta Lake: $(if ($deltaLakeOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($deltaLakeOk) { 'Green' } else { 'Red' })
         Write-Host ""
+    }
+    "flush-deltalake" {
+        Flush-DeltaLake
     }
     default {
         Write-Host "Unknown action: $Action" -ForegroundColor Red
@@ -826,7 +1298,8 @@ switch ($Action) {
         Write-Host "  .\manage_services.ps1 -Action start|stop|status|restart [-Service service-name]" -ForegroundColor Yellow
         Write-Host "  .\manage_services.ps1 -Action crawl [-Service feed-id]" -ForegroundColor Yellow
         Write-Host "  .\manage_services.ps1 -Action clustering" -ForegroundColor Yellow
-        Write-Host "  .\manage_services.ps1 -Action flush-kafka|flush-redis|flush-qdrant|flush-database|flush-all" -ForegroundColor Yellow
+        Write-Host "  .\manage_services.ps1 -Action inspect-all" -ForegroundColor Yellow
+        Write-Host "  .\manage_services.ps1 -Action flush-kafka|flush-redis|flush-qdrant|flush-database|flush-neo4j|flush-s3|flush-mlflow|flush-feast|flush-deltalake|flush-schema-registry|flush-all" -ForegroundColor Yellow
     }
 }
 

@@ -936,7 +936,7 @@ class BinanceFetcher(BaseAPIClient):
 
             label = {
                 "event_id": f"binance_{symbol}_{open_time}",
-                "event_timestamp": datetime.fromtimestamp(open_time / 1000).isoformat() + "Z",  # Actual event time
+                "event_timestamp": datetime.utcfromtimestamp(open_time / 1000).isoformat() + "Z",  # Actual event time in UTC
                 "symbol": symbol,
                 "open": open_price,
                 "close": close_price,

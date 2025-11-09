@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Expected feature names from feature engineering service
 # These match the feature names defined in feature-engineering-service/features.py
 # Note: When reading from Redis, these are stored without the "semantic_group_features:" prefix
-# All 24 features are required for model inference
+# All 28 features are required for model inference (24 base + 4 BTC)
 REQUIRED_FEATURES = [
     # Source features (4)
     "num_sources",
@@ -52,6 +52,11 @@ REQUIRED_FEATURES = [
     "intra_cluster_similarity_mean",
     "intra_cluster_similarity_std",
     "embedding_drift_score",
+    # BTC price features (4)
+    "btc_change_pct_10h",
+    "btc_volatility_score",
+    "btc_volume",
+    "btc_label_spike",
 ]
 
 

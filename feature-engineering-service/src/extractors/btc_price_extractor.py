@@ -63,8 +63,7 @@ class BtcPriceExtractor(FeatureExtractor):
         created_at = self._get_group_timestamp(group)
         if not created_at:
             logger.warning(
-                "No timestamp found for group, using default BTC features",
-                group_id=group_id
+                f"No timestamp found for group, using default BTC features: group_id={group_id}"
             )
             return self._get_default_features()
         
@@ -73,18 +72,17 @@ class BtcPriceExtractor(FeatureExtractor):
         
         if not btc_data:
             logger.debug(
-                "No BTC data found for group timestamp, using default features",
-                group_id=group_id,
-                timestamp=created_at.isoformat()
+                f"No BTC data found for group timestamp, using default features: group_id={group_id}, timestamp={created_at.isoformat()}"
             )
             return self._get_default_features()
         
         # Extract features from BTC data
+        # Note: btc_label_spike converted to int (0/1) for Avro schema compatibility
         features = {
             "btc_change_pct_10h": float(btc_data.get("change_pct_10h", 0.0)),
             "btc_volatility_score": float(btc_data.get("volatility_score", 0.0)),
             "btc_volume": float(btc_data.get("volume", 0.0)),
-            "btc_label_spike": bool(btc_data.get("label_spike", False)),
+            "btc_label_spike": int(btc_data.get("label_spike", False)),  # Convert bool to int
         }
         
         logger.info(
@@ -180,10 +178,8 @@ class BtcPriceExtractor(FeatureExtractor):
                 }
                 
                 logger.debug(
-                    "BTC data fetched from database",
-                    query_timestamp=timestamp.isoformat(),
-                    btc_timestamp=row["timestamp"].isoformat() if row["timestamp"] else None,
-                    btc_close=row["close"]
+                    f"BTC data fetched from database: query_timestamp={timestamp.isoformat()}, "
+                    f"btc_timestamp={row['timestamp'].isoformat() if row['timestamp'] else None}, btc_close={row['close']}"
                 )
                 
                 return btc_data
@@ -192,9 +188,7 @@ class BtcPriceExtractor(FeatureExtractor):
             
         except Exception as e:
             logger.error(
-                f"Failed to fetch BTC data: {str(e)}",
-                error_type=type(e).__name__,
-                timestamp=timestamp.isoformat()
+                f"Failed to fetch BTC data: error_type={type(e).__name__}, timestamp={timestamp.isoformat()}, error={str(e)}"
             )
             return None
 
@@ -208,6 +202,6 @@ class BtcPriceExtractor(FeatureExtractor):
             "btc_change_pct_10h": 0.0,
             "btc_volatility_score": 0.0,
             "btc_volume": 0.0,
-            "btc_label_spike": False,
+            "btc_label_spike": 0,  # int (0/1) for Avro schema compatibility
         }
 

@@ -212,21 +212,43 @@ class BatchPredictor:
         """
         start_time = datetime.now()
 
+        logger.info(
+            f"=== PREDICTOR: Making prediction for group ===",
+            extra={
+                "group_id": group_id,
+                "domain": domain,
+                "feature_count": len(features),
+                "trace_id": trace_id,
+            },
+        )
+
         # Validate features
         await self.feature_validator.validate_features(features, group_id, trace_id)
+        logger.info(f"Features validated for group_id={group_id}")
 
         # Get model for group (A/B testing)
         model, model_version = await self.model_manager.get_model_for_group(
             group_id,
             trace_id,
         )
+        logger.info(f"Model loaded: version={model_version}, group_id={group_id}")
 
         # Make prediction
+        logger.info(f"Making prediction with model version={model_version}")
         prediction_result = await self.model_manager.predict(
             model,
             features,
             model_version,
             trace_id,
+        )
+        logger.info(
+            f"=== PREDICTOR: Prediction complete ===",
+            extra={
+                "group_id": group_id,
+                "prediction": prediction_result.get("prediction"),
+                "confidence": prediction_result.get("confidence"),
+                "model_version": model_version,
+            },
         )
 
         # Calculate latency

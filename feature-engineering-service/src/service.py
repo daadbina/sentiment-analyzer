@@ -187,12 +187,38 @@ class FeatureEngineeringService:
             group_id = message.get("group_id")
             trace_id = message.get("trace_id", "unknown")
 
+            # Log incoming message details
+            logger.info(
+                "=== FEATURE ENGINEERING: Processing semantic group ===",
+                group_id=group_id,
+                trace_id=trace_id,
+                message_keys=list(message.keys()),
+                article_count=len(message.get("articles", [])),
+            )
+
             with TraceContext(trace_id=trace_id, group_id=group_id, operation="compute_features") as ctx:
                 # Extract features
                 features = self._extract_features(message)
 
+                # Log extracted features
+                logger.info(
+                    "Features extracted from semantic group",
+                    group_id=group_id,
+                    feature_count=len(features),
+                    feature_names=list(features.keys())[:20],  # First 20 feature names
+                    sample_features={k: features[k] for k in list(features.keys())[:5]},  # First 5 features with values
+                )
+
                 # Transform features
                 features = self._transform_features(features)
+
+                # Log transformed features
+                logger.info(
+                    "Features transformed",
+                    group_id=group_id,
+                    feature_count=len(features),
+                    sample_transformed_features={k: features[k] for k in list(features.keys())[:5]},
+                )
 
                 # Validate features
                 is_valid, errors = self.validator.validate(features)
@@ -397,23 +423,41 @@ class FeatureEngineeringService:
             )
 
             # Write to Delta Lake (offline)
-            self.delta_writer.write_features(group_id, clean_features)
-            logger.debug("Features written to Delta Lake", group_id=group_id)
-
-            # Write to Feast (offline)
-            self.feast_writer.write_features(group_id, clean_features)
-            metrics.feast_writes.inc()
-            logger.debug("Features written to Feast", group_id=group_id)
-
-            # Write to Redis (online)
-            self.redis_writer.write_features(group_id, clean_features)
-            metrics.redis_writes.inc()
-            logger.debug("Features written to Redis", group_id=group_id)
-
             logger.info(
-                "Features written to all storage backends",
+                "=== WRITING TO DELTA LAKE ===",
                 group_id=group_id,
                 feature_count=len(clean_features),
+                sample_features={k: clean_features[k] for k in list(clean_features.keys())[:5]},
+            )
+            self.delta_writer.write_features(group_id, clean_features)
+            logger.info("✓ Features written to Delta Lake successfully", group_id=group_id)
+
+            # Write to Feast (offline)
+            logger.info(
+                "=== WRITING TO FEAST OFFLINE STORE ===",
+                group_id=group_id,
+                feature_count=len(clean_features),
+            )
+            self.feast_writer.write_features(group_id, clean_features)
+            metrics.feast_writes.inc()
+            logger.info("✓ Features written to Feast successfully", group_id=group_id)
+
+            # Write to Redis (online)
+            logger.info(
+                "=== WRITING TO REDIS ONLINE STORE ===",
+                group_id=group_id,
+                feature_count=len(clean_features),
+                redis_key=f"features:{group_id}",
+            )
+            self.redis_writer.write_features(group_id, clean_features)
+            metrics.redis_writes.inc()
+            logger.info("✓ Features written to Redis successfully", group_id=group_id)
+
+            logger.info(
+                "=== ALL FEATURES WRITTEN SUCCESSFULLY ===",
+                group_id=group_id,
+                feature_count=len(clean_features),
+                storage_backends=["Delta Lake", "Feast", "Redis"],
             )
 
         except Exception as e:

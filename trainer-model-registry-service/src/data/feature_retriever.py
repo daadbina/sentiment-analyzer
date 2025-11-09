@@ -100,20 +100,30 @@ class FeatureRetriever:
                 logger.info(f"Entity dataframe shape: {entity_df.shape}")
                 logger.info(f"Entity dataframe:\n{entity_df}")
 
-                logger.info("Calling feast_client.get_features()")
+                logger.info("=== TRAINER: Fetching features from Feast ===")
+                logger.info(f"Entity count: {len(entity_ids)}")
+                logger.info(f"Feature count: {len(formatted_features)}")
+                logger.info(f"Features requested: {formatted_features[:10]}")  # First 10
+
                 feature_df = self.feast_client.get_features(
                     entity_df=entity_df,
                     features=formatted_features,
                     timestamp_column="timestamp",
                 )
-                logger.info("feast_client.get_features() returned successfully")
 
+                logger.info("=== TRAINER: Features fetched successfully ===")
                 logger.info(
                     f"Retrieved {feature_df.shape[0]} rows with "
                     f"{feature_df.shape[1]} features"
                 )
-                logger.debug(f"Feature columns: {list(feature_df.columns)}")
-                logger.debug(f"Feature dataframe dtypes:\n{feature_df.dtypes}")
+                logger.info(f"Feature columns: {list(feature_df.columns)[:20]}")  # First 20
+                logger.info(f"Feature dataframe dtypes:\n{feature_df.dtypes}")
+
+                # Log sample feature values
+                if len(feature_df) > 0:
+                    sample_row = feature_df.iloc[0].to_dict()
+                    sample_features = {k: sample_row[k] for k in list(sample_row.keys())[:10]}
+                    logger.info(f"Sample feature values (first row): {sample_features}")
 
                 # Check for null values
                 null_counts = feature_df.isnull().sum()

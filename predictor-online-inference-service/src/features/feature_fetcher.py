@@ -116,23 +116,29 @@ class FeatureFetcher:
             attributes={"group_id": group_id, "trace_id": trace_id},
         ):
             try:
-                logger.debug(
-                    f"Fetching online features from Redis: group_id={group_id}",
+                logger.info(
+                    f"=== PREDICTOR: Fetching features from Redis ===",
                     extra={"trace_id": trace_id, "group_id": group_id},
                 )
 
                 # Fetch features directly from Redis using the same key format
                 # as feature-engineering-service: features:{group_id}
                 redis_key = f"features:{group_id}"
+                logger.info(f"Redis key: {redis_key}")
+
                 feature_data = await self.redis_client.get(redis_key, trace_id=trace_id)
 
                 if not feature_data:
+                    logger.error(f"No features found in Redis for group_id={group_id}")
                     raise FeatureFetchError(
                         f"No features found in Redis for group_id={group_id}",
                         group_id=group_id,
                         store_type="online",
                         trace_id=trace_id,
                     )
+
+                logger.info(f"Raw feature data from Redis: {len(feature_data)} keys")
+                logger.info(f"Raw feature keys: {list(feature_data.keys())[:20]}")  # First 20
 
                 # Extract only the required features
                 # Add the semantic_group_features: prefix to match training data format
@@ -154,18 +160,18 @@ class FeatureFetcher:
                     age_seconds = (datetime.utcnow() - feature_timestamp).total_seconds()
                     feature_freshness_seconds.labels(group_id=group_id).set(age_seconds)
 
-                    logger.debug(
-                        f"Feature freshness: group_id={group_id}, age_seconds={age_seconds:.2f}",
+                    logger.info(
+                        f"Feature freshness: age_seconds={age_seconds:.2f}",
                         extra={"trace_id": trace_id, "group_id": group_id},
                     )
 
                 # Log sample features for debugging
                 logger.info(
-                    f"Fetched {len(features)} raw features from Redis: group_id={group_id}",
+                    f"=== PREDICTOR: Fetched {len(features)} features from Redis ===",
                     extra={
                         "trace_id": trace_id,
                         "group_id": group_id,
-                        "feature_sample": {k: features[k] for k in list(features.keys())[:5]},
+                        "feature_sample": {k: features[k] for k in list(features.keys())[:10]},
                         "all_features": features,
                     },
                 )

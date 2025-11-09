@@ -92,9 +92,23 @@ class MessageRouter:
             trace_id: Trace ID for correlation
         """
         try:
+            logger.info(
+                "=== NEO4J LOADER: Processing semantic_groups message ===",
+                trace_id=trace_id,
+                group_id=message.get("group_id"),
+                article_count=len(message.get("article_ids", [])),
+            )
+
             # Build Group node
             group = node_builder.build_group_node(message)
             group_data = group.to_neo4j_properties()
+
+            logger.info(
+                "Group node built",
+                group_id=group.id,
+                group_data_keys=list(group_data.keys()),
+                sample_data={k: group_data[k] for k in list(group_data.keys())[:5]},
+            )
 
             # Add Group node to stream
             stream_loader.add_node(
@@ -102,9 +116,12 @@ class MessageRouter:
                 node_data=group_data,
                 trace_id=trace_id,
             )
+            logger.info(f"Group node added to Neo4j stream: {group.id}")
 
             # Create BELONGS_TO relationships for each article
             article_ids = message.get("article_ids", [])
+            logger.info(f"Creating {len(article_ids)} BELONGS_TO relationships")
+
             for article_id in article_ids:
                 relationship_data = {
                     "from_id": article_id,
@@ -208,9 +225,24 @@ class MessageRouter:
             trace_id: Trace ID for correlation
         """
         try:
+            logger.info(
+                "=== NEO4J LOADER: Processing predictions message ===",
+                trace_id=trace_id,
+                group_id=message.get("group_id"),
+                prediction=message.get("prediction"),
+                confidence=message.get("confidence"),
+            )
+
             # Build Prediction node
             prediction = node_builder.build_prediction_node(message)
             prediction_data = prediction.to_neo4j_properties()
+
+            logger.info(
+                "Prediction node built",
+                prediction_id=prediction.id,
+                prediction_data_keys=list(prediction_data.keys()),
+                sample_data={k: prediction_data[k] for k in list(prediction_data.keys())[:5]},
+            )
 
             # Add Prediction node to stream
             stream_loader.add_node(
@@ -218,6 +250,7 @@ class MessageRouter:
                 node_data=prediction_data,
                 trace_id=trace_id,
             )
+            logger.info(f"Prediction node added to Neo4j stream: {prediction.id}")
 
             # Create PREDICTS relationship
             relationship_data = {
@@ -228,6 +261,10 @@ class MessageRouter:
                     "confidence": prediction.confidence,
                 },
             }
+
+            logger.info(
+                f"Creating PREDICTS relationship: {prediction.id} -> {prediction.group_id}"
+            )
 
             stream_loader.add_relationship(
                 from_label="Prediction",

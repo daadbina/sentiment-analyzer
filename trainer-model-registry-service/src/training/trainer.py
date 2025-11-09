@@ -64,10 +64,16 @@ class Trainer:
             span.set_attribute("num_train_samples", len(X_train))
 
             try:
-                logger.info(f"Starting training for {model_type}")
-                logger.debug(f"Training data shape: {X_train.shape}")
-                logger.debug(f"Training labels shape: {y_train.shape}")
-                logger.debug(f"Training features: {list(X_train.columns)}")
+                logger.info(f"=== TRAINER: Starting training for {model_type} ===")
+                logger.info(f"Training data shape: {X_train.shape}")
+                logger.info(f"Training labels shape: {y_train.shape}")
+                logger.info(f"Training features ({len(X_train.columns)}): {list(X_train.columns)[:20]}")  # First 20
+
+                # Log sample training data
+                if len(X_train) > 0:
+                    sample_row = X_train.iloc[0].to_dict()
+                    sample_features = {k: sample_row[k] for k in list(sample_row.keys())[:10]}
+                    logger.info(f"Sample training features (first row): {sample_features}")
 
                 # Check training data quality
                 logger.info(f"Training data null values: {X_train.isnull().sum().sum()}")
@@ -75,16 +81,16 @@ class Trainer:
                 logger.info(f"Training labels distribution:\n{y_train.value_counts()}")
 
                 if X_val is not None:
-                    logger.debug(f"Validation data shape: {X_val.shape}")
+                    logger.info(f"Validation data shape: {X_val.shape}")
                     logger.info(f"Validation data null values: {X_val.isnull().sum().sum()}")
                     logger.info(f"Validation labels distribution:\n{y_val.value_counts()}")
 
                 # Create model instance
                 model = self._create_model(model_type)
-                logger.debug(f"Model instance created: {type(model).__name__}")
+                logger.info(f"Model instance created: {type(model).__name__}")
 
                 # Train model
-                logger.info(f"Training {model_type} model...")
+                logger.info(f"=== TRAINER: Training {model_type} model ===")
                 metrics_dict = model.train(X_train, y_train, X_val, y_val)
 
                 # Store model and history
@@ -97,8 +103,12 @@ class Trainer:
                 # Record metrics
                 metrics.record_training_run(model_type)
 
-                logger.info(f"Training complete for {model_type}")
+                logger.info(f"=== TRAINER: Training complete for {model_type} ===")
                 logger.info(f"Training metrics: {metrics_dict}")
+                logger.info(f"Model accuracy: {metrics_dict.get('accuracy', 'N/A')}")
+                logger.info(f"Model precision: {metrics_dict.get('precision', 'N/A')}")
+                logger.info(f"Model recall: {metrics_dict.get('recall', 'N/A')}")
+                logger.info(f"Model F1 score: {metrics_dict.get('f1', 'N/A')}")
                 return model, metrics_dict
 
             except Exception as e:

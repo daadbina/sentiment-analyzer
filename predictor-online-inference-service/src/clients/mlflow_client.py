@@ -459,6 +459,60 @@ class MLflowModelClient:
 
         raise ModelLoadError("No model has been loaded yet")
 
+    def download_artifact(
+        self,
+        model_version: str | None = None,
+        artifact_path: str = "preprocessor",
+        trace_id: str | None = None,
+    ) -> str:
+        """
+        Download artifact from MLflow for a specific model version.
+
+        Args:
+            model_version: Model version identifier (if None, uses production model)
+            artifact_path: Path to artifact within the run (e.g., "preprocessor/preprocessor_*.pkl")
+            trace_id: Optional trace ID for distributed tracing
+
+        Returns:
+            Local path to downloaded artifact
+
+        Raises:
+            ModelLoadError: If artifact download fails
+        """
+        try:
+            client = self._ensure_connected()
+
+            # Get the run_id for this model version
+            # For simplicity, use the latest production model's run_id
+            if self._selected_model_info and "run_id" in self._selected_model_info:
+                run_id = self._selected_model_info["run_id"]
+            else:
+                # Try to get production model
+                try:
+                    model_name = self.config.model_name
+                    versions = client.get_latest_versions(model_name, stages=["Production"])
+                    if not versions:
+                        versions = client.get_latest_versions(model_name, stages=["None"])
+
+                    if versions:
+                        run_id = versions[0].run_id
+                    else:
+                        raise ModelLoadError(f"No model versions found for {model_name}")
+                except Exception as e:
+                    raise ModelLoadError(f"Failed to get model run_id: {e}")
+
+            logger.info(f"Downloading artifact from run {run_id}: {artifact_path}")
+
+            # Download artifact to temp directory
+            artifact_uri = client.download_artifacts(run_id, artifact_path)
+
+            logger.info(f"Artifact downloaded to: {artifact_uri}")
+            return artifact_uri
+
+        except Exception as e:
+            logger.error(f"Failed to download artifact: {e}", exc_info=True)
+            raise ModelLoadError(f"Failed to download artifact: {e}")
+
     async def health_check(self) -> bool:
         """
         Check if MLflow is healthy.

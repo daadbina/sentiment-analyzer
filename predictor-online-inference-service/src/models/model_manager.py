@@ -6,9 +6,11 @@ Implements circuit breaker pattern and fallback model support.
 """
 
 import logging
+import pickle
 from typing import Any
 
 import numpy as np
+import pandas as pd
 from mlflow.pyfunc import PyFuncModel
 
 from ..clients import MLflowModelClient
@@ -41,6 +43,7 @@ class ModelManager:
         self.mlflow_client = mlflow_client
         self.ab_testing_strategy = ab_testing_strategy
         self._models: dict[str, PyFuncModel] = {}
+        self._preprocessors: dict[str, Any] = {}  # Cache preprocessors by model version
 
         logger.info("Initialized model manager")
 
@@ -160,8 +163,33 @@ class ModelManager:
             attributes={"model_version": model_version, "trace_id": trace_id},
         ):
             try:
-                # Prepare input data
-                input_data = self._prepare_input(features)
+                # Log raw features before preprocessing
+                logger.info(
+                    f"Raw features before preprocessing: count={len(features)}",
+                    extra={
+                        "trace_id": trace_id,
+                        "model_version": model_version,
+                        "feature_names": list(features.keys()),
+                        "feature_sample": {k: features[k] for k in list(features.keys())[:5]},
+                    },
+                )
+
+                # Load preprocessor for this model version
+                preprocessor = await self._load_preprocessor(model_version, trace_id)
+
+                # Prepare input data with preprocessing
+                input_data = self._prepare_input(features, preprocessor)
+
+                # Log prepared input shape
+                logger.info(
+                    f"Prepared input for model: shape={input_data.shape}",
+                    extra={
+                        "trace_id": trace_id,
+                        "model_version": model_version,
+                        "input_shape": input_data.shape,
+                        "preprocessor_used": preprocessor is not None,
+                    },
+                )
 
                 # Make prediction
                 prediction = model.predict(input_data)
@@ -210,31 +238,112 @@ class ModelManager:
                     trace_id=trace_id,
                 )
 
-    def _prepare_input(self, features: dict[str, Any]) -> np.ndarray:
+    async def _load_preprocessor(
+        self,
+        model_version: str,
+        trace_id: str | None = None,
+    ) -> Any:
+        """
+        Load preprocessor from MLflow for a specific model version.
+
+        Args:
+            model_version: Model version identifier
+            trace_id: Optional trace ID for distributed tracing
+
+        Returns:
+            Loaded preprocessor instance
+
+        Raises:
+            ModelLoadError: If preprocessor loading fails
+        """
+        # Check cache first
+        if model_version in self._preprocessors:
+            logger.debug(f"Using cached preprocessor for version {model_version}")
+            return self._preprocessors[model_version]
+
+        try:
+            logger.info(f"Loading preprocessor for model version {model_version}")
+
+            # Download preprocessor artifact from MLflow
+            import tempfile
+            import os
+
+            # Get the run_id for this model version
+            # For now, use the default model (production)
+            preprocessor_path = self.mlflow_client.download_artifact(
+                model_version=model_version,
+                artifact_path="preprocessor/preprocessor_*.pkl",
+                trace_id=trace_id,
+            )
+
+            # Load preprocessor
+            with open(preprocessor_path, "rb") as f:
+                preprocessor = pickle.load(f)
+
+            # Cache it
+            self._preprocessors[model_version] = preprocessor
+
+            logger.info(f"Preprocessor loaded successfully for version {model_version}")
+            return preprocessor
+
+        except Exception as e:
+            logger.warning(
+                f"Failed to load preprocessor for version {model_version}: {e}. "
+                "Will use raw features without preprocessing."
+            )
+            # Return None to indicate no preprocessing available
+            return None
+
+    def _prepare_input(
+        self,
+        features: dict[str, Any],
+        preprocessor: Any = None,
+    ) -> np.ndarray:
         """
         Prepare input data for model prediction.
 
         Args:
-            features: Feature dictionary
+            features: Feature dictionary (24 raw features)
+            preprocessor: Optional preprocessor instance from training
 
         Returns:
-            NumPy array ready for model input
+            NumPy array ready for model input (preprocessed features)
         """
-        # Extract feature values in expected order
-        feature_values = [
-            float(features.get("feature_num_sources", 0)),
-            float(features.get("feature_sentiment_mean", 0)),
-            float(features.get("feature_credibility_mean", 0)),
-            float(
-                len(features.get("feature_entities", []))
-                if isinstance(features.get("feature_entities"), list)
-                else 0
-            ),
-            float(features.get("feature_time_density", 0)),
-        ]
+        # Convert features dict to DataFrame with single row
+        # Ensure features are in the correct order as expected by the preprocessor
+        feature_df = pd.DataFrame([features])
 
-        # Convert to 2D array (single sample)
-        return np.array([feature_values])
+        logger.debug(
+            f"Input features shape before preprocessing: {feature_df.shape}",
+            extra={"feature_columns": list(feature_df.columns)},
+        )
+
+        # Apply preprocessing if available
+        if preprocessor is not None:
+            try:
+                # Apply the same preprocessing pipeline as training:
+                # 1. Handle missing values (imputation)
+                # 2. Feature engineering (interaction + polynomial features)
+                # 3. Scaling
+                # 4. Remove constant features
+                preprocessed_df, _ = preprocessor.preprocess(feature_df, y=None, fit=False)
+
+                logger.debug(
+                    f"Features after preprocessing: shape={preprocessed_df.shape}",
+                    extra={"preprocessed_shape": preprocessed_df.shape},
+                )
+
+                # Convert to numpy array
+                return preprocessed_df.values
+
+            except Exception as e:
+                logger.error(f"Preprocessing failed: {e}. Using raw features.", exc_info=True)
+                # Fall back to raw features
+                return feature_df.values
+        else:
+            # No preprocessor available, use raw features
+            logger.warning("No preprocessor available, using raw features")
+            return feature_df.values
 
     async def get_model_metadata(
         self,

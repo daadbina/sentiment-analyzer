@@ -1,15 +1,15 @@
 """
-Feature fetcher for retrieving features from Feast feature store.
+Feature fetcher for retrieving features from Redis online store.
 
 Provides high-level interface for fetching features with caching and validation.
-Handles both online and offline feature retrieval.
+Reads features directly from Redis using the same format as feature-engineering-service.
 """
 
 import logging
 from datetime import datetime
 from typing import Any
 
-from ..clients import FeastClient
+from ..clients import FeastClient, RedisClient
 from ..exceptions import FeatureFetchError
 from ..metrics import feature_freshness_seconds
 from ..utils.trace import trace_span
@@ -18,33 +18,64 @@ logger = logging.getLogger(__name__)
 
 
 # Expected feature names from feature engineering service
+# These match the feature names defined in feature-engineering-service/features.py
+# Note: When reading from Redis, these are stored without the "semantic_group_features:" prefix
+# All 24 features are required for model inference
 REQUIRED_FEATURES = [
-    "feature_num_sources",
-    "feature_sentiment_mean",
-    "feature_credibility_mean",
-    "feature_entities",
-    "feature_time_density",
+    # Source features (4)
+    "num_sources",
+    "source_credibility_avg",
+    "source_credibility_std",
+    "source_diversity_score",
+    # Temporal features (4)
+    "time_span_hours",
+    "publication_velocity",
+    "temporal_concentration",
+    "days_since_first_article",
+    # Sentiment features (4)
+    "sentiment_mean",
+    "sentiment_std",
+    "sentiment_polarity_ratio",
+    "sentiment_volatility",
+    # Entity features (4)
+    "entity_count",
+    "entity_diversity",
+    "entity_prominence",
+    "entity_concentration",
+    # Content features (4)
+    "avg_word_count",
+    "avg_title_length",
+    "language_diversity",
+    "domain_diversity",
+    # Embedding features (4)
+    "centroid_magnitude",
+    "intra_cluster_similarity_mean",
+    "intra_cluster_similarity_std",
+    "embedding_drift_score",
 ]
 
 
 class FeatureFetcher:
     """
-    High-level interface for fetching features from Feast.
+    High-level interface for fetching features from Redis online store.
 
     Provides methods for retrieving features with proper error handling
-    and metric collection.
+    and metric collection. Reads features directly from Redis using the
+    key format: features:{group_id}
     """
 
-    def __init__(self, feast_client: FeastClient):
+    def __init__(self, feast_client: FeastClient, redis_client: RedisClient):
         """
         Initialize feature fetcher.
 
         Args:
-            feast_client: Feast client instance
+            feast_client: Feast client instance (for historical features)
+            redis_client: Redis client instance (for online features)
         """
         self.feast_client = feast_client
+        self.redis_client = redis_client
 
-        logger.info("Initialized feature fetcher")
+        logger.info("Initialized feature fetcher with Redis online store")
 
     async def fetch_online_features(
         self,
@@ -52,7 +83,7 @@ class FeatureFetcher:
         trace_id: str | None = None,
     ) -> dict[str, Any]:
         """
-        Fetch features from online store for a semantic group.
+        Fetch features from Redis online store for a semantic group.
 
         Args:
             group_id: Semantic group ID
@@ -67,11 +98,11 @@ class FeatureFetcher:
         Example:
             features = await fetcher.fetch_online_features("group_123")
             # Returns: {
-            #     "feature_num_sources": 5,
-            #     "feature_sentiment_mean": 0.75,
-            #     "feature_credibility_mean": 0.85,
-            #     "feature_entities": ["entity1", "entity2"],
-            #     "feature_time_density": 0.5,
+            #     "num_sources": 5,
+            #     "sentiment_mean": 0.75,
+            #     "source_credibility_avg": 0.85,
+            #     "entity_count": 10,
+            #     "temporal_concentration": 0.5,
             #     "feature_timestamp": "2025-11-07T12:00:00Z",
             # }
         """
@@ -81,33 +112,37 @@ class FeatureFetcher:
         ):
             try:
                 logger.debug(
-                    f"Fetching online features: group_id={group_id}",
+                    f"Fetching online features from Redis: group_id={group_id}",
                     extra={"trace_id": trace_id, "group_id": group_id},
                 )
 
-                # Prepare entity rows
-                entity_rows = [{"group_id": group_id}]
+                # Fetch features directly from Redis using the same key format
+                # as feature-engineering-service: features:{group_id}
+                redis_key = f"features:{group_id}"
+                feature_data = await self.redis_client.get(redis_key, trace_id=trace_id)
 
-                # Fetch features from Feast online store
-                feature_rows = await self.feast_client.get_online_features(
-                    feature_names=REQUIRED_FEATURES,
-                    entity_rows=entity_rows,
-                    trace_id=trace_id,
-                )
-
-                if not feature_rows:
+                if not feature_data:
                     raise FeatureFetchError(
-                        f"No features returned for group_id={group_id}",
+                        f"No features found in Redis for group_id={group_id}",
                         group_id=group_id,
                         store_type="online",
                         trace_id=trace_id,
                     )
 
-                features = feature_rows[0]
+                # Extract only the required features
+                features = {}
+                for feature_name in REQUIRED_FEATURES:
+                    if feature_name in feature_data:
+                        features[feature_name] = feature_data[feature_name]
+                    else:
+                        logger.warning(
+                            f"Missing feature: {feature_name} for group_id={group_id}",
+                            extra={"trace_id": trace_id, "group_id": group_id},
+                        )
 
                 # Check for feature freshness
-                if "feature_timestamp" in features:
-                    feature_timestamp = datetime.fromisoformat(features["feature_timestamp"])
+                if "timestamp" in feature_data:
+                    feature_timestamp = datetime.fromisoformat(feature_data["timestamp"])
                     age_seconds = (datetime.utcnow() - feature_timestamp).total_seconds()
                     feature_freshness_seconds.labels(group_id=group_id).set(age_seconds)
 
@@ -116,10 +151,15 @@ class FeatureFetcher:
                         extra={"trace_id": trace_id, "group_id": group_id},
                     )
 
-                logger.debug(
-                    f"Fetched online features: group_id={group_id}, "
-                    f"feature_count={len(features)}",
-                    extra={"trace_id": trace_id, "group_id": group_id},
+                # Log sample features for debugging
+                logger.info(
+                    f"Fetched {len(features)} raw features from Redis: group_id={group_id}",
+                    extra={
+                        "trace_id": trace_id,
+                        "group_id": group_id,
+                        "feature_sample": {k: features[k] for k in list(features.keys())[:5]},
+                        "all_features": features,
+                    },
                 )
 
                 return features
@@ -213,7 +253,7 @@ class FeatureFetcher:
         trace_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """
-        Fetch features from online store for multiple semantic groups.
+        Fetch features from Redis online store for multiple semantic groups.
 
         Args:
             group_ids: List of semantic group IDs
@@ -234,19 +274,15 @@ class FeatureFetcher:
         ):
             try:
                 logger.debug(
-                    f"Fetching batch online features: group_count={len(group_ids)}",
+                    f"Fetching batch online features from Redis: group_count={len(group_ids)}",
                     extra={"trace_id": trace_id},
                 )
 
-                # Prepare entity rows
-                entity_rows = [{"group_id": gid} for gid in group_ids]
-
-                # Fetch features from Feast online store
-                feature_rows = await self.feast_client.get_online_features(
-                    feature_names=REQUIRED_FEATURES,
-                    entity_rows=entity_rows,
-                    trace_id=trace_id,
-                )
+                # Fetch features for each group from Redis
+                feature_rows = []
+                for group_id in group_ids:
+                    features = await self.fetch_online_features(group_id, trace_id=trace_id)
+                    feature_rows.append(features)
 
                 logger.debug(
                     f"Fetched batch online features: group_count={len(group_ids)}, "

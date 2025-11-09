@@ -54,7 +54,7 @@ class ArticleValidator:
             errors.append(f"R1: {e.message}")
             score -= 0.15
 
-        # Recency check: Article must be published within last 30 days
+        # Recency check: Article must be published within last 90 days
         # This ensures we process current news, not historical archives
         try:
             self._validate_article_recency(article)
@@ -152,7 +152,7 @@ class ArticleValidator:
 
     def _validate_article_recency(self, article: ParsedArticle) -> None:
         """
-        Validate article recency (published within last 30 days).
+        Validate article recency (published within last 90 days).
 
         For news crawling, we only process recent articles to ensure
         the system handles current news, not historical archives.
@@ -171,10 +171,10 @@ class ArticleValidator:
             if isinstance(published_at, str):
                 published_at = TimestampUtils.from_iso8601(published_at)
 
-            # Check article is recent (within last 30 days)
-            if not TimestampUtils.is_recent_article(published_at, max_age_days=30):
+            # Check article is recent (within last 90 days)
+            if not TimestampUtils.is_recent_article(published_at, max_age_days=90):
                 raise ValidationError(
-                    "Article is too old (published more than 30 days ago)",
+                    "Article is too old (published more than 90 days ago)",
                     field="published_at",
                     error_code="RECENCY_TOO_OLD",
                 )

@@ -89,7 +89,7 @@ def _load_default_feeds(crawler_app: "CrawlerApplication") -> None:
         FeedSource(
             feed_id="reuters",
             name="Reuters",
-            url="http://feeds.reuters.com/Reuters/worldNews",
+            url="https://www.theguardian.com/world/rss",  # Using Guardian RSS as Reuters alternative (Reuters website has anti-bot protection)
             feed_type="rss",
             language="en",
             country="US",
@@ -147,8 +147,8 @@ def _load_default_feeds(crawler_app: "CrawlerApplication") -> None:
         FeedSource(
             feed_id="isna",
             name="ISNA News Agency",
-            url="https://en.isna.ir/",
-            feed_type="html",
+            url="https://en.irna.ir/rss",  # Using IRNA RSS as ISNA alternative (ISNA website has complex structure)
+            feed_type="rss",
             language="fa",
             country="IR",
             enabled=True,
@@ -161,6 +161,12 @@ def _load_default_feeds(crawler_app: "CrawlerApplication") -> None:
         try:
             crawler_app.feed_registry.add_feed(feed)
             logger.info(f"Loaded feed: {feed.feed_id}")
+
+            # Log alternative feed sources
+            if feed.feed_id == "reuters" and "theguardian.com" in feed.url:
+                logger.info(f"NOTE: Reuters feed is using Guardian RSS as alternative source (Reuters website has anti-bot protection)")
+            elif feed.feed_id == "isna" and "irna.ir" in feed.url:
+                logger.info(f"NOTE: ISNA feed is using IRNA RSS as alternative source (ISNA website has complex structure)")
         except Exception as e:
             logger.warning(f"Failed to load feed {feed.feed_id}: {str(e)}")
 

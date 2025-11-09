@@ -59,17 +59,21 @@ class SQLBuilder:
     def order_by(
         self,
         field: str,
-        order: SortOrder = SortOrder.ASC,
+        order: SortOrder | str = SortOrder.ASC,
     ) -> "SQLBuilder":
         """Add ORDER BY clause.
 
         Args:
             field: Field name
-            order: Sort order
+            order: Sort order (SortOrder enum or string "ASC"/"DESC")
 
         Returns:
             Self for chaining
         """
+        # Convert string to enum if needed
+        if isinstance(order, str):
+            order = SortOrder(order.upper())
+
         self.order_by_fields.append((field, order))
         return self
 

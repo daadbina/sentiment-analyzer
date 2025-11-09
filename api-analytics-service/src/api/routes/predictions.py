@@ -48,7 +48,6 @@ async def list_predictions(
         List of predictions
     """
     try:
-        metrics_recorder.record_request("GET /predictions")
 
         builder = SQLBuilder("predictions")
         builder.select("id", "group_id", "sentiment", "confidence", "model_version", "created_at")
@@ -84,7 +83,6 @@ async def list_predictions(
             },
         )
 
-        metrics_recorder.record_success("GET /predictions")
 
         return PredictionListResponse(
             items=predictions,
@@ -114,7 +112,6 @@ async def get_prediction(
         Prediction details
     """
     try:
-        metrics_recorder.record_request(f"GET /predictions/{prediction_id}")
 
         builder = SQLBuilder("predictions")
         builder.where("id = $1", prediction_id)
@@ -134,7 +131,6 @@ async def get_prediction(
             extra={"extra_fields": {"prediction_id": prediction_id}},
         )
 
-        metrics_recorder.record_success(f"GET /predictions/{prediction_id}")
 
         return prediction
 
@@ -159,7 +155,6 @@ async def create_prediction(
         Created prediction
     """
     try:
-        metrics_recorder.record_request("POST /predictions")
 
         query = """
             INSERT INTO predictions (group_id, sentiment, confidence, model_version)
@@ -185,7 +180,6 @@ async def create_prediction(
             extra={"extra_fields": {"prediction_id": created_prediction.id}},
         )
 
-        metrics_recorder.record_success("POST /predictions")
 
         return created_prediction
 
@@ -214,7 +208,6 @@ async def get_group_predictions(
         List of predictions for group
     """
     try:
-        metrics_recorder.record_request(f"GET /predictions/group/{group_id}")
 
         builder = SQLBuilder("predictions")
         builder.where("group_id = $1", group_id)
@@ -243,7 +236,6 @@ async def get_group_predictions(
             },
         )
 
-        metrics_recorder.record_success(f"GET /predictions/group/{group_id}")
 
         return PredictionListResponse(
             items=predictions,

@@ -48,7 +48,6 @@ async def list_entities(
         List of entities
     """
     try:
-        metrics_recorder.record_request("GET /entities")
 
         builder = SQLBuilder("entities")
         builder.select("id", "name", "entity_type", "wikidata_id", "description", "mention_count", "created_at")
@@ -84,7 +83,6 @@ async def list_entities(
             },
         )
 
-        metrics_recorder.record_success("GET /entities")
 
         return EntityListResponse(
             items=entities,
@@ -114,7 +112,6 @@ async def get_entity(
         Entity details
     """
     try:
-        metrics_recorder.record_request(f"GET /entities/{entity_id}")
 
         builder = SQLBuilder("entities")
         builder.where("id = $1", entity_id)
@@ -134,7 +131,6 @@ async def get_entity(
             extra={"extra_fields": {"entity_id": entity_id}},
         )
 
-        metrics_recorder.record_success(f"GET /entities/{entity_id}")
 
         return entity
 
@@ -159,7 +155,6 @@ async def create_entity(
         Created entity
     """
     try:
-        metrics_recorder.record_request("POST /entities")
 
         query = """
             INSERT INTO entities (name, entity_type, wikidata_id, description)
@@ -185,7 +180,6 @@ async def create_entity(
             extra={"extra_fields": {"entity_id": created_entity.id}},
         )
 
-        metrics_recorder.record_success("POST /entities")
 
         return created_entity
 
@@ -214,7 +208,6 @@ async def get_entity_mentions(
         Entity mentions
     """
     try:
-        metrics_recorder.record_request(f"GET /entities/{entity_id}/mentions")
 
         builder = SQLBuilder("entity_mentions")
         builder.where("entity_id = $1", entity_id)
@@ -241,7 +234,6 @@ async def get_entity_mentions(
             },
         )
 
-        metrics_recorder.record_success(f"GET /entities/{entity_id}/mentions")
 
         return {
             "entity_id": entity_id,

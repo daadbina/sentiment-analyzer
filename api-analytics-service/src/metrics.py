@@ -265,3 +265,7 @@ class MetricsRecorder:
         )
         api_export_size_bytes.labels(format=format_type).set(size_bytes)
 
+
+# Global metrics recorder instance
+metrics_recorder = MetricsRecorder()
+

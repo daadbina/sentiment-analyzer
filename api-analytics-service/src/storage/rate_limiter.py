@@ -80,7 +80,7 @@ class RateLimiter:
                         }
                     },
                 )
-                metrics_recorder.record_rate_limit_exceeded()
+                metrics_recorder.record_rate_limit_exceeded(user_id, endpoint)
                 raise RateLimitError(
                     message="Rate limit exceeded",
                     details={

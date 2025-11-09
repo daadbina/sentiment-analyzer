@@ -48,7 +48,6 @@ async def get_trends(
         Trend data
     """
     try:
-        metrics_recorder.record_request("GET /analytics/trends")
 
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=days)
@@ -102,7 +101,6 @@ async def get_trends(
             },
         )
 
-        metrics_recorder.record_success("GET /analytics/trends")
 
         return TrendResponse(
             metric=metric,
@@ -132,7 +130,6 @@ async def get_distributions(
         Distribution data
     """
     try:
-        metrics_recorder.record_request("GET /analytics/distributions")
 
         if metric == "sentiment":
             query = """
@@ -173,7 +170,6 @@ async def get_distributions(
             },
         )
 
-        metrics_recorder.record_success("GET /analytics/distributions")
 
         return DistributionResponse(
             metric=metric,
@@ -202,7 +198,6 @@ async def get_top_entities(
         Top entities
     """
     try:
-        metrics_recorder.record_request("GET /analytics/top-entities")
 
         query = """
             SELECT name, mention_count
@@ -243,7 +238,6 @@ async def get_top_entities(
             },
         )
 
-        metrics_recorder.record_success("GET /analytics/top-entities")
 
         return TopItemsResponse(
             metric="top_entities",
@@ -272,7 +266,6 @@ async def get_top_actors(
         Top actors
     """
     try:
-        metrics_recorder.record_request("GET /analytics/top-actors")
 
         query = """
             SELECT name, mention_count
@@ -314,7 +307,6 @@ async def get_top_actors(
             },
         )
 
-        metrics_recorder.record_success("GET /analytics/top-actors")
 
         return TopItemsResponse(
             metric="top_actors",

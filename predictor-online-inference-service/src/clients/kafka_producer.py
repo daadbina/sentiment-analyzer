@@ -173,11 +173,19 @@ class KafkaProducerClient:
                     else:
                         delivery_future.set_result(msg)
 
+                # Convert schema dict to Avro schema object
+                import avro.schema
+                import json
+
+                # Parse the schema dict into an Avro schema object
+                schema_str = json.dumps(value_schema)
+                avro_schema = avro.schema.parse(schema_str)
+
                 # Produce message with Avro serialization
                 producer.produce(
                     topic=topic,
                     value=prediction,
-                    value_schema=value_schema,
+                    value_schema=avro_schema,
                     callback=delivery_callback,
                 )
 

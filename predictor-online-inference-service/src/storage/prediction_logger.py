@@ -128,13 +128,12 @@ class PredictionLogger:
             trace_id: Optional trace ID for distributed tracing
         """
         try:
+            # Import the schema
+            from src.clients.kafka_producer import PREDICTION_SCHEMA
+
             await self.kafka_producer.produce_prediction(
-                group_id=prediction["group_id"],
-                domain=prediction["domain"],
-                prediction_probability=prediction["prediction_probability"],
-                prediction_confidence=prediction["prediction_confidence"],
-                model_version=prediction["model_version"],
-                features=prediction.get("features", {}),
+                prediction=prediction,
+                value_schema=PREDICTION_SCHEMA,
                 trace_id=trace_id,
             )
 

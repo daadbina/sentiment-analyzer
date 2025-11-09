@@ -5,8 +5,10 @@ Provides high-level interface for model loading with version management.
 Implements circuit breaker pattern and fallback model support.
 """
 
+import asyncio
 import logging
 import pickle
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import numpy as np
@@ -19,6 +21,9 @@ from ..utils.ab_testing import ABTestingStrategy
 from ..utils.trace import trace_span
 
 logger = logging.getLogger(__name__)
+
+# Thread pool for running synchronous model predictions
+_thread_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="model_predict")
 
 
 class ModelManager:
@@ -191,8 +196,9 @@ class ModelManager:
                     },
                 )
 
-                # Make prediction
-                prediction = model.predict(input_data)
+                # Make prediction in thread pool to avoid blocking the event loop
+                loop = asyncio.get_event_loop()
+                prediction = await loop.run_in_executor(_thread_pool, model.predict, input_data)
 
                 # Extract probability and confidence
                 if isinstance(prediction, np.ndarray):

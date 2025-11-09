@@ -645,7 +645,7 @@ class LabelerService:
 
                 if valid_btc:
                     # Enrich BTC labels
-                    enriched_btc = await self._enrich_labels(valid_btc, "BINANCE")
+                    enriched_btc = [self._enrich_label_fields(label, "BINANCE") for label in valid_btc]
                     logger.info(
                         f"Enriched {len(enriched_btc)} BTC labels",
                         operation="_fetch_btc_background",

@@ -315,6 +315,11 @@ class LabelSettings(BaseSettings):
         alias="LABEL_FRESHNESS_BINANCE_MINUTES",
         description="Binance freshness threshold in minutes"
     )
+    min_semantic_groups_threshold: int = Field(
+        default=50,
+        alias="LABEL_MIN_SEMANTIC_GROUPS_THRESHOLD",
+        description="Minimum number of semantic groups required before starting deduplication and reconciliation"
+    )
 
     model_config = ConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 

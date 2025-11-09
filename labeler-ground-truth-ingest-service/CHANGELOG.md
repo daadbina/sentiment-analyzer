@@ -18,6 +18,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.0] - 2025-11-09
+
+### Added
+- **Semantic Groups Threshold Check** (src/service.py, src/config.py)
+  - Added MIN_SEMANTIC_GROUPS_THRESHOLD configuration parameter (default: 50)
+  - Prevents premature deduplication when semantic groups don't exist
+  - Labeler now waits for clustering to create sufficient semantic groups before processing
+  - Added threshold check in process_labels() before deduplication and reconciliation
+  - Service skips processing and waits for next iteration when threshold not met
+  - Comprehensive logging for threshold status and semantic group count
+  - Added "===" markers to logs for easy filtering
+  - Configurable via LABEL_MIN_SEMANTIC_GROUPS_THRESHOLD environment variable
+
+### Fixed
+- **Premature Deduplication Issue**
+  - Resolved issue where labels were cached as duplicates before reconciliation was possible
+  - Previously, labeler started deduplicating immediately even when no semantic groups existed
+  - All incoming labels were marked as duplicates because there were no groups to reconcile against
+  - When clustering created groups later, labels were already cached as duplicates
+  - Now waits for clustering service to create at least 50 semantic groups before processing
+  - Aligns with organic clustering approach (no pre-defined groups)
+  - Ensures reconciliation can work correctly with dynamically created semantic groups
+
+### Changed
+- **Label Processing Pipeline**
+  - Modified process_labels() to check semantic groups count before deduplication
+  - Added early return when threshold not met to prevent premature caching
+  - Enhanced logging to show semantic groups count at pipeline start
+  - Logs now show current groups vs required threshold for visibility
+
+---
+
 ## [0.8.0] - 2025-11-09
 
 ### Fixed

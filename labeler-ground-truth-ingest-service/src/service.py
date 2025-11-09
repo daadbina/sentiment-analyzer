@@ -750,8 +750,10 @@ class LabelerService:
         """Main label processing pipeline."""
         try:
             logger.info(
-                "Starting label processing pipeline",
-                operation="process_labels"
+                "=== LABELER: Starting label processing pipeline ===",
+                operation="process_labels",
+                semantic_groups_count=len(self.semantic_groups),
+                min_threshold=config.label.min_semantic_groups_threshold
             )
 
             # Consume semantic groups from Kafka
@@ -787,6 +789,35 @@ class LabelerService:
                     crypto_labels.extend(valid)
                 else:
                     event_labels.extend(valid)
+
+            # Check if we have enough semantic groups before deduplication and reconciliation
+            # This prevents premature caching of labels as duplicates when no groups exist
+            min_threshold = config.label.min_semantic_groups_threshold
+            current_groups = len(self.semantic_groups)
+
+            if current_groups < min_threshold:
+                logger.warning(
+                    f"=== LABELER: Insufficient semantic groups for processing === "
+                    f"Waiting for clustering service to create at least {min_threshold} semantic groups. "
+                    f"Currently have {current_groups} groups. Skipping deduplication and reconciliation to "
+                    f"prevent premature caching of labels as duplicates.",
+                    operation="process_labels",
+                    current_groups=current_groups,
+                    required_threshold=min_threshold,
+                    event_labels_count=len(event_labels),
+                    crypto_labels_count=len(crypto_labels)
+                )
+                # Skip processing and wait for next iteration
+                return
+
+            logger.info(
+                f"=== LABELER: Sufficient semantic groups available for processing ===",
+                operation="process_labels",
+                current_groups=current_groups,
+                required_threshold=min_threshold,
+                event_labels_count=len(event_labels),
+                crypto_labels_count=len(crypto_labels)
+            )
 
             # Deduplicate ALL labels (both event and crypto) for safety
             # Per Architecture.md: Deduplication Engine detects duplicates from multiple sources

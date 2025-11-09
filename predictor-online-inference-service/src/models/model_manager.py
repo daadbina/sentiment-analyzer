@@ -265,14 +265,9 @@ class ModelManager:
             logger.info(f"Loading preprocessor for model version {model_version}")
 
             # Download preprocessor artifact from MLflow
-            import tempfile
-            import os
-
-            # Get the run_id for this model version
-            # For now, use the default model (production)
             preprocessor_path = self.mlflow_client.download_artifact(
                 model_version=model_version,
-                artifact_path="preprocessor/preprocessor_*.pkl",
+                artifact_path="preprocessor",
                 trace_id=trace_id,
             )
 

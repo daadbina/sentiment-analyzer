@@ -470,11 +470,11 @@ class MLflowModelClient:
 
         Args:
             model_version: Model version identifier (if None, uses production model)
-            artifact_path: Path to artifact within the run (e.g., "preprocessor/preprocessor_*.pkl")
+            artifact_path: Path to artifact within the run (e.g., "preprocessor")
             trace_id: Optional trace ID for distributed tracing
 
         Returns:
-            Local path to downloaded artifact
+            Local path to downloaded artifact file
 
         Raises:
             ModelLoadError: If artifact download fails
@@ -503,8 +503,25 @@ class MLflowModelClient:
 
             logger.info(f"Downloading artifact from run {run_id}: {artifact_path}")
 
-            # Download artifact to temp directory
-            artifact_uri = client.download_artifacts(run_id, artifact_path)
+            # List artifacts in the preprocessor directory to find the .pkl file
+            artifacts = client.list_artifacts(run_id, path=artifact_path)
+            if not artifacts:
+                raise ModelLoadError(f"No artifacts found in {artifact_path}")
+
+            # Find the .pkl file
+            preprocessor_artifact = None
+            for artifact in artifacts:
+                if artifact.path.endswith(".pkl"):
+                    preprocessor_artifact = artifact
+                    break
+
+            if not preprocessor_artifact:
+                raise ModelLoadError(f"No .pkl file found in {artifact_path}")
+
+            logger.info(f"Found preprocessor artifact: {preprocessor_artifact.path}")
+
+            # Download the specific artifact
+            artifact_uri = client.download_artifacts(run_id, preprocessor_artifact.path)
 
             logger.info(f"Artifact downloaded to: {artifact_uri}")
             return artifact_uri

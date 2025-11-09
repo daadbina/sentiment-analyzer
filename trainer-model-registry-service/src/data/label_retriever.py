@@ -274,3 +274,73 @@ class LabelRetriever:
                     f"Failed to compute label statistics: {e}",
                     stage="label_statistics",
                 )
+
+    async def retrieve_btc_labels(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> pd.DataFrame:
+        """
+        Retrieve BTC price labels from PostgreSQL btc_truth table.
+
+        Args:
+            start_date: Start date for label retrieval
+            end_date: End date for label retrieval
+
+        Returns:
+            DataFrame with BTC price labels (change_pct_10h, label_spike, etc.)
+
+        Raises:
+            DataPreparationError: If retrieval fails
+        """
+        with tracer.start_as_current_span("retrieve_btc_labels"):
+            try:
+                logger.info(f"Retrieving BTC labels from {start_date} to {end_date}")
+
+                # Query BTC labels from btc_truth table
+                query = """
+                    SELECT
+                        event_id,
+                        timestamp,
+                        close as btc_price,
+                        change_pct_10h,
+                        label_spike,
+                        volatility_score,
+                        volume,
+                        label_confidence
+                    FROM btc_truth
+                    WHERE timestamp >= $1 AND timestamp <= $2
+                    ORDER BY timestamp DESC
+                """
+
+                rows = await self.postgres_client.fetch_all(
+                    query,
+                    start_date,
+                    end_date,
+                )
+
+                if not rows:
+                    logger.warning(f"No BTC labels found between {start_date} and {end_date}")
+                    return pd.DataFrame()
+
+                # Convert to DataFrame
+                btc_df = pd.DataFrame(rows)
+
+                logger.info(
+                    f"Retrieved {len(btc_df)} BTC labels",
+                    extra={
+                        "label_count": len(btc_df),
+                        "date_range": f"{start_date} to {end_date}",
+                        "avg_change_pct": btc_df["change_pct_10h"].mean() if "change_pct_10h" in btc_df.columns else None,
+                        "spike_count": btc_df["label_spike"].sum() if "label_spike" in btc_df.columns else None,
+                    },
+                )
+
+                return btc_df
+
+            except Exception as e:
+                logger.error(f"Failed to retrieve BTC labels: {e}")
+                raise DataPreparationError(
+                    f"Failed to retrieve BTC labels: {e}",
+                    stage="btc_label_retrieval",
+                )

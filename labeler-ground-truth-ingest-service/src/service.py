@@ -655,7 +655,7 @@ class LabelerService:
                     # Write to storage (Delta Lake + PostgreSQL + Outbox + Kafka)
                     try:
                         # Write to Delta Lake
-                        await self.delta_writer.write_labels(enriched_btc)
+                        await self.delta_lake_writer.write_labels(enriched_btc)
                         logger.info(
                             f"Wrote {len(enriched_btc)} BTC labels to Delta Lake",
                             operation="_fetch_btc_background",

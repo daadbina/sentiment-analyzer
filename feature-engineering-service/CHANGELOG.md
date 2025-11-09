@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2025-11-09
+
+### Added - BTC Price Feature Integration
+- **BTC Price Feature Extractor** - New src/extractors/btc_price_extractor.py:
+  - BtcPriceExtractor class extending BaseExtractor
+  - Fetches BTC price data from PostgreSQL btc_truth table (Dataset 7)
+  - Extracts 4 features: btc_change_pct_10h, btc_volatility_score, btc_volume, btc_label_spike
+  - Temporal alignment logic (±1 hour window) to match BTC data with semantic groups
+  - Handles missing BTC data gracefully with default values (0.0, False)
+  - Comprehensive logging with BTC price values and timestamps
+- **PostgreSQL Client Enhancement**:
+  - Added execute_query_sync() method for synchronous queries
+  - Supports parameterized queries with RealDictCursor
+- **Feast Feature View Update**:
+  - Updated feature count from 24 to 28 (4 new BTC features)
+  - Added BTC feature fields to Feast schema
+  - Updated parquet file schema to include BTC features
+  - Updated feature view description to include BTC price prediction
+- **Service Integration**:
+  - Integrated BtcPriceExtractor into service.py extractor chain
+  - BTC features extracted for all semantic groups
+  - BTC features written to Feast offline store (Delta Lake)
+  - BTC features written to Redis online store
+  - BTC features published to Kafka topic 'features_computed'
+
+### Expected Impact
+- **BTC Price Prediction**: Enables models to predict BTC price changes based on news sentiment
+- **Feature Diversity**: Increased from 24 to 28 features
+- **Temporal Correlation**: BTC features aligned with news publication time
+- **Architecture Compliance**: Implements Dataset 7 (Bitcoin & Financial Prices) from Architecture.md
+- **Task Completion**: Addresses Phase 3 BTC price prediction requirement from Task.md
+
+### Technical Details
+- Temporal alignment uses ±1 hour window to find closest BTC data point
+- BTC data queried using ORDER BY ABS(EXTRACT(EPOCH FROM (timestamp - $3))) for closest match
+- Default values used when BTC data not available (graceful degradation)
+- BTC features integrated seamlessly with existing 24 semantic group features
+- Feature version remains v1.0 (backward compatible addition)
+
 ## [0.2.3] - 2025-11-08
 
 ### Fixed

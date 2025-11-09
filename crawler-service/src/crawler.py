@@ -94,6 +94,9 @@ class CrawlerApplication:
             self.health_manager.get_check("feed_registry").set_healthy()
             self.health_manager.get_check("http_fetcher").set_healthy()
 
+            # Schedule all enabled feeds for automatic crawling
+            await self._schedule_all_feeds()
+
             self.is_running = True
             self.logger.info("Crawler application started successfully")
 
@@ -128,6 +131,43 @@ class CrawlerApplication:
         except Exception as e:
             self.logger.error(f"Error stopping crawler: {str(e)}")
 
+    async def _schedule_all_feeds(self) -> None:
+        """
+        Schedule all enabled feeds for automatic crawling.
+
+        This method is called during startup to schedule periodic crawl jobs
+        for all enabled feeds based on their crawl_interval_minutes configuration.
+        """
+        enabled_feeds = self.feed_registry.get_enabled_feeds()
+        self.logger.info(f"Scheduling {len(enabled_feeds)} enabled feeds for automatic crawling")
+
+        for feed in enabled_feeds:
+            try:
+                # Create a wrapper function that will be called by the scheduler
+                async def crawl_wrapper(feed_to_crawl=feed):
+                    """Wrapper function for scheduled crawl."""
+                    try:
+                        await self.crawl_feed(feed_to_crawl)
+                    except Exception as e:
+                        self.logger.error(
+                            f"Scheduled crawl failed for feed {feed_to_crawl.feed_id}: {str(e)}"
+                        )
+
+                # Schedule the feed
+                self.scheduler.schedule_crawl(
+                    feed_id=feed.feed_id,
+                    crawl_func=crawl_wrapper,
+                    interval_minutes=feed.crawl_interval_minutes,
+                )
+
+                self.logger.info(
+                    f"Scheduled feed '{feed.feed_id}' for crawling every "
+                    f"{feed.crawl_interval_minutes} minutes"
+                )
+
+            except Exception as e:
+                self.logger.error(f"Failed to schedule feed {feed.feed_id}: {str(e)}")
+
     async def crawl_feed(self, feed: FeedSource) -> CrawlJob:
         """
         Crawl a single feed.
@@ -150,11 +190,34 @@ class CrawlerApplication:
             )
             self.metrics.record_http_request(feed.feed_id, 200)
 
-            # Parse articles
-            parser = self.parser_factory.create_parser(feed.feed_id, feed.feed_type)
-            articles = await parser.parse(content, feed.url)
-
-            self.logger.info(f"Parsed {len(articles)} articles from {feed.feed_id}")
+            # Parse articles with fallback to HTML parser if RSS fails
+            articles = []
+            try:
+                parser = self.parser_factory.create_parser(feed.feed_id, feed.feed_type)
+                articles = await parser.parse(content, feed.url)
+                self.logger.info(
+                    f"Parsed {len(articles)} articles from {feed.feed_id} using {feed.feed_type} parser"
+                )
+            except Exception as parse_error:
+                # If RSS parsing fails and feed_type is 'rss', try HTML parser as fallback
+                if feed.feed_type.lower() == "rss":
+                    self.logger.warning(
+                        f"RSS parsing failed for {feed.feed_id}: {str(parse_error)}. "
+                        f"Attempting HTML parser fallback..."
+                    )
+                    try:
+                        html_parser = self.parser_factory.create_parser(feed.feed_id, "html")
+                        articles = await html_parser.parse(content, feed.url)
+                        self.logger.info(
+                            f"Parsed {len(articles)} articles from {feed.feed_id} using HTML parser fallback"
+                        )
+                    except Exception as html_error:
+                        self.logger.error(
+                            f"HTML parser fallback also failed for {feed.feed_id}: {str(html_error)}"
+                        )
+                        raise parse_error  # Raise original RSS error
+                else:
+                    raise  # Re-raise if not RSS or fallback failed
 
             # Process each article
             for article in articles:

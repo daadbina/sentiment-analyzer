@@ -37,10 +37,8 @@ class BtcPriceExtractor(FeatureExtractor):
         self.temporal_window_hours = 1  # ±1 hour alignment window
         
         logger.info(
-            "BtcPriceExtractor initialized",
-            extractor=self.name,
-            features=self.features_extracted,
-            temporal_window_hours=self.temporal_window_hours
+            f"BtcPriceExtractor initialized: extractor={self.name}, "
+            f"features={self.features_extracted}, temporal_window_hours={self.temporal_window_hours}"
         )
 
     def extract(
@@ -90,13 +88,10 @@ class BtcPriceExtractor(FeatureExtractor):
         }
         
         logger.info(
-            "BTC price features extracted",
-            group_id=group_id,
-            timestamp=created_at.isoformat(),
-            btc_change_pct_10h=features["btc_change_pct_10h"],
-            btc_volatility_score=features["btc_volatility_score"],
-            btc_volume=features["btc_volume"],
-            btc_label_spike=features["btc_label_spike"]
+            f"BTC price features extracted: group_id={group_id}, timestamp={created_at.isoformat()}, "
+            f"btc_change_pct_10h={features['btc_change_pct_10h']}, "
+            f"btc_volatility_score={features['btc_volatility_score']}, "
+            f"btc_volume={features['btc_volume']}, btc_label_spike={features['btc_label_spike']}"
         )
         
         return features

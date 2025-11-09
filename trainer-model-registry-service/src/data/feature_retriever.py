@@ -146,7 +146,7 @@ class FeatureRetriever:
         Get default feature list.
 
         Returns:
-            List of feature names from feature-engineering-service
+            List of 28 feature names from feature-engineering-service (24 base + 4 BTC)
         """
         # These features are computed by feature-engineering-service
         # and stored in Feast offline store
@@ -181,6 +181,11 @@ class FeatureRetriever:
             "intra_cluster_similarity_mean",
             "intra_cluster_similarity_std",
             "embedding_drift_score",
+            # BTC price features (4)
+            "btc_change_pct_10h",
+            "btc_volatility_score",
+            "btc_volume",
+            "btc_label_spike",
         ]
 
     def validate_features(self, feature_df: pd.DataFrame) -> bool:

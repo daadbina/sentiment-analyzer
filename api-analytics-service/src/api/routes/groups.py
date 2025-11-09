@@ -122,7 +122,8 @@ async def get_group(
     try:
 
         builder = SQLBuilder("semantic_groups")
-        builder.where("id = $1", group_id)
+        builder.select("group_id", "topic_label", "article_count", "similarity_avg", "created_at", "updated_at")
+        builder.where("group_id = $1", group_id)
 
         query, params = builder.build()
         row = await postgres_client.fetch_one(query, *params)
@@ -169,17 +170,16 @@ async def create_group(
 
         # Insert group
         query = """
-            INSERT INTO semantic_groups (title, description, article_count, entity_count)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, title, description, article_count, entity_count, created_at, updated_at
+            INSERT INTO semantic_groups (topic_label, article_count, similarity_avg)
+            VALUES ($1, $2, $3)
+            RETURNING group_id, topic_label, article_count, similarity_avg, created_at, updated_at
         """
 
         row = await postgres_client.fetch_one(
             query,
-            group.title,
-            group.description,
+            group.topic_label,
             group.article_count,
-            group.entity_count,
+            group.similarity_avg or 0.0,
         )
 
         if not row:
@@ -189,7 +189,7 @@ async def create_group(
 
         logger.info(
             "Group created",
-            extra={"extra_fields": {"group_id": created_group.id}},
+            extra={"extra_fields": {"group_id": created_group.group_id}},
         )
 
 
@@ -227,14 +227,9 @@ async def update_group(
         params = []
         param_count = 1
 
-        if group_update.title:
-            updates.append(f"title = ${param_count}")
-            params.append(group_update.title)
-            param_count += 1
-
-        if group_update.description is not None:
-            updates.append(f"description = ${param_count}")
-            params.append(group_update.description)
+        if group_update.topic_label:
+            updates.append(f"topic_label = ${param_count}")
+            params.append(group_update.topic_label)
             param_count += 1
 
         if not updates:
@@ -246,8 +241,8 @@ async def update_group(
         query = f"""
             UPDATE semantic_groups
             SET {', '.join(updates)}
-            WHERE id = ${param_count}
-            RETURNING id, title, description, article_count, entity_count, created_at, updated_at
+            WHERE group_id = ${param_count}
+            RETURNING group_id, topic_label, article_count, similarity_avg, created_at, updated_at
         """
 
         row = await postgres_client.fetch_one(query, *params)
@@ -292,7 +287,7 @@ async def delete_group(
     """
     try:
 
-        query = "DELETE FROM semantic_groups WHERE id = $1"
+        query = "DELETE FROM semantic_groups WHERE group_id = $1"
         await postgres_client.execute(query, group_id)
 
         logger.info(

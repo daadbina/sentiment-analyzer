@@ -348,8 +348,12 @@ class MLflowClientWrapper:
         """
         Register model in MLflow registry.
 
+        NOTE: This method is deprecated. Use mlflow.register_model() directly in service.py
+        which properly sets run_id when models are logged using flavor-specific methods
+        (mlflow.sklearn.log_model, mlflow.xgboost.log_model).
+
         Args:
-            model_uri: URI of model artifact
+            model_uri: URI of model artifact (e.g., "runs://{run_id}/model")
             model_name: Name for registered model
             tags: Optional tags for model
 
@@ -366,39 +370,19 @@ class MLflowClientWrapper:
             )
 
         try:
-            try:
-                # Try to register new model using client method
-                model_version = self.client.create_registered_model(model_name)
-                logger.info(f"Created registered model: {model_name}")
+            # Use mlflow.register_model() which properly handles run_id
+            # when models are logged using flavor-specific methods
+            model_version_obj = mlflow.register_model(
+                model_uri=model_uri,
+                name=model_name,
+                tags=tags,
+            )
 
-                # Create version for this model
-                model_version = self.client.create_model_version(
-                    name=model_name,
-                    source=model_uri,
-                )
-                logger.info(
-                    f"Registered model: {model_name} (version: {model_version.version})"
-                )
-            except Exception as register_error:
-                # If model already exists, create a new version
-                if "already exists" in str(register_error) or "RESOURCE_ALREADY_EXISTS" in str(register_error):
-                    logger.info(f"Model {model_name} already exists, creating new version")
-                    model_version = self.client.create_model_version(
-                        name=model_name,
-                        source=model_uri,
-                    )
-                    logger.info(
-                        f"Created new version for model: {model_name} (version: {model_version.version})"
-                    )
-                else:
-                    raise
+            logger.info(
+                f"Registered model: {model_name} (version: {model_version_obj.version}, run_id: {model_version_obj.run_id})"
+            )
 
-            if tags:
-                self.client.set_model_version_tag(
-                    model_name, model_version.version, "tags", str(tags)
-                )
-
-            return str(model_version.version)
+            return str(model_version_obj.version)
         except Exception as e:
             logger.error(f"Failed to register model: {e}")
             raise RegistrationError(

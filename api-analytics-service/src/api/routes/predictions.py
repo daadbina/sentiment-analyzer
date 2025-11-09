@@ -32,7 +32,7 @@ async def list_predictions(
     page: int = Query(1, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     group_id: Optional[str] = None,
-    sentiment: Optional[str] = None,
+    domain: Optional[str] = None,
     postgres_client: PostgreSQLClient = Depends(get_postgres_client),
 ) -> PredictionListResponse:
     """List predictions with filtering.
@@ -41,7 +41,7 @@ async def list_predictions(
         page: Page number
         page_size: Items per page
         group_id: Filter by group ID
-        sentiment: Filter by sentiment
+        domain: Filter by domain
         postgres_client: PostgreSQL client
 
     Returns:
@@ -50,13 +50,13 @@ async def list_predictions(
     try:
 
         builder = SQLBuilder("predictions")
-        builder.select("id", "group_id", "sentiment", "confidence", "model_version", "created_at")
+        builder.select("id", "group_id", "domain", "prediction_probability", "prediction_confidence", "model_version", "features", "predicted_at", "trace_id", "created_at")
 
         if group_id:
             builder.where("group_id = $1", group_id)
 
-        if sentiment:
-            builder.where("sentiment = $1", sentiment)
+        if domain:
+            builder.where("domain = $1", domain)
 
         # Get total count
         count_query, count_params = builder.build_count()
@@ -70,7 +70,18 @@ async def list_predictions(
         query, params = builder.build()
         rows = await postgres_client.fetch_all(query, *params)
 
-        predictions = [PredictionResponse(**row) for row in rows]
+        # Convert rows to dicts and handle JSON conversion
+        import json
+        predictions = []
+        for row in rows:
+            row_dict = dict(row)
+            # Parse JSON features
+            if 'features' in row_dict and isinstance(row_dict['features'], str):
+                try:
+                    row_dict['features'] = json.loads(row_dict['features']) if row_dict['features'] else None
+                except:
+                    row_dict['features'] = None
+            predictions.append(PredictionResponse(**row_dict))
 
         logger.info(
             "Predictions listed",
@@ -99,7 +110,7 @@ async def list_predictions(
 
 @router.get("/{prediction_id}", response_model=PredictionResponse)
 async def get_prediction(
-    prediction_id: str,
+    prediction_id: int,
     postgres_client: PostgreSQLClient = Depends(get_postgres_client),
 ) -> PredictionResponse:
     """Get prediction by ID.
@@ -114,6 +125,7 @@ async def get_prediction(
     try:
 
         builder = SQLBuilder("predictions")
+        builder.select("id", "group_id", "domain", "prediction_probability", "prediction_confidence", "model_version", "features", "predicted_at", "trace_id", "created_at")
         builder.where("id = $1", prediction_id)
 
         query, params = builder.build()
@@ -124,7 +136,16 @@ async def get_prediction(
             metrics_recorder.record_error(f"GET /predictions/{prediction_id}", "Not found")
             raise HTTPException(status_code=404, detail="Prediction not found")
 
-        prediction = PredictionResponse(**row)
+        # Convert row to dict and handle JSON conversion
+        import json
+        row_dict = dict(row)
+        if 'features' in row_dict and isinstance(row_dict['features'], str):
+            try:
+                row_dict['features'] = json.loads(row_dict['features']) if row_dict['features'] else None
+            except:
+                row_dict['features'] = None
+
+        prediction = PredictionResponse(**row_dict)
 
         logger.info(
             "Prediction retrieved",
@@ -155,25 +176,42 @@ async def create_prediction(
         Created prediction
     """
     try:
+        from datetime import datetime
+        import json
+
+        # Convert features dict to JSON string
+        features_json = json.dumps(prediction.features) if prediction.features else None
 
         query = """
-            INSERT INTO predictions (group_id, sentiment, confidence, model_version)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, group_id, sentiment, confidence, model_version, created_at
+            INSERT INTO predictions (group_id, domain, prediction_probability, prediction_confidence, model_version, features, predicted_at, trace_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id, group_id, domain, prediction_probability, prediction_confidence, model_version, features, predicted_at, trace_id, created_at
         """
 
         row = await postgres_client.fetch_one(
             query,
             prediction.group_id,
-            prediction.sentiment,
-            prediction.confidence,
+            prediction.domain,
+            prediction.prediction_probability,
+            prediction.prediction_confidence,
             prediction.model_version,
+            features_json,
+            datetime.utcnow(),
+            prediction.trace_id,
         )
 
         if not row:
             raise QueryError(message="Failed to create prediction")
 
-        created_prediction = PredictionResponse(**row)
+        # Convert row to dict and handle JSON conversion
+        row_dict = dict(row)
+        if 'features' in row_dict and isinstance(row_dict['features'], str):
+            try:
+                row_dict['features'] = json.loads(row_dict['features']) if row_dict['features'] else None
+            except:
+                row_dict['features'] = None
+
+        created_prediction = PredictionResponse(**row_dict)
 
         logger.info(
             "Prediction created",
@@ -210,6 +248,7 @@ async def get_group_predictions(
     try:
 
         builder = SQLBuilder("predictions")
+        builder.select("id", "group_id", "domain", "prediction_probability", "prediction_confidence", "model_version", "features", "predicted_at", "trace_id", "created_at")
         builder.where("group_id = $1", group_id)
 
         # Get total count
@@ -224,7 +263,18 @@ async def get_group_predictions(
         query, params = builder.build()
         rows = await postgres_client.fetch_all(query, *params)
 
-        predictions = [PredictionResponse(**row) for row in rows]
+        # Convert rows to dicts and handle JSON conversion
+        import json
+        predictions = []
+        for row in rows:
+            row_dict = dict(row)
+            # Parse JSON features
+            if 'features' in row_dict and isinstance(row_dict['features'], str):
+                try:
+                    row_dict['features'] = json.loads(row_dict['features']) if row_dict['features'] else None
+                except:
+                    row_dict['features'] = None
+            predictions.append(PredictionResponse(**row_dict))
 
         logger.info(
             "Group predictions retrieved",

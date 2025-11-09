@@ -83,6 +83,14 @@ class DataPreprocessor:
                 logger.debug(f"Input feature columns: {list(X.columns)}")
                 logger.debug(f"Input feature dtypes:\n{X.dtypes}")
 
+                # Convert object columns to numeric (handles Feast returning features as object dtype)
+                object_cols = X.select_dtypes(include=['object']).columns.tolist()
+                if object_cols:
+                    logger.info(f"Converting object columns to numeric: {object_cols}")
+                    for col in object_cols:
+                        X[col] = pd.to_numeric(X[col], errors='coerce')
+                    logger.debug(f"Dtypes after conversion:\n{X.dtypes}")
+
                 # Filter to only numeric columns (exclude entity IDs and other non-numeric columns)
                 numeric_cols = X.select_dtypes(include=['number']).columns.tolist()
                 if len(numeric_cols) < X.shape[1]:
@@ -162,19 +170,30 @@ class DataPreprocessor:
                         f"Missing values per column: {null_counts[null_counts > 0]}"
                     )
 
-                    if fit:
-                        self.imputer = SimpleImputer(strategy="mean")
-                        X_imputed = self.imputer.fit_transform(X)
-                    else:
-                        if self.imputer is None:
-                            raise DataPreparationError(
-                                "Imputer not fitted",
-                                stage="missing_values",
-                            )
-                        X_imputed = self.imputer.transform(X)
+                    # Check for columns with all NaN values
+                    all_nan_cols = null_counts[null_counts == len(X)].index.tolist()
+                    if all_nan_cols:
+                        logger.warning(f"Columns with all NaN values (will be filled with 0): {all_nan_cols}")
+                        # Fill all-NaN columns with 0 (default value for missing BTC features)
+                        for col in all_nan_cols:
+                            X[col] = 0.0
 
-                    X = pd.DataFrame(X_imputed, columns=X.columns)
-                    logger.info("Missing values handled")
+                    # Now handle remaining missing values with imputer
+                    null_counts_after = X.isnull().sum()
+                    if null_counts_after.sum() > 0:
+                        if fit:
+                            self.imputer = SimpleImputer(strategy="mean")
+                            X_imputed = self.imputer.fit_transform(X)
+                        else:
+                            if self.imputer is None:
+                                raise DataPreparationError(
+                                    "Imputer not fitted",
+                                    stage="missing_values",
+                                )
+                            X_imputed = self.imputer.transform(X)
+
+                        X = pd.DataFrame(X_imputed, columns=X.columns, index=X.index)
+                        logger.info("Missing values handled")
 
                 return X
 

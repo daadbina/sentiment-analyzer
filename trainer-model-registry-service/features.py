@@ -1,7 +1,7 @@
 """
 Feast feature definitions for semantic group features.
 
-Defines the semantic_group_features feature view with all 24 computed features.
+Defines the semantic_group_features feature view with all 28 computed features (24 base + 4 BTC).
 """
 
 from datetime import timedelta
@@ -28,7 +28,7 @@ semantic_group_source = PushSource(
     batch_source=batch_source,
 )
 
-# Define the feature view with all 24 features
+# Define the feature view with all 28 features (24 base + 4 BTC)
 semantic_group_features = FeatureView(
     name="semantic_group_features",
     entities=[group_id],
@@ -64,8 +64,13 @@ semantic_group_features = FeatureView(
         Field(name="intra_cluster_similarity_mean", dtype=Float32),
         Field(name="intra_cluster_similarity_std", dtype=Float32),
         Field(name="embedding_drift_score", dtype=Float32),
+        # BTC price features (4)
+        Field(name="btc_change_pct_10h", dtype=Float32),
+        Field(name="btc_volatility_score", dtype=Float32),
+        Field(name="btc_volume", dtype=Float32),
+        Field(name="btc_label_spike", dtype=Int32),
     ],
     source=semantic_group_source,
-    description="24 computed features for semantic groups from feature engineering service",
+    description="28 computed features for semantic groups (24 base + 4 BTC price features)",
 )
 

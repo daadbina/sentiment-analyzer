@@ -38,13 +38,15 @@ class PredictionCache:
     async def get_cached_prediction(
         self,
         group_id: str,
+        domain: str,
         trace_id: str | None = None,
     ) -> dict[str, Any] | None:
         """
-        Get cached prediction for a semantic group.
+        Get cached prediction for a semantic group and domain.
 
         Args:
             group_id: Semantic group ID
+            domain: Domain of prediction (btc/conflict/geopolitical)
             trace_id: Optional trace ID for distributed tracing
 
         Returns:
@@ -52,24 +54,24 @@ class PredictionCache:
         """
         with trace_span(
             "get_cached_prediction",
-            attributes={"group_id": group_id, "trace_id": trace_id},
+            attributes={"group_id": group_id, "domain": domain, "trace_id": trace_id},
         ):
             try:
-                cache_key = self._get_cache_key(group_id)
+                cache_key = self._get_cache_key(group_id, domain)
 
                 # Get from Redis
                 cached_data = await self.redis_client.get(cache_key, trace_id)
 
                 if cached_data is None:
                     logger.debug(
-                        f"Cache miss: group_id={group_id}",
-                        extra={"trace_id": trace_id, "group_id": group_id},
+                        f"Cache miss: group_id={group_id}, domain={domain}",
+                        extra={"trace_id": trace_id, "group_id": group_id, "domain": domain},
                     )
                     return None
 
                 logger.debug(
-                    f"Cache hit: group_id={group_id}",
-                    extra={"trace_id": trace_id, "group_id": group_id},
+                    f"Cache hit: group_id={group_id}, domain={domain}",
+                    extra={"trace_id": trace_id, "group_id": group_id, "domain": domain},
                 )
 
                 return cached_data
@@ -77,13 +79,13 @@ class PredictionCache:
             except CacheError:
                 # Log but don't fail on cache errors
                 logger.warning(
-                    f"Cache get failed: group_id={group_id}",
+                    f"Cache get failed: group_id={group_id}, domain={domain}",
                     extra={"trace_id": trace_id},
                 )
                 return None
             except Exception as e:
                 logger.warning(
-                    f"Unexpected cache error: group_id={group_id}, error={e}",
+                    f"Unexpected cache error: group_id={group_id}, domain={domain}, error={e}",
                     extra={"trace_id": trace_id},
                 )
                 return None
@@ -99,15 +101,18 @@ class PredictionCache:
 
         Args:
             group_id: Semantic group ID
-            prediction: Prediction dictionary to cache
+            prediction: Prediction dictionary to cache (must contain 'domain' key)
             trace_id: Optional trace ID for distributed tracing
         """
+        # Extract domain from prediction
+        domain = prediction.get("domain", "conflict")
+
         with trace_span(
             "cache_prediction",
-            attributes={"group_id": group_id, "trace_id": trace_id},
+            attributes={"group_id": group_id, "domain": domain, "trace_id": trace_id},
         ):
             try:
-                cache_key = self._get_cache_key(group_id)
+                cache_key = self._get_cache_key(group_id, domain)
 
                 # Store in Redis with TTL
                 await self.redis_client.set(
@@ -118,69 +123,72 @@ class PredictionCache:
                 )
 
                 logger.debug(
-                    f"Prediction cached: group_id={group_id}, ttl={self.ttl_seconds}s",
-                    extra={"trace_id": trace_id, "group_id": group_id},
+                    f"Prediction cached: group_id={group_id}, domain={domain}, ttl={self.ttl_seconds}s",
+                    extra={"trace_id": trace_id, "group_id": group_id, "domain": domain},
                 )
 
             except CacheError:
                 # Log but don't fail on cache errors
                 logger.warning(
-                    f"Cache set failed: group_id={group_id}",
+                    f"Cache set failed: group_id={group_id}, domain={domain}",
                     extra={"trace_id": trace_id},
                 )
             except Exception as e:
                 logger.warning(
-                    f"Unexpected cache error: group_id={group_id}, error={e}",
+                    f"Unexpected cache error: group_id={group_id}, domain={domain}, error={e}",
                     extra={"trace_id": trace_id},
                 )
 
     async def invalidate_prediction(
         self,
         group_id: str,
+        domain: str,
         trace_id: str | None = None,
     ) -> None:
         """
-        Invalidate cached prediction for a semantic group.
+        Invalidate cached prediction for a semantic group and domain.
 
         Args:
             group_id: Semantic group ID
+            domain: Domain of prediction (btc/conflict/geopolitical)
             trace_id: Optional trace ID for distributed tracing
         """
         with trace_span(
             "invalidate_cached_prediction",
-            attributes={"group_id": group_id, "trace_id": trace_id},
+            attributes={"group_id": group_id, "domain": domain, "trace_id": trace_id},
         ):
             try:
-                cache_key = self._get_cache_key(group_id)
+                cache_key = self._get_cache_key(group_id, domain)
 
                 # Delete from Redis
                 await self.redis_client.delete(cache_key, trace_id)
 
                 logger.debug(
-                    f"Prediction invalidated: group_id={group_id}",
-                    extra={"trace_id": trace_id, "group_id": group_id},
+                    f"Prediction invalidated: group_id={group_id}, domain={domain}",
+                    extra={"trace_id": trace_id, "group_id": group_id, "domain": domain},
                 )
 
             except CacheError:
                 # Log but don't fail on cache errors
                 logger.warning(
-                    f"Cache delete failed: group_id={group_id}",
+                    f"Cache delete failed: group_id={group_id}, domain={domain}",
                     extra={"trace_id": trace_id},
                 )
             except Exception as e:
                 logger.warning(
-                    f"Unexpected cache error: group_id={group_id}, error={e}",
+                    f"Unexpected cache error: group_id={group_id}, domain={domain}, error={e}",
                     extra={"trace_id": trace_id},
                 )
 
-    def _get_cache_key(self, group_id: str) -> str:
+    def _get_cache_key(self, group_id: str, domain: str) -> str:
         """
-        Get Redis cache key for a group ID.
+        Get Redis cache key for a group ID and domain.
 
         Args:
             group_id: Semantic group ID
+            domain: Domain of prediction (btc/conflict/geopolitical)
 
         Returns:
             Redis cache key
         """
-        return f"prediction:{group_id}"
+        return f"prediction:{group_id}:{domain}"

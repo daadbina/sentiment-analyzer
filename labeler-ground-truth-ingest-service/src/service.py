@@ -662,10 +662,10 @@ class LabelerService:
                             label_count=len(enriched_btc)
                         )
 
-                        # Write to PostgreSQL
-                        await self.postgres_writer.write_labels(enriched_btc)
+                        # Write to PostgreSQL btc_truth table
+                        await self.postgres_writer.write_crypto_labels(enriched_btc)
                         logger.info(
-                            f"Wrote {len(enriched_btc)} BTC labels to PostgreSQL",
+                            f"Wrote {len(enriched_btc)} BTC labels to PostgreSQL btc_truth table",
                             operation="_fetch_btc_background",
                             label_count=len(enriched_btc)
                         )

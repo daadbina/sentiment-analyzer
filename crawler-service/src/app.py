@@ -89,8 +89,8 @@ def _load_default_feeds(crawler_app: "CrawlerApplication") -> None:
         FeedSource(
             feed_id="reuters",
             name="Reuters",
-            url="https://www.reuters.com/world/",
-            feed_type="html",
+            url="http://feeds.reuters.com/Reuters/worldNews",
+            feed_type="rss",
             language="en",
             country="US",
             enabled=True,

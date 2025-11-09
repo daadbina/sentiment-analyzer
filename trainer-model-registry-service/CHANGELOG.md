@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.5] - 2025-11-09
+
+### Added - BTC Price Feature Integration
+- **Feature Retriever Enhancement** - Updated src/data/feature_retriever.py:
+  - Increased feature count from 24 to 28 (added 4 BTC price features)
+  - Added BTC features to default feature list: btc_change_pct_10h, btc_volatility_score, btc_volume, btc_label_spike
+  - BTC features fetched from Feast offline store alongside semantic group features
+  - Comprehensive logging for BTC feature retrieval
+- **Label Retriever Enhancement** - Updated src/data/label_retriever.py:
+  - Added retrieve_btc_labels() method to fetch BTC price labels from btc_truth table
+  - Fetches BTC price data: change_pct_10h, label_spike, volatility_score, volume, btc_price
+  - Temporal alignment with semantic groups for correlation analysis
+  - Comprehensive logging with BTC label statistics (avg_change_pct, spike_count)
+  - Error handling with DataPreparationError for failed retrievals
+
+### Expected Impact
+- **BTC Price Prediction**: Models can now train on BTC price prediction task
+- **Feature Diversity**: Increased from 24 to 28 features for richer model inputs
+- **Correlation Analysis**: Enables analysis of news sentiment impact on BTC price movements
+- **Multi-Task Learning**: Supports both event realization and BTC price prediction
+- **Architecture Compliance**: Implements Dataset 7 (Bitcoin & Financial Prices) from Architecture.md
+- **Task Completion**: Addresses Phase 3 BTC price prediction requirement from Task.md
+
+### Technical Details
+- BTC features integrated seamlessly with existing 24 semantic group features
+- BTC labels fetched from btc_truth table with timestamp-based filtering
+- Feature retriever uses Feast feature view prefix: semantic_group_features:btc_*
+- Label retriever supports both event realization labels and BTC price labels
+- Models can be trained on either task or both (multi-task learning)
+- Feature engineering pipeline automatically includes BTC features in transformations
+
 ## [1.0.4] - 2025-11-08
 
 ### Added - Feature Engineering & Ensemble Models

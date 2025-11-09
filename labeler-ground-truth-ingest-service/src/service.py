@@ -71,6 +71,7 @@ class LabelerService:
         self.running = False
         self.semantic_groups: List[Dict[str, Any]] = []
         self.semantic_groups_task: Optional[asyncio.Task] = None  # Background task for consuming semantic groups
+        self.btc_fetch_task: Optional[asyncio.Task] = None  # Background task for fetching BTC data
 
         logger.info(
             f"Labeler service initialized",
@@ -109,6 +110,13 @@ class LabelerService:
             self.semantic_groups_task = asyncio.create_task(self._consume_semantic_groups_background())
             logger.info(
                 "Started background task to consume semantic groups from Kafka",
+                operation="start"
+            )
+
+            # Start background task to fetch BTC data every 5 minutes
+            self.btc_fetch_task = asyncio.create_task(self._fetch_btc_background())
+            logger.info(
+                "Started background task to fetch BTC data every 5 minutes",
                 operation="start"
             )
 
@@ -165,6 +173,17 @@ class LabelerService:
                 except asyncio.CancelledError:
                     logger.info(
                         "Background semantic groups consumer task cancelled",
+                        operation="shutdown"
+                    )
+
+            # Cancel background BTC fetch task
+            if self.btc_fetch_task and not self.btc_fetch_task.done():
+                self.btc_fetch_task.cancel()
+                try:
+                    await self.btc_fetch_task
+                except asyncio.CancelledError:
+                    logger.info(
+                        "Background BTC fetch task cancelled",
                         operation="shutdown"
                     )
 
@@ -236,53 +255,13 @@ class LabelerService:
                 error_type=type(e).__name__
             )
 
-        try:
-            # Check if Binance fetch interval has elapsed (5 minutes)
-            binance_interval_seconds = config.binance.fetch_interval_minutes * 60
-            if self.binance_fetcher.should_fetch(binance_interval_seconds):
-                with TimedOperation(logger, "fetch_binance", source="Binance") as op:
-                    labels["binance"] = await self.binance_fetcher.fetch()
-                    self.binance_fetcher.record_fetch_time()
-                # Record metrics after context manager exits (duration_ms is set in __exit__)
-                if op.duration_ms is not None:
-                    metrics.record_fetch("Binance", len(labels["binance"]), op.duration_ms / 1000)
-            else:
-                logger.debug(
-                    "Skipping Binance fetch - interval not elapsed",
-                    operation="fetch_labels",
-                    source="Binance",
-                    interval_minutes=config.binance.fetch_interval_minutes
-                )
-
-        except Exception as e:
-            logger.error(
-                f"Failed to fetch from Binance: {str(e)}",
-                operation="fetch_labels",
-                source="Binance",
-                error_type=type(e).__name__
-            )
-
-            # Fallback to CCXT if Binance fails
-            try:
-                logger.info(
-                    "Falling back to CCXT for crypto data",
-                    operation="fetch_labels",
-                    source="CCXT"
-                )
-                with TimedOperation(logger, "fetch_ccxt_fallback", source="CCXT") as op:
-                    labels["binance"] = await self.ccxt_fetcher.fetch()
-                    self.binance_fetcher.record_fetch_time()  # Record time for fallback too
-                # Record metrics after context manager exits
-                if op.duration_ms is not None:
-                    metrics.record_fetch("CCXT", len(labels["binance"]), op.duration_ms / 1000)
-
-            except Exception as ccxt_error:
-                logger.error(
-                    f"CCXT fallback also failed: {str(ccxt_error)}",
-                    operation="fetch_labels",
-                    source="CCXT",
-                    error_type=type(ccxt_error).__name__
-                )
+        # Binance fetching is now handled by background task _fetch_btc_background()
+        # This ensures BTC data is fetched every 5 minutes independent of GDELT processing
+        logger.debug(
+            "Binance fetch handled by background task",
+            operation="fetch_labels",
+            source="Binance"
+        )
 
         logger.info(
             "Label fetching completed",
@@ -618,6 +597,127 @@ class LabelerService:
         logger.info(
             "Background semantic groups consumer stopped",
             operation="_consume_semantic_groups_background"
+        )
+
+    async def _fetch_btc_background(self):
+        """Background task to continuously fetch BTC data every 5 minutes.
+
+        This ensures BTC price data is always fresh and up-to-date for feature engineering,
+        independent of the main GDELT/ACLED processing loop which can take 30+ minutes.
+        """
+        logger.info(
+            "Starting background BTC fetcher",
+            operation="_fetch_btc_background"
+        )
+
+        # Wait a bit before first fetch to allow service to fully initialize
+        await asyncio.sleep(5.0)
+
+        while self.running:
+            try:
+                # Fetch BTC data from Binance
+                logger.info(
+                    "Fetching BTC data from Binance",
+                    operation="_fetch_btc_background"
+                )
+
+                with TimedOperation(logger, "fetch_binance", source="Binance") as op:
+                    btc_labels = await self.binance_fetcher.fetch()
+                    self.binance_fetcher.record_fetch_time()
+
+                if op.duration_ms is not None:
+                    metrics.record_fetch("Binance", len(btc_labels), op.duration_ms / 1000)
+
+                logger.info(
+                    f"Fetched {len(btc_labels)} BTC labels from Binance",
+                    operation="_fetch_btc_background",
+                    label_count=len(btc_labels)
+                )
+
+                # Validate BTC labels
+                valid_btc, invalid_btc = await self.validator.validate_batch(btc_labels, "BINANCE")
+                logger.info(
+                    f"Validated BTC labels: {len(valid_btc)} valid, {len(invalid_btc)} invalid",
+                    operation="_fetch_btc_background",
+                    valid_count=len(valid_btc),
+                    invalid_count=len(invalid_btc)
+                )
+
+                if valid_btc:
+                    # Enrich BTC labels
+                    enriched_btc = await self._enrich_labels(valid_btc, "BINANCE")
+                    logger.info(
+                        f"Enriched {len(enriched_btc)} BTC labels",
+                        operation="_fetch_btc_background",
+                        label_count=len(enriched_btc)
+                    )
+
+                    # Write to storage (Delta Lake + PostgreSQL + Outbox + Kafka)
+                    try:
+                        # Write to Delta Lake
+                        await self.delta_writer.write_labels(enriched_btc)
+                        logger.info(
+                            f"Wrote {len(enriched_btc)} BTC labels to Delta Lake",
+                            operation="_fetch_btc_background",
+                            label_count=len(enriched_btc)
+                        )
+
+                        # Write to PostgreSQL
+                        await self.postgres_writer.write_labels(enriched_btc)
+                        logger.info(
+                            f"Wrote {len(enriched_btc)} BTC labels to PostgreSQL",
+                            operation="_fetch_btc_background",
+                            label_count=len(enriched_btc)
+                        )
+
+                        # Write to outbox
+                        await self.outbox_manager.write_batch(enriched_btc)
+                        logger.info(
+                            f"Wrote {len(enriched_btc)} BTC labels to outbox",
+                            operation="_fetch_btc_background",
+                            label_count=len(enriched_btc)
+                        )
+
+                        # Produce to Kafka
+                        await self.kafka_producer.produce_batch(enriched_btc)
+                        logger.info(
+                            f"Produced {len(enriched_btc)} BTC labels to Kafka",
+                            operation="_fetch_btc_background",
+                            label_count=len(enriched_btc)
+                        )
+
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to write BTC labels to storage: {str(e)}",
+                            operation="_fetch_btc_background",
+                            error_type=type(e).__name__
+                        )
+
+                # Sleep for 5 minutes before next fetch
+                logger.info(
+                    "Sleeping for 5 minutes before next BTC fetch",
+                    operation="_fetch_btc_background"
+                )
+                await asyncio.sleep(300)  # 5 minutes = 300 seconds
+
+            except asyncio.CancelledError:
+                logger.info(
+                    "Background BTC fetcher cancelled",
+                    operation="_fetch_btc_background"
+                )
+                break
+            except Exception as e:
+                logger.error(
+                    f"Error fetching BTC data: {str(e)}",
+                    operation="_fetch_btc_background",
+                    error_type=type(e).__name__
+                )
+                # Continue running despite errors, but wait a bit before retrying
+                await asyncio.sleep(60.0)  # Wait 1 minute before retry on error
+
+        logger.info(
+            "Background BTC fetcher stopped",
+            operation="_fetch_btc_background"
         )
 
     async def consume_semantic_groups(self):

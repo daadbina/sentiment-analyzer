@@ -19,7 +19,7 @@ COPY requirements.txt .
 
 # Create wheels for all dependencies
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels -r requirements.txt
+    pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
 
 # Stage 2: Runtime
 FROM python:3.11-slim

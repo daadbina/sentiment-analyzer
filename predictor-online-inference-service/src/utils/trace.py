@@ -6,6 +6,7 @@ All operations are traced with context propagation for end-to-end visibility.
 """
 
 import logging
+import uuid
 from contextlib import contextmanager
 from functools import wraps
 from typing import Any
@@ -16,7 +17,6 @@ from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import Span, Status, StatusCode
-from ulid import ULID
 
 logger = logging.getLogger(__name__)
 
@@ -89,12 +89,12 @@ def get_tracer() -> trace.Tracer | None:
 
 def generate_trace_id() -> str:
     """
-    Generate a unique trace ID using ULID.
+    Generate a unique trace ID using UUID.
 
     Returns:
-        ULID string for trace identification
+        UUID string for trace identification
     """
-    return str(ULID())
+    return str(uuid.uuid4())
 
 
 @contextmanager

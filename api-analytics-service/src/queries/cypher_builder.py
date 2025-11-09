@@ -239,7 +239,9 @@ class CentralityCalculator:
         """
         query = f"""
             MATCH (n:{node_label})
-            RETURN n.id, size((n)--()) as degree
+            OPTIONAL MATCH (n)-[r]-()
+            WITH n, count(r) as degree
+            RETURN n.id, degree
             ORDER BY degree DESC
         """
         return query, {}
@@ -260,7 +262,8 @@ class CentralityCalculator:
         """
         query = f"""
             MATCH (n:{node_label})
-            WITH n, size((n)--()) as degree
+            OPTIONAL MATCH (n)-[r]-()
+            WITH n, count(r) as degree
             RETURN n.id, degree
             ORDER BY degree DESC
             LIMIT {limit}
@@ -283,7 +286,8 @@ class CentralityCalculator:
         """
         query = f"""
             MATCH (n:{node_label})
-            WITH n, size((n)--()) as connections
+            OPTIONAL MATCH (n)-[r]-()
+            WITH n, count(r) as connections
             RETURN n.id, connections
             ORDER BY connections DESC
             LIMIT {limit}

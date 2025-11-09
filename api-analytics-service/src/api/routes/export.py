@@ -44,7 +44,7 @@ async def export_groups(
     try:
 
         query = """
-            SELECT id, title, description, article_count, entity_count, created_at, updated_at
+            SELECT group_id, topic_label, article_count, similarity_avg, created_at, updated_at
             FROM semantic_groups
             ORDER BY created_at DESC
         """
@@ -56,8 +56,8 @@ async def export_groups(
             data = [
                 {
                     **row,
-                    "created_at": row["created_at"].isoformat(),
-                    "updated_at": row["updated_at"].isoformat(),
+                    "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
+                    "updated_at": row["updated_at"].isoformat() if row.get("updated_at") else None,
                 }
                 for row in rows
             ]
@@ -85,11 +85,10 @@ async def export_groups(
             writer = csv.DictWriter(
                 output,
                 fieldnames=[
-                    "id",
-                    "title",
-                    "description",
+                    "group_id",
+                    "topic_label",
                     "article_count",
-                    "entity_count",
+                    "similarity_avg",
                     "created_at",
                     "updated_at",
                 ],
@@ -100,8 +99,8 @@ async def export_groups(
                 writer.writerow(
                     {
                         **row,
-                        "created_at": row["created_at"].isoformat(),
-                        "updated_at": row["updated_at"].isoformat(),
+                        "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
+                        "updated_at": row["updated_at"].isoformat() if row.get("updated_at") else None,
                     }
                 )
 
@@ -144,7 +143,7 @@ async def export_predictions(
     try:
 
         query = """
-            SELECT id, group_id, sentiment, confidence, model_version, created_at
+            SELECT id, group_id, domain, prediction_probability, prediction_confidence, model_version, predicted_at, created_at
             FROM predictions
             ORDER BY created_at DESC
         """
@@ -155,7 +154,8 @@ async def export_predictions(
             data = [
                 {
                     **row,
-                    "created_at": row["created_at"].isoformat(),
+                    "predicted_at": row["predicted_at"].isoformat() if row.get("predicted_at") else None,
+                    "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
                 }
                 for row in rows
             ]
@@ -185,9 +185,11 @@ async def export_predictions(
                 fieldnames=[
                     "id",
                     "group_id",
-                    "sentiment",
-                    "confidence",
+                    "domain",
+                    "prediction_probability",
+                    "prediction_confidence",
                     "model_version",
+                    "predicted_at",
                     "created_at",
                 ],
             )
@@ -197,7 +199,8 @@ async def export_predictions(
                 writer.writerow(
                     {
                         **row,
-                        "created_at": row["created_at"].isoformat(),
+                        "predicted_at": row["predicted_at"].isoformat() if row.get("predicted_at") else None,
+                        "created_at": row["created_at"].isoformat() if row.get("created_at") else None,
                     }
                 )
 

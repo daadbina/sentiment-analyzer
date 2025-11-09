@@ -35,7 +35,7 @@ async def list_entities(
     search: Optional[str] = None,
     postgres_client: PostgreSQLClient = Depends(get_postgres_client),
 ) -> EntityListResponse:
-    """List entities with filtering.
+    """List entities (actors) with filtering.
 
     Args:
         page: Page number
@@ -49,11 +49,11 @@ async def list_entities(
     """
     try:
 
-        builder = SQLBuilder("entities")
-        builder.select("id", "name", "entity_type", "wikidata_id", "description", "mention_count", "created_at")
+        builder = SQLBuilder("actors")
+        builder.select("actor_id", "name", "normalized_name", "type", "wikidata_id", "country", "aliases", "dbpedia_uri", "sentiment_avg", "occurrences", "first_seen", "last_seen", "ner_fallback_rate", "metadata", "created_at", "updated_at")
 
         if entity_type:
-            builder.where("entity_type = $1", entity_type)
+            builder.where("type = $1", entity_type)
 
         if search:
             builder.where("name ILIKE $1", f"%{search}%")
@@ -65,12 +65,26 @@ async def list_entities(
         # Add pagination
         builder.limit(page_size)
         builder.offset((page - 1) * page_size)
-        builder.order_by("mention_count", "DESC")
+        builder.order_by("occurrences", "DESC")
 
         query, params = builder.build()
         rows = await postgres_client.fetch_all(query, *params)
 
-        entities = [EntityResponse(**row) for row in rows]
+        # Convert rows to dicts and handle UUID/JSON conversion
+        import json
+        entities = []
+        for row in rows:
+            row_dict = dict(row)
+            # Convert UUID to string
+            if 'actor_id' in row_dict and row_dict['actor_id']:
+                row_dict['actor_id'] = str(row_dict['actor_id'])
+            # Parse JSON metadata
+            if 'metadata' in row_dict and isinstance(row_dict['metadata'], str):
+                try:
+                    row_dict['metadata'] = json.loads(row_dict['metadata']) if row_dict['metadata'] else None
+                except:
+                    row_dict['metadata'] = None
+            entities.append(EntityResponse(**row_dict))
 
         logger.info(
             "Entities listed",
@@ -102,10 +116,10 @@ async def get_entity(
     entity_id: str,
     postgres_client: PostgreSQLClient = Depends(get_postgres_client),
 ) -> EntityResponse:
-    """Get entity by ID.
+    """Get entity (actor) by ID.
 
     Args:
-        entity_id: Entity ID
+        entity_id: Entity (actor) ID
         postgres_client: PostgreSQL client
 
     Returns:
@@ -113,8 +127,9 @@ async def get_entity(
     """
     try:
 
-        builder = SQLBuilder("entities")
-        builder.where("id = $1", entity_id)
+        builder = SQLBuilder("actors")
+        builder.select("actor_id", "name", "normalized_name", "type", "wikidata_id", "country", "aliases", "dbpedia_uri", "sentiment_avg", "occurrences", "first_seen", "last_seen", "ner_fallback_rate", "metadata", "created_at", "updated_at")
+        builder.where("actor_id::text = $1", entity_id)
 
         query, params = builder.build()
         row = await postgres_client.fetch_one(query, *params)
@@ -124,7 +139,18 @@ async def get_entity(
             metrics_recorder.record_error(f"GET /entities/{entity_id}", "Not found")
             raise HTTPException(status_code=404, detail="Entity not found")
 
-        entity = EntityResponse(**row)
+        # Convert row to dict and handle UUID/JSON conversion
+        import json
+        row_dict = dict(row)
+        if 'actor_id' in row_dict and row_dict['actor_id']:
+            row_dict['actor_id'] = str(row_dict['actor_id'])
+        if 'metadata' in row_dict and isinstance(row_dict['metadata'], str):
+            try:
+                row_dict['metadata'] = json.loads(row_dict['metadata']) if row_dict['metadata'] else None
+            except:
+                row_dict['metadata'] = None
+
+        entity = EntityResponse(**row_dict)
 
         logger.info(
             "Entity retrieved",
@@ -145,7 +171,7 @@ async def create_entity(
     entity: EntityCreate,
     postgres_client: PostgreSQLClient = Depends(get_postgres_client),
 ) -> EntityResponse:
-    """Create new entity.
+    """Create new entity (actor).
 
     Args:
         entity: Entity data
@@ -155,19 +181,27 @@ async def create_entity(
         Created entity
     """
     try:
+        import json
+
+        # Generate normalized name if not provided
+        normalized_name = entity.normalized_name or entity.name.lower().strip()
 
         query = """
-            INSERT INTO entities (name, entity_type, wikidata_id, description)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, name, entity_type, wikidata_id, description, mention_count, created_at
+            INSERT INTO actors (name, normalized_name, type, wikidata_id, country, aliases, dbpedia_uri, metadata)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING actor_id, name, normalized_name, type, wikidata_id, country, aliases, dbpedia_uri, sentiment_avg, occurrences, first_seen, last_seen, ner_fallback_rate, metadata, created_at, updated_at
         """
 
         row = await postgres_client.fetch_one(
             query,
             entity.name,
-            entity.entity_type,
+            normalized_name,
+            entity.type,
             entity.wikidata_id,
-            entity.description,
+            entity.country,
+            entity.aliases or [],
+            entity.dbpedia_uri,
+            entity.metadata,
         )
 
         if not row:
@@ -177,7 +211,7 @@ async def create_entity(
 
         logger.info(
             "Entity created",
-            extra={"extra_fields": {"entity_id": created_entity.id}},
+            extra={"extra_fields": {"entity_id": created_entity.actor_id}},
         )
 
 
@@ -198,6 +232,9 @@ async def get_entity_mentions(
 ) -> dict:
     """Get mentions of an entity.
 
+    Note: This endpoint requires article-actor relationship data which is not yet available in the database.
+    Returns empty result until the relationship table is created by upstream services.
+
     Args:
         entity_id: Entity ID
         page: Page number
@@ -205,46 +242,27 @@ async def get_entity_mentions(
         postgres_client: PostgreSQL client
 
     Returns:
-        Entity mentions
+        Entity mentions (currently empty until relationship data is available)
     """
-    try:
+    # TODO: Implement once article_actors or similar relationship table is created
+    # For now, return empty result to avoid 500 errors
 
-        builder = SQLBuilder("entity_mentions")
-        builder.where("entity_id = $1", entity_id)
+    logger.info(
+        "Entity mentions requested (feature not yet implemented)",
+        extra={
+            "extra_fields": {
+                "entity_id": entity_id,
+                "note": "Relationship table not yet available",
+            }
+        },
+    )
 
-        # Get total count
-        count_query, count_params = builder.build_count()
-        total = await postgres_client.fetch_val(count_query, *count_params)
-
-        # Add pagination
-        builder.limit(page_size)
-        builder.offset((page - 1) * page_size)
-        builder.order_by("created_at", "DESC")
-
-        query, params = builder.build()
-        rows = await postgres_client.fetch_all(query, *params)
-
-        logger.info(
-            "Entity mentions retrieved",
-            extra={
-                "extra_fields": {
-                    "entity_id": entity_id,
-                    "count": len(rows),
-                }
-            },
-        )
-
-
-        return {
-            "entity_id": entity_id,
-            "mentions": rows,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-        }
-
-    except QueryError as e:
-        logger.error(f"Failed to get entity mentions: {str(e)}")
-        metrics_recorder.record_error(f"GET /entities/{entity_id}/mentions", str(e))
-        raise HTTPException(status_code=500, detail="Failed to get entity mentions")
+    return {
+        "entity_id": entity_id,
+        "mentions": [],
+        "total": 0,
+        "page": page,
+        "page_size": page_size,
+        "note": "Entity mentions feature requires article-actor relationship data which is not yet available in the database",
+    }
 

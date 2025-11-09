@@ -72,7 +72,7 @@ async def get_trends(
         elif metric == "entities":
             query = """
                 SELECT DATE(created_at) as date, COUNT(*) as count
-                FROM entities
+                FROM actors
                 WHERE created_at >= $1 AND created_at <= $2
                 GROUP BY DATE(created_at)
                 ORDER BY date ASC
@@ -131,18 +131,18 @@ async def get_distributions(
     """
     try:
 
-        if metric == "sentiment":
+        if metric == "domain":
             query = """
-                SELECT sentiment, COUNT(*) as count
+                SELECT domain, COUNT(*) as count
                 FROM predictions
-                GROUP BY sentiment
+                GROUP BY domain
                 ORDER BY count DESC
             """
         elif metric == "entity_type":
             query = """
-                SELECT entity_type, COUNT(*) as count
-                FROM entities
-                GROUP BY entity_type
+                SELECT type, COUNT(*) as count
+                FROM actors
+                GROUP BY type
                 ORDER BY count DESC
             """
         else:
@@ -200,27 +200,27 @@ async def get_top_entities(
     try:
 
         query = """
-            SELECT name, mention_count
-            FROM entities
-            ORDER BY mention_count DESC
+            SELECT name, occurrences
+            FROM actors
+            ORDER BY occurrences DESC
             LIMIT $1
         """
 
         rows = await postgres_client.fetch_all(query, limit)
 
         total = await postgres_client.fetch_val(
-            "SELECT COUNT(*) FROM entities"
+            "SELECT COUNT(*) FROM actors"
         )
 
-        total_mentions = sum(row["mention_count"] for row in rows)
+        total_mentions = sum(row["occurrences"] for row in rows)
 
         items = [
             TopItemResponse(
                 rank=i + 1,
                 name=row["name"],
-                count=row["mention_count"],
+                count=row["occurrences"],
                 percentage=(
-                    (row["mention_count"] / total_mentions * 100)
+                    (row["occurrences"] / total_mentions * 100)
                     if total_mentions > 0
                     else 0
                 ),
@@ -268,28 +268,28 @@ async def get_top_actors(
     try:
 
         query = """
-            SELECT name, mention_count
-            FROM entities
-            WHERE entity_type = 'PERSON'
-            ORDER BY mention_count DESC
+            SELECT name, occurrences
+            FROM actors
+            WHERE type = 'PERSON'
+            ORDER BY occurrences DESC
             LIMIT $1
         """
 
         rows = await postgres_client.fetch_all(query, limit)
 
         total = await postgres_client.fetch_val(
-            "SELECT COUNT(*) FROM entities WHERE entity_type = 'PERSON'"
+            "SELECT COUNT(*) FROM actors WHERE type = 'PERSON'"
         )
 
-        total_mentions = sum(row["mention_count"] for row in rows)
+        total_mentions = sum(row["occurrences"] for row in rows)
 
         items = [
             TopItemResponse(
                 rank=i + 1,
                 name=row["name"],
-                count=row["mention_count"],
+                count=row["occurrences"],
                 percentage=(
-                    (row["mention_count"] / total_mentions * 100)
+                    (row["occurrences"] / total_mentions * 100)
                     if total_mentions > 0
                     else 0
                 ),

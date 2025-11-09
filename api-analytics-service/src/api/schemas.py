@@ -63,21 +63,26 @@ class PredictionBase(BaseModel):
     model_config = {"protected_namespaces": ()}
 
     group_id: str
-    sentiment: str = Field(..., pattern="^(positive|negative|neutral)$")
-    confidence: float = Field(..., ge=0.0, le=1.0)
+    domain: str
+    prediction_probability: float = Field(..., ge=0.0, le=1.0)
+    prediction_confidence: float = Field(..., ge=0.0, le=1.0)
     model_version: str
 
 
 class PredictionCreate(PredictionBase):
     """Create prediction schema."""
 
-    pass
+    features: Optional[Dict[str, Any]] = None
+    trace_id: Optional[str] = None
 
 
 class PredictionResponse(PredictionBase):
     """Prediction response schema."""
 
-    id: str
+    id: int
+    features: Optional[Dict[str, Any]] = None
+    predicted_at: datetime
+    trace_id: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -96,31 +101,42 @@ class PredictionListResponse(BaseModel):
 
 
 # ============================================================================
-# Entities
+# Entities (Actors)
 # ============================================================================
 
 
 class EntityBase(BaseModel):
-    """Base entity schema."""
+    """Base entity (actor) schema."""
 
     name: str = Field(..., min_length=1, max_length=500)
-    entity_type: str = Field(..., min_length=1, max_length=100)
+    type: str = Field(..., min_length=1, max_length=100)
     wikidata_id: Optional[str] = None
-    description: Optional[str] = None
+    country: Optional[str] = None
+    aliases: Optional[List[str]] = None
 
 
 class EntityCreate(EntityBase):
     """Create entity schema."""
 
-    pass
+    normalized_name: Optional[str] = None
+    dbpedia_uri: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class EntityResponse(EntityBase):
     """Entity response schema."""
 
-    id: str
-    mention_count: int = Field(default=0, ge=0)
+    actor_id: str
+    normalized_name: str
+    dbpedia_uri: Optional[str] = None
+    sentiment_avg: float = Field(default=0.0)
+    occurrences: int = Field(default=0, ge=0)
+    first_seen: datetime
+    last_seen: datetime
+    ner_fallback_rate: float = Field(default=0.0)
+    metadata: Optional[Dict[str, Any]] = None
     created_at: datetime
+    updated_at: datetime
 
     class Config:
         """Pydantic config."""

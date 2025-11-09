@@ -144,8 +144,9 @@ class BtcPriceExtractor(FeatureExtractor):
             end_time = timestamp + timedelta(hours=self.temporal_window_hours)
             
             # Query btc_truth table
+            # Note: Using %s placeholders for psycopg2 compatibility
             query = """
-                SELECT 
+                SELECT
                     change_pct_10h,
                     volatility_score,
                     volume,
@@ -153,8 +154,8 @@ class BtcPriceExtractor(FeatureExtractor):
                     timestamp,
                     close
                 FROM btc_truth
-                WHERE timestamp >= $1 AND timestamp <= $2
-                ORDER BY ABS(EXTRACT(EPOCH FROM (timestamp - $3)))
+                WHERE timestamp >= %s AND timestamp <= %s
+                ORDER BY ABS(EXTRACT(EPOCH FROM (timestamp - %s)))
                 LIMIT 1
             """
             

@@ -205,6 +205,9 @@ class PostgresClient:
             results = cursor.fetchall()
             cursor.close()
 
+            # Commit the transaction to avoid "transaction is aborted" errors
+            self.connection.commit()
+
             logger.debug(
                 "Query executed",
                 result_count=len(results)
@@ -213,6 +216,9 @@ class PostgresClient:
 
         except Exception as e:
             logger.error("Error executing query", error=str(e))
+            # Rollback the transaction on error
+            if self.connection:
+                self.connection.rollback()
             raise PostgresError(f"Error executing query: {str(e)}")
 
     def close(self):

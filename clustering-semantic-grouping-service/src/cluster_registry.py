@@ -154,19 +154,36 @@ class ClusterRegistry:
             session = self.Session()
 
             # 1. Write to clustering.clusters table (internal registry)
-            record = ClusterRecord(
-                group_id=group_id,
-                article_ids=article_ids,
-                article_count=article_count,
-                similarity_avg=similarity_avg,
-                topic_label=topic_label[:255] if topic_label else "",  # Truncate to 255 chars
-                centroid_vector=centroid_vector,
-                cluster_metadata=cluster_meta,
-                stability_score=stability_score,
-                created_at=created_at,
-                created_by='clustering-service',
-            )
-            session.add(record)
+            # Check if cluster already exists
+            existing_cluster = session.query(ClusterRecord).filter_by(group_id=group_id).first()
+
+            if existing_cluster:
+                # Update existing cluster
+                existing_cluster.article_ids = article_ids
+                existing_cluster.article_count = article_count
+                existing_cluster.similarity_avg = similarity_avg
+                existing_cluster.topic_label = topic_label[:255] if topic_label else ""
+                existing_cluster.centroid_vector = centroid_vector
+                existing_cluster.cluster_metadata = cluster_meta
+                existing_cluster.stability_score = stability_score
+                existing_cluster.updated_at = datetime.utcnow()
+                logger.debug(f"Updated existing cluster in clustering.clusters: {group_id}")
+            else:
+                # Insert new cluster
+                record = ClusterRecord(
+                    group_id=group_id,
+                    article_ids=article_ids,
+                    article_count=article_count,
+                    similarity_avg=similarity_avg,
+                    topic_label=topic_label[:255] if topic_label else "",  # Truncate to 255 chars
+                    centroid_vector=centroid_vector,
+                    cluster_metadata=cluster_meta,
+                    stability_score=stability_score,
+                    created_at=created_at,
+                    created_by='clustering-service',
+                )
+                session.add(record)
+                logger.debug(f"Inserted new cluster in clustering.clusters: {group_id}")
 
             # 2. Write to public.semantic_groups table (for labeler and other services)
             # Convert centroid_vector to JSON string format for semantic_groups table

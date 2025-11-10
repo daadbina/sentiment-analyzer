@@ -11,7 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     gcc \
     g++ \
+    gfortran \
     libpq-dev \
+    libopenblas-dev \
+    liblapack-dev \
     git \
     && rm -rf /var/lib/apt/lists/*
 
@@ -20,6 +23,7 @@ COPY requirements.txt .
 
 # Create wheels for all dependencies
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir numpy cython && \
     pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
 
 # Stage 2: Runtime

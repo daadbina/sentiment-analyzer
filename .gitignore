@@ -8,6 +8,7 @@ __pycache__/
 env/
 venv/
 venv311/
+venv313/
 ENV/
 build/
 develop-eggs/
@@ -18,6 +19,10 @@ eggs/
 lib/
 lib64/
 parts/
+
+# Temporary build scripts
+build_services_individually.sh
+build_services_individually.ps1
 sdist/
 var/
 wheels/

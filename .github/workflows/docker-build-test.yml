@@ -91,7 +91,6 @@ jobs:
             echo "any-changed=false" >> $GITHUB_OUTPUT
           fi
 
-jobs:
   # Build ingest-validator-service first (priority service with disk space issues)
   build-ingest-validator:
     name: Build Ingest Validator Service

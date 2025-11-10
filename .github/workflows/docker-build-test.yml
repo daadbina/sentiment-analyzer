@@ -38,11 +38,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check for service changes
         uses: dorny/paths-filter@v2
         id: filter
         with:
+          base: ${{ github.event.before }}
+          ref: ${{ github.event.after }}
           filters: |
             crawler:
               - 'crawler-service/**'

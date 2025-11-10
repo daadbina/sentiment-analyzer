@@ -790,28 +790,30 @@ class LabelerService:
                 else:
                     event_labels.extend(valid)
 
+            # TEMPORARY: Semantic groups threshold check DISABLED for testing
+            # TODO: Re-enable this check after testing reconciliation with existing GDELT data
             # Check if we have enough semantic groups before deduplication and reconciliation
             # This prevents premature caching of labels as duplicates when no groups exist
             min_threshold = config.label.min_semantic_groups_threshold
             current_groups = len(self.semantic_groups)
 
-            if current_groups < min_threshold:
-                logger.warning(
-                    f"=== LABELER: Insufficient semantic groups for processing === "
-                    f"Waiting for clustering service to create at least {min_threshold} semantic groups. "
-                    f"Currently have {current_groups} groups. Skipping deduplication and reconciliation to "
-                    f"prevent premature caching of labels as duplicates.",
-                    operation="process_labels",
-                    current_groups=current_groups,
-                    required_threshold=min_threshold,
-                    event_labels_count=len(event_labels),
-                    crypto_labels_count=len(crypto_labels)
-                )
-                # Skip processing and wait for next iteration
-                return
+            # if current_groups < min_threshold:
+            #     logger.warning(
+            #         f"=== LABELER: Insufficient semantic groups for processing === "
+            #         f"Waiting for clustering service to create at least {min_threshold} semantic groups. "
+            #         f"Currently have {current_groups} groups. Skipping deduplication and reconciliation to "
+            #         f"prevent premature caching of labels as duplicates.",
+            #         operation="process_labels",
+            #         current_groups=current_groups,
+            #         required_threshold=min_threshold,
+            #         event_labels_count=len(event_labels),
+            #         crypto_labels_count=len(crypto_labels)
+            #     )
+            #     # Skip processing and wait for next iteration
+            #     return
 
             logger.info(
-                f"=== LABELER: Sufficient semantic groups available for processing ===",
+                f"=== LABELER: Processing labels (threshold check TEMPORARILY DISABLED) ===",
                 operation="process_labels",
                 current_groups=current_groups,
                 required_threshold=min_threshold,
@@ -819,6 +821,8 @@ class LabelerService:
                 crypto_labels_count=len(crypto_labels)
             )
 
+            # TEMPORARY: Deduplication for GDELT/event labels DISABLED for testing
+            # TODO: Re-enable deduplication for event labels after testing reconciliation
             # Deduplicate ALL labels (both event and crypto) for safety
             # Per Architecture.md: Deduplication Engine detects duplicates from multiple sources
             # GDELT data should be unique, but deduplication adds safety layer for production
@@ -826,16 +830,27 @@ class LabelerService:
             unique_crypto_labels = []
 
             if event_labels:
-                unique_event_labels, duplicates = await self.deduplication_engine.deduplicate_batch(event_labels)
-                if len(duplicates) > 0:
-                    logger.warning(
-                        "Event labels had duplicates (unexpected for GDELT)",
-                        operation="process_labels",
-                        duplicate_count=len(duplicates),
-                        source="gdelt/acled"
-                    )
+                # TEMPORARY: Skip deduplication for GDELT/ACLED event labels
+                # This allows all GDELT labels to be reconciled every time
+                unique_event_labels = event_labels
+                logger.info(
+                    "Event labels deduplication TEMPORARILY DISABLED - processing all labels",
+                    operation="process_labels",
+                    event_label_count=len(event_labels),
+                    source="gdelt/acled"
+                )
+                # Original code (commented out temporarily):
+                # unique_event_labels, duplicates = await self.deduplication_engine.deduplicate_batch(event_labels)
+                # if len(duplicates) > 0:
+                #     logger.warning(
+                #         "Event labels had duplicates (unexpected for GDELT)",
+                #         operation="process_labels",
+                #         duplicate_count=len(duplicates),
+                #         source="gdelt/acled"
+                #     )
 
             if crypto_labels:
+                # Keep deduplication enabled for crypto labels (BTC prices)
                 unique_crypto_labels, duplicates = await self.deduplication_engine.deduplicate_batch(crypto_labels)
                 if len(duplicates) > 0:
                     logger.info(

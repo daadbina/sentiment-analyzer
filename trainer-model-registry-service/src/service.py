@@ -307,16 +307,47 @@ class TrainerService:
                 logger.debug(f"Label 0 count: {(y_series == 0).sum()}, Label 1 count: {(y_series == 1).sum()}")
                 logger.debug(f"Label imbalance ratio: {(y_series == 1).sum() / (y_series == 0).sum() if (y_series == 0).sum() > 0 else 'N/A'}")
 
+                # Validate minimum dataset size
+                min_samples_required = 50  # Minimum for meaningful model training
+                if len(y_series) < min_samples_required:
+                    logger.error(
+                        f"Insufficient training data: {len(y_series)} samples (minimum {min_samples_required} required). "
+                        f"Need more ground truth labels from labeler service."
+                    )
+                    raise TrainerError(
+                        f"Insufficient training data: {len(y_series)} samples (minimum {min_samples_required} required)"
+                    )
+
+                # Validate minimum samples per class
+                class_counts = y_series.value_counts().to_dict()
+                min_class_samples = min(class_counts.values())
+                min_class_required = 10  # Minimum samples per class
+                if min_class_samples < min_class_required:
+                    logger.warning(
+                        f"Low sample count for minority class: {min_class_samples} samples "
+                        f"(recommended minimum {min_class_required}). Model performance may be poor."
+                    )
+
                 # Preprocess data
                 logger.info("Preprocessing data")
                 X_before = X.shape
                 X, _ = self.preprocessor.preprocess(X, y_series, fit=True)
                 logger.info(f"Data after preprocessing: {X.shape} (was {X_before})")
 
-                # Split data
-                logger.info("Splitting data")
+                # Validate feature-to-sample ratio
+                feature_to_sample_ratio = X.shape[1] / len(X)
+                if feature_to_sample_ratio > 0.5:
+                    logger.warning(
+                        f"High feature-to-sample ratio: {feature_to_sample_ratio:.2f} "
+                        f"({X.shape[1]} features / {len(X)} samples). "
+                        f"Risk of overfitting. Consider feature selection or dimensionality reduction."
+                    )
+
+                # Split data with stratification to preserve class distribution
+                # This is critical for small datasets with class imbalance
+                logger.info("Splitting data with stratification")
                 (X_train, y_train), (X_val, y_val), (X_test, y_test) = (
-                    self.splitter.split_temporal(X, y_series)
+                    self.splitter.split_stratified(X, y_series)
                 )
                 logger.info(f"Train set: {X_train.shape}, Val set: {X_val.shape}, Test set: {X_test.shape}")
                 logger.info(f"Train labels distribution: {y_train.value_counts().to_dict()}")
@@ -542,7 +573,16 @@ class TrainerService:
                                         logger.warning(f"Failed to clean up preprocessor file: {cleanup_error}")
                     except Exception as e:
                         logger.error(f"Failed to register {model_type} model: {e}", exc_info=True)
-                        # Continue with other models
+                        # Log detailed error information for debugging
+                        import traceback
+                        logger.error(f"Full traceback: {traceback.format_exc()}")
+                        logger.error(
+                            f"MLflow registration failed for {model_type}. "
+                            f"Check MLflow server health at {config.mlflow.tracking_uri}. "
+                            f"Common causes: MLflow server down, database connection issues, "
+                            f"S3/MinIO storage issues, or insufficient disk space."
+                        )
+                        # Continue with other models - don't fail entire pipeline
 
                 result = {
                     "timestamp": datetime.now().isoformat(),

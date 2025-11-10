@@ -327,14 +327,17 @@ class LabelReconciler:
             label_countries = label.get("countries", [])
             label_event_type = label.get("event_type", "")
             for group in semantic_groups:
-                # Temporal matching using event_timestamp
-                temporal_match, temporal_conf = self.temporal_matcher.match(
-                    label_timestamp,
-                    group.get("created_at", "")
-                )
+                # TEMPORARY: Skip temporal matching to allow historical GDELT events to match
+                # temporal_match, temporal_conf = self.temporal_matcher.match(
+                #     label_timestamp,
+                #     group.get("created_at", "")
+                # )
+                #
+                # if not temporal_match:
+                #     continue
 
-                if not temporal_match:
-                    continue
+                # Set temporal confidence to 1.0 (always pass)
+                temporal_conf = 1.0
 
                 # Get group description for matching
                 group_description = (

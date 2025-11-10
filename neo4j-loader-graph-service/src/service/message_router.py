@@ -303,6 +303,7 @@ class MessageRouter:
             trace_id: Trace ID for correlation
         """
         try:
+
             # Build Article node
             article = node_builder.build_article_node(message)
             article_data = article.to_neo4j_properties()

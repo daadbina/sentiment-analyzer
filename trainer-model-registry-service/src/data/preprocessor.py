@@ -115,7 +115,7 @@ class DataPreprocessor:
                 if self.enable_feature_engineering and self.feature_engineer is not None:
                     X_before_fe = X.shape[1]
                     X = self.feature_engineer.engineer_features(X, fit=fit)
-                    logger.info(f"Feature engineering: {X_before_fe} → {X.shape[1]} features")
+                    logger.info(f"Feature engineering: {X_before_fe} -> {X.shape[1]} features")
                     logger.debug(f"Shape after feature engineering: {X.shape}")
 
                 # Scale features

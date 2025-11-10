@@ -17,6 +17,7 @@ from src.service import ValidatorService
 from src.logging_config import setup_logging
 from src.metrics import get_metrics
 from src.models import NewsRaw
+from src.repositories.database_initializer import DatabaseInitializer
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,13 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting FastAPI application")
     setup_logging()
+
+    # Initialize database (create tables and default sources if needed)
+    try:
+        await DatabaseInitializer.initialize()
+        logger.info("Database initialization complete")
+    except Exception as e:
+        logger.warning(f"Database initialization failed (service will continue): {e}")
 
     # Initialize metrics
     metrics = get_metrics()

@@ -527,22 +527,12 @@ class LabelerService:
             operation="_consume_semantic_groups_background"
         )
 
-        # Initial load from PostgreSQL
-        try:
-            groups = await self.postgres_writer.fetch_semantic_groups()
-            if groups:
-                self.semantic_groups = groups
-                logger.info(
-                    f"Initial load: Fetched {len(groups)} semantic groups from PostgreSQL",
-                    operation="_consume_semantic_groups_background",
-                    group_count=len(groups)
-                )
-        except Exception as e:
-            logger.error(
-                f"Failed to fetch initial semantic groups from PostgreSQL: {str(e)}",
-                operation="_consume_semantic_groups_background",
-                error_type=type(e).__name__
-            )
+        # SKIP initial load from PostgreSQL - only use Kafka messages
+        # This ensures labeler only processes semantic groups from the current clustering run
+        logger.info(
+            "=== LABELER: Skipping PostgreSQL initial load - waiting for semantic groups from Kafka ===",
+            operation="_consume_semantic_groups_background"
+        )
 
         # Continuously consume from Kafka
         while self.running:
@@ -555,6 +545,19 @@ class LabelerService:
                 )
 
                 if new_groups:
+                    # Log first group for debugging
+                    if len(new_groups) > 0:
+                        sample_group = new_groups[0]
+                        logger.info(
+                            f"=== LABELER: Sample semantic group from Kafka ===",
+                            operation="_consume_semantic_groups_background",
+                            group_id=sample_group.get('group_id'),
+                            topic_label=sample_group.get('topic_label'),
+                            article_count=sample_group.get('article_count'),
+                            created_at=sample_group.get('created_at'),
+                            keys=list(sample_group.keys())
+                        )
+
                     # Update semantic groups list
                     # Create a dict for fast lookup by group_id
                     groups_dict = {g['group_id']: g for g in self.semantic_groups}
@@ -567,11 +570,19 @@ class LabelerService:
                     self.semantic_groups = list(groups_dict.values())
 
                     logger.info(
-                        f"Updated semantic groups from Kafka",
+                        f"=== LABELER: Received {len(new_groups)} new semantic groups from Kafka ===",
                         operation="_consume_semantic_groups_background",
                         new_groups=len(new_groups),
                         total_groups=len(self.semantic_groups)
                     )
+
+                    # Trigger reconciliation immediately when new semantic groups arrive
+                    logger.info(
+                        "=== LABELER: Triggering reconciliation after receiving new semantic groups ===",
+                        operation="_consume_semantic_groups_background",
+                        new_groups=len(new_groups)
+                    )
+                    await self.process_labels()
 
                 # Small sleep to avoid tight loop (only when no messages)
                 if not new_groups:
@@ -651,6 +662,29 @@ class LabelerService:
                         operation="_fetch_btc_background",
                         label_count=len(enriched_btc)
                     )
+
+                    # Deduplicate BTC labels to avoid sending same prices repeatedly
+                    unique_btc, duplicate_btc = await self.deduplication_engine.deduplicate_batch(enriched_btc)
+                    logger.info(
+                        f"=== LABELER: Deduplicated BTC labels - {len(unique_btc)} unique, {len(duplicate_btc)} duplicates ===",
+                        operation="_fetch_btc_background",
+                        unique_count=len(unique_btc),
+                        duplicate_count=len(duplicate_btc),
+                        total_fetched=len(enriched_btc)
+                    )
+
+                    # Only process unique labels (skip duplicates)
+                    if not unique_btc:
+                        logger.info(
+                            "=== LABELER: No new BTC prices to process - all are duplicates ===",
+                            operation="_fetch_btc_background"
+                        )
+                        # Sleep for 5 minutes before next fetch
+                        await asyncio.sleep(300)
+                        continue
+
+                    # Use unique_btc instead of enriched_btc for all subsequent operations
+                    enriched_btc = unique_btc
 
                     # Write to storage (Delta Lake + PostgreSQL + Outbox + Kafka)
                     try:
@@ -747,17 +781,13 @@ class LabelerService:
         )
 
     async def process_labels(self):
-        """Main label processing pipeline."""
+        """Main label processing pipeline - triggered when semantic groups are available."""
         try:
             logger.info(
                 "=== LABELER: Starting label processing pipeline ===",
                 operation="process_labels",
-                semantic_groups_count=len(self.semantic_groups),
-                min_threshold=config.label.min_semantic_groups_threshold
+                semantic_groups_count=len(self.semantic_groups)
             )
-
-            # Consume semantic groups from Kafka
-            await self.consume_semantic_groups()
 
             # Fetch labels
             labels = await self.fetch_labels()
@@ -790,64 +820,30 @@ class LabelerService:
                 else:
                     event_labels.extend(valid)
 
-            # TEMPORARY: Semantic groups threshold check DISABLED for testing
-            # TODO: Re-enable this check after testing reconciliation with existing GDELT data
-            # Check if we have enough semantic groups before deduplication and reconciliation
-            # This prevents premature caching of labels as duplicates when no groups exist
-            min_threshold = config.label.min_semantic_groups_threshold
-            current_groups = len(self.semantic_groups)
-
-            # if current_groups < min_threshold:
-            #     logger.warning(
-            #         f"=== LABELER: Insufficient semantic groups for processing === "
-            #         f"Waiting for clustering service to create at least {min_threshold} semantic groups. "
-            #         f"Currently have {current_groups} groups. Skipping deduplication and reconciliation to "
-            #         f"prevent premature caching of labels as duplicates.",
-            #         operation="process_labels",
-            #         current_groups=current_groups,
-            #         required_threshold=min_threshold,
-            #         event_labels_count=len(event_labels),
-            #         crypto_labels_count=len(crypto_labels)
-            #     )
-            #     # Skip processing and wait for next iteration
-            #     return
-
             logger.info(
-                f"=== LABELER: Processing labels (threshold check TEMPORARILY DISABLED) ===",
+                f"=== LABELER: Processing labels with {len(self.semantic_groups)} semantic groups ===",
                 operation="process_labels",
-                current_groups=current_groups,
-                required_threshold=min_threshold,
+                semantic_groups_count=len(self.semantic_groups),
                 event_labels_count=len(event_labels),
                 crypto_labels_count=len(crypto_labels)
             )
 
-            # TEMPORARY: Deduplication for GDELT/event labels DISABLED for testing
-            # TODO: Re-enable deduplication for event labels after testing reconciliation
-            # Deduplicate ALL labels (both event and crypto) for safety
-            # Per Architecture.md: Deduplication Engine detects duplicates from multiple sources
-            # GDELT data should be unique, but deduplication adds safety layer for production
+            # Deduplication for GDELT/event labels DISABLED
+            # This allows GDELT labels to be reconciled multiple times with new semantic groups
+            # Per user requirement: reconcile GDELT data each time without deduplication
             unique_event_labels = []
             unique_crypto_labels = []
 
             if event_labels:
-                # TEMPORARY: Skip deduplication for GDELT/ACLED event labels
+                # Skip deduplication for GDELT/ACLED event labels
                 # This allows all GDELT labels to be reconciled every time
                 unique_event_labels = event_labels
                 logger.info(
-                    "Event labels deduplication TEMPORARILY DISABLED - processing all labels",
+                    "=== LABELER: Processing all event labels without deduplication (allows multiple reconciliation) ===",
                     operation="process_labels",
                     event_label_count=len(event_labels),
                     source="gdelt/acled"
                 )
-                # Original code (commented out temporarily):
-                # unique_event_labels, duplicates = await self.deduplication_engine.deduplicate_batch(event_labels)
-                # if len(duplicates) > 0:
-                #     logger.warning(
-                #         "Event labels had duplicates (unexpected for GDELT)",
-                #         operation="process_labels",
-                #         duplicate_count=len(duplicates),
-                #         source="gdelt/acled"
-                #     )
 
             if crypto_labels:
                 # Keep deduplication enabled for crypto labels (BTC prices)
@@ -864,6 +860,13 @@ class LabelerService:
             # Crypto labels are NOT reconciled per Architecture.md
             reconciliation_map = {}
             if unique_event_labels and self.semantic_groups:
+                logger.info(
+                    "=== LABELER: Starting reconciliation ===",
+                    operation="process_labels",
+                    event_labels_to_reconcile=len(unique_event_labels),
+                    semantic_groups_available=len(self.semantic_groups)
+                )
+
                 # Reconcile all labels
                 labels_to_reconcile = unique_event_labels
 
@@ -886,14 +889,15 @@ class LabelerService:
 
                 # Log reconciliation summary
                 logger.info(
-                    f"Reconciliation completed",
+                    "=== LABELER: Reconciliation completed ===",
                     operation="process_labels",
                     reconciled_count=len(reconciliation_map),
-                    total_reconciled_results=len(reconciled_labels)
+                    total_reconciled_results=len(reconciled_labels),
+                    unreconciled_count=len(unique_event_labels) - len(reconciliation_map)
                 )
             elif unique_event_labels:
                 logger.warning(
-                    "No semantic groups available for reconciliation",
+                    "=== LABELER: No semantic groups available for reconciliation - waiting for clustering service ===",
                     operation="process_labels",
                     event_label_count=len(unique_event_labels)
                 )
@@ -914,6 +918,29 @@ class LabelerService:
                 enriched_event_labels.append(label)
 
 
+
+            # Deduplicate event labels before writing to storage
+            # This prevents sending duplicate GDELT/ACLED labels to PostgreSQL and Kafka
+            if enriched_event_labels:
+                unique_event_labels_for_storage, duplicate_event_labels = await self.deduplication_engine.deduplicate_batch(enriched_event_labels)
+                logger.info(
+                    f"=== LABELER: Deduplicated event labels before storage - {len(unique_event_labels_for_storage)} unique, {len(duplicate_event_labels)} duplicates ===",
+                    operation="process_labels",
+                    unique_count=len(unique_event_labels_for_storage),
+                    duplicate_count=len(duplicate_event_labels),
+                    total_enriched=len(enriched_event_labels)
+                )
+
+                # Only process unique labels (skip duplicates)
+                if not unique_event_labels_for_storage:
+                    logger.info(
+                        "=== LABELER: No new event labels to write - all are duplicates ===",
+                        operation="process_labels"
+                    )
+                    # Continue to crypto labels processing
+                else:
+                    # Use unique labels for storage
+                    enriched_event_labels = unique_event_labels_for_storage
 
             # Write event labels to storage using outbox pattern
             if enriched_event_labels:
@@ -1050,26 +1077,34 @@ class LabelerService:
             )
 
     async def run(self):
-        """Run service main loop."""
+        """Run service - keep alive while background tasks handle processing.
+
+        The service is now event-driven:
+        - Background task consumes semantic groups from Kafka
+        - When new semantic groups arrive, reconciliation is triggered automatically
+        - No need for periodic polling loop
+        """
         logger.info(
-            "Labeler service main loop started",
+            "=== LABELER: Service running in event-driven mode - reconciliation triggered by semantic group messages ===",
             operation="run"
         )
 
-        while self.running:
-            try:
-                await self.process_labels()
-
-                # Sleep before next iteration
+        # Keep service alive while background tasks run
+        try:
+            while self.running:
+                # Just sleep and let background tasks do the work
                 await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            logger.info(
+                "=== LABELER: Service run loop cancelled ===",
+                operation="run"
+            )
 
-            except Exception as e:
-                logger.error(
-                    f"Error in main loop: {str(e)}",
-                    operation="run",
-                    error_type=type(e).__name__
-                )
-                await asyncio.sleep(60)
+        logger.warning(
+            "=== LABELER: Service run loop exited - shutting down ===",
+            operation="run",
+            running=self.running
+        )
 
     async def health_check(self) -> Dict[str, Any]:
         """Health check endpoint (/health)."""

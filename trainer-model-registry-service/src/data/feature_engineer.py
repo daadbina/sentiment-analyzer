@@ -87,7 +87,7 @@ class FeatureEngineer:
                     )
 
                 logger.info(
-                    f"Feature engineering complete: {X.shape[1]} → {X_engineered.shape[1]} features"
+                    f"Feature engineering complete: {X.shape[1]} -> {X_engineered.shape[1]} features"
                 )
                 return X_engineered
 

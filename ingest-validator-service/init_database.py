@@ -117,6 +117,7 @@ async def create_tables():
             ("rt", "RT News", 0.6, True, None),
             ("tasnim", "Tasnim News Agency", 0.65, True, None),
             ("isna", "ISNA News Agency", 0.7, True, None),
+            ("webhose_free_datasets", "Webhose Free News Datasets (Training Data)", 1.0, True, "training_data"),
         ]
         
         for source_id, name, credibility, is_active, publisher_id in default_sources:

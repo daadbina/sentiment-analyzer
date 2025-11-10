@@ -20,6 +20,7 @@ class DatabaseInitializer:
         ("rt", "RT", 0.6, True, "rt"),
         ("tasnim", "Tasnim", 0.65, True, "tasnim"),
         ("isna", "ISNA", 0.7, True, "isna"),
+        ("webhose_free_datasets", "Webhose Free News Datasets (Training Data)", 1.0, True, "training_data"),
     ]
 
     @staticmethod

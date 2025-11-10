@@ -5,6 +5,7 @@ Provides REST API endpoints for crawler management and monitoring.
 """
 
 import logging
+from typing import Optional, List
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -361,6 +362,55 @@ async def delete_feed(feed_id: str):
 # ============================================================================
 # Crawl Endpoints
 # ============================================================================
+
+
+@app.post("/crawl/training-data", tags=["Crawling"])
+async def crawl_training_data(
+    categories: Optional[List[str]] = None,
+    sentiments: Optional[List[str]] = None,
+    max_datasets: Optional[int] = None,
+):
+    """
+    Fetch training data from GitHub repository and produce to Kafka.
+
+    This endpoint downloads labeled news articles from the Webhose free-news-datasets
+    repository and produces them to the news_raw topic with is_training_data flag.
+
+    Args:
+        categories: List of categories to fetch (None = all available).
+        sentiments: List of sentiments to fetch (None = both positive and negative).
+        max_datasets: Maximum number of datasets to fetch (None = all).
+
+    Returns:
+        dict: Training data fetch job result.
+
+    Example:
+        POST /crawl/training-data
+        {
+            "categories": ["War, Conflict and Unrest", "Politics"],
+            "sentiments": ["positive", "negative"],
+            "max_datasets": 5
+        }
+    """
+    if not crawler_app:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Service not initialized",
+        )
+
+    try:
+        job = await crawler_app.crawl_training_data(
+            categories=categories,
+            sentiments=sentiments,
+            max_datasets=max_datasets,
+        )
+        return job.model_dump()
+    except Exception as e:
+        logger.error(f"Training data fetch failed: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
 
 @app.post("/crawl/{feed_id}", tags=["Crawling"])

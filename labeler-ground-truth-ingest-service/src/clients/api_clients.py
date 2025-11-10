@@ -15,6 +15,7 @@ except ImportError:
 from src.config import config
 from src.exceptions import FetchError, CircuitBreakerError
 from src.utils.trace import get_logger
+from src.validation.confidence_calculator import ConfidenceCalculator
 
 
 logger = get_logger(__name__, config.logging.log_level)
@@ -247,6 +248,7 @@ class ACLEDFetcher(BaseAPIClient):
         self.password = config.acled.password
         self.access_token = config.acled.access_token
         self.token_expires_at = config.acled.token_expires_at
+        self.confidence_calculator = ConfidenceCalculator()
 
     async def _get_oauth_token(self) -> str:
         """Get OAuth access token from ACLED."""
@@ -496,17 +498,28 @@ class ACLEDFetcher(BaseAPIClient):
             except Exception:
                 event_timestamp = datetime.utcnow().isoformat() + "Z"
 
+            # Calculate dynamic confidence based on event characteristics
+            event_type = event.get("event_type", "")
+            fatalities = int(event.get("fatalities", 0))
+            source_url = event.get("source_url", "")
+
+            confidence = self.confidence_calculator.calculate_acled_confidence(
+                event_type=event_type,
+                fatalities=fatalities,
+                source_url=source_url
+            )
+
             label = {
                 "event_id": str(event.get("event_id_cnty", "")),
                 "event_date": event_date_str,
                 "event_timestamp": event_timestamp,  # Actual event time (ISO format)
                 "country": event.get("country", ""),
-                "event_type": event.get("event_type", ""),
-                "fatalities": int(event.get("fatalities", 0)),
-                "label_conflict": 1 if event.get("event_type") in ["Violence against civilians", "Protests"] else 0,
-                "label_confidence": 0.85,  # ACLED data is high confidence (mapped to PostgreSQL column)
+                "event_type": event_type,
+                "fatalities": fatalities,
+                "label_conflict": 1 if event_type in ["Violence against civilians", "Protests"] else 0,
+                "label_confidence": confidence,  # Dynamic confidence based on event characteristics
                 "label_source": "acled",  # Source identifier for deduplication
-                "source_url": event.get("source_url", ""),
+                "source_url": source_url,
                 "fetched_at": datetime.utcnow().isoformat() + "Z",  # When fetched from API
                 "trace_id": logger.trace_id
             }
@@ -561,6 +574,9 @@ class GDELTFetcher(BaseAPIClient):
                 error_type=type(e).__name__
             )
             self.ner_client = None
+
+        # Initialize confidence calculator
+        self.confidence_calculator = ConfidenceCalculator()
 
     async def fetch(self) -> List[Dict[str, Any]]:
         """Fetch events from GDELT using gdelt library."""
@@ -798,6 +814,15 @@ class GDELTFetcher(BaseAPIClient):
                         description_parts.append(title)
                     description = " ".join(description_parts)
 
+                    # Calculate dynamic confidence based on event characteristics
+                    confidence = self.confidence_calculator.calculate_gdelt_confidence(
+                        event_code=event_code,
+                        goldstein_scale=goldstein_scale,
+                        countries=countries,
+                        source_url=url,
+                        description=description
+                    )
+
                     label = {
                         "event_id": url or f"gdelt_{idx}",
                         "event_date": seendate,
@@ -809,7 +834,7 @@ class GDELTFetcher(BaseAPIClient):
                         "goldstein_scale": goldstein_scale,  # Sentiment score (-10 to +10)
                         "label_conflict": label_conflict,  # Binary conflict label (0/1)
                         "label_event_type": "news_article",
-                        "label_confidence": 0.80,  # Confidence for GDELT articles (mapped to PostgreSQL column)
+                        "label_confidence": confidence,  # Dynamic confidence based on event characteristics
                         "label_source": "gdelt",  # Source identifier for deduplication
                         "source_url": url,
                         "title": title,
@@ -863,6 +888,7 @@ class BinanceFetcher(BaseAPIClient):
         self.symbols = config.binance.symbols.split(",")
         self.interval = config.binance.interval
         self.limit = config.binance.limit
+        self.confidence_calculator = ConfidenceCalculator()
 
     async def fetch(self) -> List[Dict[str, Any]]:
         """Fetch crypto prices from Binance."""
@@ -934,6 +960,17 @@ class BinanceFetcher(BaseAPIClient):
                 prev_close = float(response[i - 10][4])
                 change_pct = ((close_price - prev_close) / prev_close) * 100
 
+            # Calculate volatility score
+            volatility_score = min(abs(change_pct) / 10.0, 1.0)
+
+            # Calculate dynamic confidence based on price characteristics
+            confidence = self.confidence_calculator.calculate_btc_confidence(
+                change_pct=change_pct,
+                volatility_score=volatility_score,
+                volume=volume,
+                source="binance"
+            )
+
             label = {
                 "event_id": f"binance_{symbol}_{open_time}",
                 "event_timestamp": datetime.utcfromtimestamp(open_time / 1000).isoformat() + "Z",  # Actual event time in UTC
@@ -945,8 +982,8 @@ class BinanceFetcher(BaseAPIClient):
                 "volume": volume,
                 "change_pct_10p": change_pct,
                 "label_spike": abs(change_pct) > 5.0,  # Boolean for PostgreSQL
-                "volatility_score": min(abs(change_pct) / 10.0, 1.0),
-                "label_confidence": 0.95,  # Confidence for Binance prices (mapped to PostgreSQL column)
+                "volatility_score": volatility_score,
+                "label_confidence": confidence,  # Dynamic confidence based on price characteristics
                 "label_source": "binance",  # Source identifier for deduplication
                 "source_url": "https://www.binance.com",
                 "fetched_at": datetime.utcnow().isoformat() + "Z",  # When fetched from API
@@ -981,6 +1018,8 @@ class CCXTFetcher(BaseAPIClient):
             self.symbols = config.ccxt.symbols.split(",")
             self.timeframe = config.ccxt.timeframe
             self.limit = config.ccxt.limit
+
+        self.confidence_calculator = ConfidenceCalculator()
 
     async def fetch(self) -> List[Dict[str, Any]]:
         """Fetch crypto prices from CCXT exchanges (fallback)."""
@@ -1101,6 +1140,17 @@ class CCXTFetcher(BaseAPIClient):
                 prev_close = float(ohlcv[i - 10][4])
                 change_pct = ((close_price - prev_close) / prev_close) * 100
 
+            # Calculate volatility score
+            volatility_score = min(abs(change_pct) / 10.0, 1.0)
+
+            # Calculate dynamic confidence based on price characteristics
+            confidence = self.confidence_calculator.calculate_btc_confidence(
+                change_pct=change_pct,
+                volatility_score=volatility_score,
+                volume=volume,
+                source="ccxt"
+            )
+
             label = {
                 "event_id": f"ccxt_{exchange}_{symbol}_{timestamp}",
                 "timestamp": datetime.fromtimestamp(timestamp / 1000).isoformat(),
@@ -1113,8 +1163,8 @@ class CCXTFetcher(BaseAPIClient):
                 "volume": volume,
                 "change_pct_10p": change_pct,
                 "label_spike": 1 if abs(change_pct) > 5.0 else 0,
-                "volatility_score": min(abs(change_pct) / 10.0, 1.0),
-                "confidence": 0.90,  # Slightly lower confidence for fallback
+                "volatility_score": volatility_score,
+                "confidence": confidence,  # Dynamic confidence based on price characteristics
                 "source_url": f"https://{exchange}.com",
                 "fetched_at": datetime.utcnow().isoformat(),
                 "trace_id": logger.trace_id

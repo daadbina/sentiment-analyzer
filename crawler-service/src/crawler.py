@@ -22,6 +22,7 @@ from .logging_config import get_logger
 from .models import CrawlJob, FeedSource
 from .database import DatabaseManager
 from .kafka_admin import KafkaTopicManager
+from .training_data_fetcher import TrainingDataFetcher
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class CrawlerApplication:
         self.kafka_producer = KafkaProducerAdapter()
         self.http_fetcher = HTTPFetcher()
         self.parser_factory = ParserFactory()
+        self.training_data_fetcher = TrainingDataFetcher()
         self.validator = ArticleValidator()
         self.dedup_engine = DeduplicationEngine()
         self.normalizer = ArticleNormalizer()
@@ -90,6 +92,10 @@ class CrawlerApplication:
             await self.scheduler.start()
             self.health_manager.get_check("scheduler").set_healthy()
 
+            # Start training data fetcher
+            await self.training_data_fetcher.start()
+            self.logger.info("Training data fetcher started")
+
             # Mark feed registry as healthy
             self.health_manager.get_check("feed_registry").set_healthy()
             self.health_manager.get_check("http_fetcher").set_healthy()
@@ -119,6 +125,10 @@ class CrawlerApplication:
 
             # Stop HTTP fetcher (cleanup aiohttp session)
             await self.http_fetcher.stop()
+
+            # Stop training data fetcher
+            await self.training_data_fetcher.stop()
+            self.logger.info("Training data fetcher stopped")
 
             # Close database connection
             await self.database.close()
@@ -294,6 +304,74 @@ class CrawlerApplication:
                 self.logger.error(f"Failed to crawl feed {feed.feed_id}: {str(e)}")
 
         return jobs
+
+    async def crawl_training_data(
+        self,
+        categories: Optional[List[str]] = None,
+        sentiments: Optional[List[str]] = None,
+        max_datasets: Optional[int] = None,
+    ) -> CrawlJob:
+        """
+        Fetch training data from GitHub repository and produce to Kafka.
+
+        Args:
+            categories: List of categories to fetch (None = all).
+            sentiments: List of sentiments to fetch (None = all).
+            max_datasets: Maximum number of datasets to fetch (None = all).
+
+        Returns:
+            CrawlJob: Job execution result.
+        """
+        job = await self.scheduler.create_crawl_job()
+        self.current_job = job
+
+        try:
+            self.logger.info(
+                f"Starting training data fetch job {job.job_id} - "
+                f"categories: {categories}, sentiments: {sentiments}, "
+                f"max_datasets: {max_datasets}"
+            )
+
+            # Fetch training data
+            messages = await self.training_data_fetcher.fetch_training_data(
+                categories=categories,
+                sentiments=sentiments,
+                max_datasets=max_datasets,
+                job_id=job.job_id,
+            )
+
+            self.logger.info(f"Fetched {len(messages)} training messages")
+
+            # Publish to Kafka
+            for message in messages:
+                try:
+                    await self.kafka_producer.publish(message)
+                    self.metrics.record_article_published("training_data")
+                    job.articles_published += 1
+                except Exception as e:
+                    self.logger.error(f"Error publishing training message: {str(e)}")
+                    self.metrics.record_article_failed("training_data", type(e).__name__)
+                    job.articles_failed += 1
+
+                job.articles_crawled += 1
+
+            # Complete job
+            await self.scheduler.complete_crawl_job(job, status="completed")
+            self.metrics.record_articles_per_job(job.articles_published)
+
+            self.logger.info(
+                f"Training data fetch job {job.job_id} completed - "
+                f"crawled: {job.articles_crawled}, published: {job.articles_published}, "
+                f"failed: {job.articles_failed}"
+            )
+
+            return job
+
+        except Exception as e:
+            self.logger.error(f"Training data fetch job {job.job_id} failed: {str(e)}")
+            await self.scheduler.complete_crawl_job(job, status="failed")
+            job.errors.append(str(e))
+            raise
 
     def get_health_status(self) -> dict:
         """

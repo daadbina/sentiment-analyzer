@@ -14,12 +14,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Copy minified requirements first for better caching (no heavy ML dependencies)
+COPY requirements-minified.txt .
 
 # Create wheels for all dependencies
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
+    pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements-minified.txt
 
 # Stage 2: Runtime
 FROM python:3.11-slim
@@ -41,11 +41,11 @@ RUN useradd -m -u 1000 validator && \
 
 # Copy wheels from builder
 COPY --from=builder /build/wheels /wheels
-COPY --from=builder /build/requirements.txt .
+COPY --from=builder /build/requirements-minified.txt .
 
 # Install Python dependencies from wheels
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt && \
+    pip install --no-cache-dir --no-index --find-links=/wheels -r requirements-minified.txt && \
     rm -rf /wheels
 
 # Copy application code

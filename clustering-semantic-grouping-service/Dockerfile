@@ -23,9 +23,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 # Create wheels for all dependencies
-# Install numpy and Cython first as they are required to build hdbscan
+# Install build dependencies in order: numpy, cython, scipy, scikit-learn, then hdbscan
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir numpy cython && \
+    pip install --no-cache-dir numpy==1.26.2 cython && \
+    pip install --no-cache-dir scipy==1.11.4 scikit-learn==1.3.2 && \
     pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
 
 # Stage 2: Runtime

@@ -39,25 +39,25 @@ jobs:
           cp .env.docker .env
           echo "Created .env file from .env.docker"
 
-      - name: Pull pre-built images
+      - name: Pull pre-built images or use latest
         run: |
           echo "Pulling pre-built service images..."
           BRANCH_NAME=${GITHUB_REF#refs/heads/}
-          
-          # Pull all 12 service images
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/crawler-service:${BRANCH_NAME}-${{ github.sha }} || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ingest-validator-service:${BRANCH_NAME}-${{ github.sha }} || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/canonicalizer-normalizer-service:${BRANCH_NAME}-${{ github.sha }} || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/ner-entity-linking-service:${BRANCH_NAME}-${{ github.sha }} || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/embedding-service:${BRANCH_NAME}-${{ github.sha }} || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/clustering-semantic-grouping-service:${BRANCH_NAME}-${{ github.sha }} || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/feature-engineering-service:${BRANCH_NAME}-${{ github.sha }} || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/labeler-ground-truth-ingest-service:${BRANCH_NAME}-${{ github.sha }} || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/trainer-model-registry-service:${BRANCH_NAME}-${{ github.sha }} || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/neo4j-loader-graph-service:${BRANCH_NAME}-${{ github.sha }} || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/predictor-online-inference-service:${BRANCH_NAME}-${{ github.sha }} || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/api-analytics-service:${BRANCH_NAME}-${{ github.sha }} || true
-          
+
+          # Try to pull images with current SHA, fallback to latest
+          for service in crawler-service ingest-validator-service canonicalizer-normalizer-service \
+                         ner-entity-linking-service embedding-service clustering-semantic-grouping-service \
+                         feature-engineering-service labeler-ground-truth-ingest-service trainer-model-registry-service \
+                         neo4j-loader-graph-service predictor-online-inference-service api-analytics-service; do
+            echo "Pulling $service..."
+            if ! docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${service}:${BRANCH_NAME}-${{ github.sha }}; then
+              echo "SHA-tagged image not found, trying latest..."
+              docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${service}:latest || \
+              docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/${service}:${BRANCH_NAME} || \
+              echo "Warning: Could not pull ${service}, will try to build locally"
+            fi
+          done
+
           echo "Images pulled successfully"
 
       - name: Start infrastructure services
@@ -381,5 +381,6 @@ jobs:
           docker system prune -af --volumes
 
 
-#   T r i g g e r   w o r k f l o w s  
+#   T r i g g e r   w o r k f l o w s 
+ 
  

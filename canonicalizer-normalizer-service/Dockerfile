@@ -46,11 +46,11 @@ RUN useradd -m -u 1000 canonicalizer && \
 
 # Copy wheels from builder
 COPY --from=builder /build/wheels /wheels
-COPY --from=builder /build/requirements-minified.txt .
+COPY --from=builder /build/requirements.txt .
 
 # Install Python dependencies from wheels
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --no-index --find-links=/wheels -r requirements-minified.txt && \
+    pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt && \
     rm -rf /wheels
 
 # Copy application code

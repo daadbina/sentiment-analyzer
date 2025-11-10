@@ -27,9 +27,8 @@ jobs:
           - clustering-semantic-grouping-service
           - feature-engineering-service
           - labeler-ground-truth-ingest-service
-          - trainer-service
-          - neo4j-loader-service
-          - predictor-service
+          - trainer-model-registry-service
+          - predictor-online-inference-service
           - api-analytics-service
     
     steps:

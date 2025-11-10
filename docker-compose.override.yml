@@ -2,8 +2,6 @@
 # This file is automatically merged with docker-compose.yml
 # Use this for development-specific configurations
 
-version: '3.8'
-
 services:
   # Override for development with hot-reload
   crawler-service:

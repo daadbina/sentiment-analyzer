@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Optimized for slow internet with multi-stage builds and layer caching
 
 networks:

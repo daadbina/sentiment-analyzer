@@ -38,14 +38,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2  # Only need last 2 commits for change detection
 
       - name: Check for service changes
         uses: dorny/paths-filter@v2
         id: filter
         with:
-          base: HEAD~1  # Compare against previous commit on same branch
           filters: |
             crawler:
               - 'crawler-service/**'

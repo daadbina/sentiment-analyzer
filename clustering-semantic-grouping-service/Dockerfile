@@ -24,11 +24,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 # Create wheels for all dependencies
-# Install build dependencies in order: numpy, cython, scipy, scikit-learn, then hdbscan
+# Install build dependencies in order: numpy, cython, scipy, scikit-learn
+# Download all packages including pre-built wheels where available
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir numpy==1.26.2 cython && \
     pip install --no-cache-dir scipy==1.11.4 scikit-learn==1.3.2 && \
-    pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
+    pip download --no-cache-dir --dest /build/wheels -r requirements.txt && \
+    cd /build/wheels && \
+    for file in *.tar.gz *.zip; do \
+        if [ -f "$file" ]; then \
+            pip wheel --no-cache-dir --wheel-dir /build/wheels "$file" || true; \
+        fi; \
+    done
 
 # Stage 2: Runtime
 FROM python:3.11-slim

@@ -822,6 +822,142 @@ jobs:
 
           echo "All infrastructure services are healthy!"
 
+      - name: Test crawler-service
+        run: |
+          echo "=== Starting crawler-service ==="
+          docker compose up -d crawler-service
+
+          echo "Waiting for crawler-service to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8000/health 2>/dev/null; then
+              echo "✅ crawler-service is healthy!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+          # Test metrics endpoint
+          curl -f http://localhost:9101/metrics | grep -q "python_info" && echo "✅ Metrics endpoint working"
+
+          # Show logs
+          docker compose logs --tail=20 crawler-service
+
+      - name: Test ingest-validator-service
+        run: |
+          echo "=== Starting ingest-validator-service ==="
+          docker compose up -d ingest-validator-service
+
+          echo "Waiting for ingest-validator-service to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8001/health 2>/dev/null; then
+              echo "✅ ingest-validator-service is healthy!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+          # Test metrics endpoint
+          curl -f http://localhost:9102/metrics | grep -q "python_info" && echo "✅ Metrics endpoint working"
+
+          # Show logs
+          docker compose logs --tail=20 ingest-validator-service
+
+      - name: Test canonicalizer-normalizer-service
+        run: |
+          echo "=== Starting canonicalizer-normalizer-service ==="
+          docker compose up -d canonicalizer-normalizer-service
+
+          echo "Waiting for canonicalizer-normalizer-service to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8002/health 2>/dev/null; then
+              echo "✅ canonicalizer-normalizer-service is healthy!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+          # Test metrics endpoint
+          curl -f http://localhost:9103/metrics | grep -q "python_info" && echo "✅ Metrics endpoint working"
+
+          # Show logs
+          docker compose logs --tail=20 canonicalizer-normalizer-service
+
+      - name: Test ner-entity-linking-service
+        run: |
+          echo "=== Starting ner-entity-linking-service ==="
+          docker compose up -d ner-entity-linking-service
+
+          echo "Waiting for ner-entity-linking-service to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8003/health 2>/dev/null; then
+              echo "✅ ner-entity-linking-service is healthy!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+          # Test metrics endpoint
+          curl -f http://localhost:9104/metrics | grep -q "python_info" && echo "✅ Metrics endpoint working"
+
+          # Show logs
+          docker compose logs --tail=20 ner-entity-linking-service
+
+      - name: Test embedding-service
+        run: |
+          echo "=== Starting embedding-service ==="
+          docker compose up -d embedding-service
+
+          echo "Waiting for embedding-service to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8004/health 2>/dev/null; then
+              echo "✅ embedding-service is healthy!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+          # Test metrics endpoint
+          curl -f http://localhost:9105/metrics | grep -q "python_info" && echo "✅ Metrics endpoint working"
+
+          # Show logs
+          docker compose logs --tail=20 embedding-service
+
+      - name: Test clustering-semantic-grouping-service
+        run: |
+          echo "=== Starting clustering-semantic-grouping-service ==="
+          docker compose up -d clustering-semantic-grouping-service
+
+          echo "Waiting for clustering-semantic-grouping-service to be ready..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8005/health 2>/dev/null; then
+              echo "✅ clustering-semantic-grouping-service is healthy!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+          # Test metrics endpoint
+          curl -f http://localhost:9106/metrics | grep -q "python_info" && echo "✅ Metrics endpoint working"
+
+          # Show logs
+          docker compose logs --tail=20 clustering-semantic-grouping-service
+
+      - name: Show final status
+        if: always()
+        run: |
+          echo "=== Final Service Status ==="
+          docker compose ps
+
+          echo ""
+          echo "=== Disk Usage ==="
+          df -h
+
       - name: Cleanup
         if: always()
         run: |

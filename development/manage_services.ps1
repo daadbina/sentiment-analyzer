@@ -741,46 +741,6 @@ function Start-AllServices {
         Write-Host "  [OK] Old log files removed" -ForegroundColor Green
     }
 
-    # Flush external services
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host "FLUSHING EXTERNAL SERVICES" -ForegroundColor Cyan
-    Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host ""
-
-    $redisOk = Flush-Redis
-    Write-Host ""
-
-    $qdrantOk = Flush-Qdrant
-    Write-Host ""
-
-    $kafkaOk = Flush-Kafka
-    Write-Host ""
-
-    $dbOk = Flush-Database
-    Write-Host ""
-
-    $neo4jOk = Flush-Neo4j
-    Write-Host ""
-
-    $schemaRegistryOk = Flush-SchemaRegistry
-    Write-Host ""
-
-    if (-not ($redisOk -and $qdrantOk -and $kafkaOk -and $dbOk -and $neo4jOk -and $schemaRegistryOk)) {
-        Write-Host "========================================" -ForegroundColor Red
-        Write-Host "WARNING: Some services failed to flush" -ForegroundColor Red
-        Write-Host "========================================" -ForegroundColor Red
-        Write-Host "Redis: $(if ($redisOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($redisOk) { 'Green' } else { 'Red' })
-        Write-Host "Qdrant: $(if ($qdrantOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($qdrantOk) { 'Green' } else { 'Red' })
-        Write-Host "Kafka: $(if ($kafkaOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($kafkaOk) { 'Green' } else { 'Red' })
-        Write-Host "Database: $(if ($dbOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($dbOk) { 'Green' } else { 'Red' })
-        Write-Host "Neo4j: $(if ($neo4jOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($neo4jOk) { 'Green' } else { 'Red' })
-        Write-Host "Schema Registry: $(if ($schemaRegistryOk) { 'OK' } else { 'FAILED' })" -ForegroundColor $(if ($schemaRegistryOk) { 'Green' } else { 'Red' })
-        Write-Host ""
-        Write-Host "Continuing with service startup..." -ForegroundColor Yellow
-        Write-Host ""
-    }
-
     Write-Host ""
 
     $pids = @()

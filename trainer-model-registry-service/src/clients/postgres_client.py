@@ -138,7 +138,6 @@ class PostgreSQLClient:
             async with self.pool.acquire() as conn:
                 row = await conn.fetchrow(query, *args)
             if row:
-                logger.debug(f"Fetched one row from query: {query[:100]}...")
                 return dict(row)
             return None
         except Exception as e:
@@ -172,7 +171,6 @@ class PostgreSQLClient:
         try:
             async with self.pool.acquire() as conn:
                 rows = await conn.fetch(query, *args)
-            logger.debug(f"Fetched {len(rows)} rows from query: {query[:100]}...")
             return [dict(row) for row in rows]
         except Exception as e:
             logger.error(f"Fetch all failed: {e}")

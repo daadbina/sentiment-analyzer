@@ -163,6 +163,11 @@ class TrainingConfig(BaseSettings):
 
     model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
+    prediction_task: str = Field(
+        default="btc_price_spike",
+        alias="PREDICTION_TASK",
+        description="Prediction task: 'news_realization' or 'btc_price_spike'",
+    )
     window_months: int = Field(
         default=18,
         alias="TRAINING_WINDOW_MONTHS",
@@ -177,6 +182,15 @@ class TrainingConfig(BaseSettings):
     random_seed: int = Field(
         default=42, alias="RANDOM_SEED", description="Random seed for reproducibility"
     )
+
+    @field_validator("prediction_task")
+    @classmethod
+    def validate_prediction_task(cls, v: str) -> str:
+        """Validate prediction task is valid."""
+        valid_tasks = ["news_realization", "btc_price_spike"]
+        if v not in valid_tasks:
+            raise ValueError(f"Prediction task must be one of {valid_tasks}, got {v}")
+        return v
 
     @field_validator("test_set_size", "validation_set_size")
     @classmethod

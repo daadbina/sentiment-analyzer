@@ -151,6 +151,105 @@ class FeatureRetriever:
                     },
                 )
 
+    def retrieve_features_with_timestamps(
+        self,
+        entity_timestamps: dict,
+        start_date: datetime,
+        end_date: datetime,
+        features: Optional[List[str]] = None,
+    ) -> pd.DataFrame:
+        """
+        Retrieve features for entities with specific timestamps for each entity.
+
+        This is critical for BTC prediction where we need features at the actual
+        time of each semantic group creation, not a single timestamp for all groups.
+
+        Args:
+            entity_timestamps: Dictionary mapping entity IDs to their timestamps
+            start_date: Start date for feature retrieval (for filtering)
+            end_date: End date for feature retrieval (for filtering)
+            features: Optional list of specific features to retrieve
+
+        Returns:
+            DataFrame with features
+
+        Raises:
+            DataPreparationError: If retrieval fails
+        """
+        with tracer.start_as_current_span("retrieve_features_with_timestamps") as span:
+            span.set_attribute("num_entities", len(entity_timestamps))
+            span.set_attribute("start_date", start_date.isoformat())
+            span.set_attribute("end_date", end_date.isoformat())
+
+            try:
+                logger.info(
+                    f"Retrieving features for {len(entity_timestamps)} entities "
+                    f"with individual timestamps"
+                )
+
+                # Create entity dataframe with individual timestamps
+                entity_ids = list(entity_timestamps.keys())
+                timestamps = [pd.Timestamp(entity_timestamps[eid], tz='UTC') for eid in entity_ids]
+
+                entity_df = pd.DataFrame(
+                    {
+                        "group_id": entity_ids,
+                        "timestamp": timestamps,
+                    }
+                )
+
+                logger.debug(f"Entity dataframe shape: {entity_df.shape}")
+                logger.debug(f"Entity dataframe sample:\n{entity_df.head()}")
+                logger.debug(f"Timestamp range: {entity_df['timestamp'].min()} to {entity_df['timestamp'].max()}")
+
+                # Get features from Feast
+                feature_list = features or self._get_default_features()
+                # Format features with feature view prefix for Feast
+                formatted_features = [
+                    f"semantic_group_features:{feature}" for feature in feature_list
+                ]
+
+                logger.info(f"Requesting {len(formatted_features)} features from Feast")
+                logger.info(f"Features requested: {formatted_features[:10]}")  # First 10
+
+                logger.info("=== TRAINER: Fetching features from Feast with individual timestamps ===")
+                logger.info(f"Entity count: {len(entity_ids)}")
+                logger.info(f"Feature count: {len(formatted_features)}")
+
+                feature_df = self.feast_client.get_features(
+                    entity_df=entity_df,
+                    features=formatted_features,
+                    timestamp_column="timestamp",
+                )
+
+                logger.info("=== TRAINER: Features fetched successfully ===")
+                logger.info(
+                    f"Retrieved {feature_df.shape[0]} rows with "
+                    f"{feature_df.shape[1]} features"
+                )
+                logger.info(f"Feature columns: {list(feature_df.columns)[:20]}")  # First 20
+
+                # Check for null values
+                null_counts = feature_df.isnull().sum()
+                if null_counts.sum() > 0:
+                    logger.warning(f"Found null values in features:\n{null_counts[null_counts > 0]}")
+                else:
+                    logger.info("No null values found in features")
+
+                return feature_df
+
+            except Exception as e:
+                logger.error(f"Feature retrieval with timestamps failed: {e}", exc_info=True)
+                raise DataPreparationError(
+                    f"Feature retrieval with timestamps failed: {e}",
+                    stage="feature_retrieval",
+                    details={
+                        "num_entities": len(entity_timestamps),
+                        "start_date": start_date.isoformat(),
+                        "end_date": end_date.isoformat(),
+                    },
+                )
+
     def _get_default_features(self) -> List[str]:
         """
         Get default feature list.

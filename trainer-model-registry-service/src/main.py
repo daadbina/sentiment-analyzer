@@ -4,6 +4,14 @@ Main entry point for trainer service.
 Starts the service and handles lifecycle.
 """
 
+import os
+import sys
+
+# Set encoding to UTF-8 to avoid Unicode errors on Windows
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 import logging
 import asyncio
 import signal

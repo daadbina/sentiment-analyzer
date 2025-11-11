@@ -116,13 +116,13 @@ class LLMBaselineModel(BaseModel):
                         model_name=self.model_name,
                     )
 
-                logger.debug(f"Making LLM baseline predictions for {len(X)} samples using numeric features")
+                logger.info(f"Making LLM baseline predictions for {len(X)} samples using numeric features")
 
                 # Get probabilities and apply threshold
                 probabilities = self.predict_proba(X)
                 predictions = (probabilities[:, 1] > 0.5).astype(int)
 
-                logger.debug(f"Made predictions for {len(X)} samples")
+                logger.info(f"Made predictions for {len(X)} samples")
                 return predictions
 
             except Exception as e:

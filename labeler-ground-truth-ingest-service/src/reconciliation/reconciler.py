@@ -226,6 +226,7 @@ class SemanticMatcher:
             similarity_threshold: Minimum Jaccard similarity for match (default 0.3 for lenient matching)
         """
         self.similarity_threshold = similarity_threshold
+        self.match_count = 0  # Track number of matches attempted
 
     def match(
         self,
@@ -259,15 +260,24 @@ class SemanticMatcher:
             # Match if similarity meets threshold
             matched = similarity >= self.similarity_threshold
 
-            # logger.debug(
-            #     f"Semantic matching result",
-            #     operation="semantic_match",
-            #     label_words=len(label_words),
-            #     group_words=len(group_words),
-            #     intersection=intersection,
-            #     similarity=similarity,
-            #     matched=matched
-            # )
+            # DEBUG: Log ONLY successful matches to verify quality (not noise)
+            # Log first 100 successful matches to analyze match quality
+            if matched:
+                self.match_count += 1
+                if self.match_count <= 100:
+                    logger.info(
+                        f"DEBUG: SUCCESSFUL MATCH #{self.match_count}",
+                        operation="semantic_match",
+                        label_desc=label_description[:100],
+                        group_desc=group_description[:100],
+                        label_words_count=len(label_words),
+                        group_words_count=len(group_words),
+                        intersection=intersection,
+                        union=union,
+                        similarity=round(similarity, 3),
+                        threshold=self.similarity_threshold,
+                        matched=matched
+                    )
 
             return matched, similarity
 
@@ -288,9 +298,11 @@ class LabelReconciler:
         self.temporal_matcher = TemporalMatcher(
             threshold_hours=config.label.reconciliation_threshold_hours
         )
-        # Use default threshold (0.3) for semantic matching
+        # Threshold set to 0.2 to filter out single-word noise matches
+        # 0.2 means at least 2 words must match out of 10 (20% overlap)
+        # This filters out weak matches like "COMPANY" matching "company" only
         self.semantic_matcher = SemanticMatcher(
-            similarity_threshold=0.3
+            similarity_threshold=0.2  # Increased from 0.1 to reduce noise
         )
         self.country_event_matcher = CountryEventTypeMatcher(
             country_threshold=0.6,
@@ -323,9 +335,35 @@ class LabelReconciler:
                 )
                 return None
 
-            # Log label details for debugging
+            # Log label details for debugging (first label only)
             label_countries = label.get("countries", [])
             label_event_type = label.get("event_type", "")
+            # Use description (event_type + countries + title) for richer context
+            label_description = (
+                label.get("description") or
+                label.get("title") or
+                label.get("event_type") or
+                ""
+            )
+
+            # DEBUG: Log first label details
+            if not hasattr(self, '_logged_first_label'):
+                self._logged_first_label = True
+                # Log ALL group IDs to see if they're diverse
+                all_group_ids = [g.get("group_id") for g in semantic_groups]
+                unique_group_ids = set(all_group_ids)
+                logger.info(
+                    f"DEBUG: First label details",
+                    operation="reconcile",
+                    event_id=label.get("event_id"),
+                    countries=label_countries,
+                    event_type=label_event_type,
+                    description=label_description[:100] if label_description else None,
+                    total_groups=len(semantic_groups),
+                    unique_group_ids=len(unique_group_ids),
+                    all_group_ids=all_group_ids[:5]  # Show first 5
+                )
+
             for group in semantic_groups:
                 # TEMPORARY: Skip temporal matching to allow historical GDELT events to match
                 # temporal_match, temporal_conf = self.temporal_matcher.match(
@@ -346,10 +384,23 @@ class LabelReconciler:
                     ""
                 )
 
+                # DEBUG: Log first group details
+                if not hasattr(self, '_logged_first_group'):
+                    self._logged_first_group = True
+                    logger.info(
+                        f"DEBUG: First group details",
+                        operation="reconcile",
+                        group_id=group.get("group_id"),
+                        topic_label=group_description,
+                        countries=group.get("countries"),
+                        article_count=group.get("article_count")
+                    )
+
                 if not group_description:
                     continue  # Skip groups without topic labels
 
                 # PRIMARY: Try semantic matching first (more reliable for diverse content)
+                # Use description (event_type + countries + title) for richer context
                 label_description = (
                     label.get("description") or
                     label.get("title") or
@@ -407,6 +458,19 @@ class LabelReconciler:
             if best_match and best_confidence >= config.reconciliation.confidence_threshold:
                 return best_match
             else:
+                # Log rejected matches to understand why they're failing
+                if best_match and not hasattr(self, '_logged_rejected_match'):
+                    self._logged_rejected_match = True
+                    logger.info(
+                        f"DEBUG: REJECTED MATCH (confidence too low)",
+                        operation="reconcile",
+                        best_confidence=best_confidence,
+                        threshold=config.reconciliation.confidence_threshold,
+                        group_id=best_match.get("group_id"),
+                        match_type=best_match.get("match_type"),
+                        semantic_confidence=best_match.get("semantic_confidence"),
+                        temporal_confidence=best_match.get("temporal_confidence")
+                    )
                 # No matching group found - this is normal for many labels
                 # Only log at debug level to reduce noise
                 return None
@@ -455,6 +519,18 @@ class LabelReconciler:
                     total=total_labels,
                     matched_so_far=len(results)
                 )
+
+        # Log diversity of group_ids in results
+        if results:
+            result_group_ids = [r.get("group_id") for r in results]
+            unique_result_group_ids = set(result_group_ids)
+            logger.info(
+                f"DEBUG: Reconciliation results diversity",
+                operation="reconcile_batch",
+                total_results=len(results),
+                unique_group_ids=len(unique_result_group_ids),
+                sample_group_ids=list(unique_result_group_ids)[:5]
+            )
 
         logger.info(
             f"Batch reconciliation completed",

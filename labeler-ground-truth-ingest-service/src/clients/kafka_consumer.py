@@ -62,7 +62,7 @@ class SemanticGroupConsumer:
             consumer_config = {
                 "bootstrap.servers": self.config.kafka.brokers,
                 "group.id": self.config.kafka.consumer_group,
-                "auto.offset.reset": "earliest",
+                "auto.offset.reset": "latest",  # Only consume NEW messages produced after labeler starts
                 "enable.auto.commit": self.config.kafka.consumer_auto_commit_enabled,
                 "auto.commit.interval.ms": self.config.kafka.consumer_auto_commit_interval_ms,
                 "isolation.level": "read_committed",  # Exactly-once semantics
@@ -80,8 +80,8 @@ class SemanticGroupConsumer:
             import time
             time.sleep(self.config.kafka.consumer_partition_wait_ms / 1000.0)
 
-            # Seek to beginning once on startup
-            await self.seek_to_beginning()
+            # REMOVED: seek_to_beginning - let auto.offset.reset handle it
+            # This avoids the partition assignment issue at startup
 
             logger.info(
                 "Kafka consumer connected for semantic groups",

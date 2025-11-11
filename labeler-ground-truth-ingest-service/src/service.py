@@ -48,6 +48,9 @@ class LabelerService:
         self.binance_fetcher = BinanceFetcher()
         self.ccxt_fetcher = CCXTFetcher()  # Fallback for crypto data
 
+        # Cache for GDELT labels - allows re-reconciliation when new semantic groups arrive
+        self.cached_gdelt_labels: List[Dict[str, Any]] = []
+
         self.kafka_producer = KafkaProducerClient()
         self.kafka_consumer = SemanticGroupConsumer()  # Add Kafka consumer for semantic groups
         self.delta_lake_writer = DeltaLakeWriter()
@@ -236,16 +239,29 @@ class LabelerService:
                 with TimedOperation(logger, "fetch_gdelt", source="GDELT") as op:
                     labels["gdelt"] = await self.gdelt_fetcher.fetch()
                     self.gdelt_fetcher.record_fetch_time()
+                    # Cache the fetched labels for re-reconciliation when new semantic groups arrive
+                    self.cached_gdelt_labels = labels["gdelt"]
                 # Record metrics after context manager exits (duration_ms is set in __exit__)
                 if op.duration_ms is not None:
                     metrics.record_fetch("GDELT", len(labels["gdelt"]), op.duration_ms / 1000)
             else:
-                logger.debug(
-                    "Skipping GDELT fetch - interval not elapsed",
-                    operation="fetch_labels",
-                    source="GDELT",
-                    interval_hours=config.gdelt.fetch_interval_hours
-                )
+                # Use cached GDELT labels if available (for re-reconciliation with new semantic groups)
+                if self.cached_gdelt_labels:
+                    labels["gdelt"] = self.cached_gdelt_labels
+                    logger.info(
+                        "Using cached GDELT labels for reconciliation",
+                        operation="fetch_labels",
+                        source="GDELT",
+                        cached_count=len(self.cached_gdelt_labels),
+                        interval_hours=config.gdelt.fetch_interval_hours
+                    )
+                else:
+                    logger.debug(
+                        "Skipping GDELT fetch - interval not elapsed and no cache available",
+                        operation="fetch_labels",
+                        source="GDELT",
+                        interval_hours=config.gdelt.fetch_interval_hours
+                    )
 
         except Exception as e:
             logger.error(
@@ -537,58 +553,76 @@ class LabelerService:
         # Continuously consume from Kafka
         while self.running:
             try:
-                # Consume messages from Kafka with very short timeout to avoid blocking
-                # Use timeout_ms=1000 (1 second) and max_messages=10 for quick, non-blocking polls
-                new_groups = await self.kafka_consumer.consume_batch(
-                    timeout_ms=1000,  # 1 second - short timeout to avoid blocking
-                    max_messages=10   # Small batch to process quickly
+                # ACCUMULATE all semantic groups from multiple batches before triggering reconciliation
+                # This ensures we get ALL 216+ groups from clustering, not just the first 10
+                accumulated_groups = []
+                consecutive_empty_batches = 0
+                max_empty_batches = 3  # Stop after 3 consecutive empty batches
+
+                logger.info(
+                    "=== LABELER: Starting to accumulate semantic groups from Kafka ===",
+                    operation="_consume_semantic_groups_background"
                 )
 
-                if new_groups:
-                    # Log first group for debugging
-                    if len(new_groups) > 0:
-                        sample_group = new_groups[0]
+                # Keep consuming until we get 3 consecutive empty batches
+                while consecutive_empty_batches < max_empty_batches and self.running:
+                    new_groups = await self.kafka_consumer.consume_batch(
+                        timeout_ms=1000,  # 1 second timeout per batch
+                        max_messages=1000 # Large batch size to get many groups at once
+                    )
+
+                    if new_groups:
+                        accumulated_groups.extend(new_groups)
+                        consecutive_empty_batches = 0  # Reset counter
                         logger.info(
-                            f"=== LABELER: Sample semantic group from Kafka ===",
+                            f"=== LABELER: Accumulated {len(new_groups)} groups (total: {len(accumulated_groups)}) ===",
                             operation="_consume_semantic_groups_background",
-                            group_id=sample_group.get('group_id'),
-                            topic_label=sample_group.get('topic_label'),
-                            article_count=sample_group.get('article_count'),
-                            created_at=sample_group.get('created_at'),
-                            keys=list(sample_group.keys())
+                            batch_size=len(new_groups),
+                            total_accumulated=len(accumulated_groups)
+                        )
+                    else:
+                        consecutive_empty_batches += 1
+                        logger.info(
+                            f"=== LABELER: Empty batch {consecutive_empty_batches}/{max_empty_batches} ===",
+                            operation="_consume_semantic_groups_background",
+                            consecutive_empty=consecutive_empty_batches
                         )
 
-                    # Update semantic groups list
-                    # Create a dict for fast lookup by group_id
-                    groups_dict = {g['group_id']: g for g in self.semantic_groups}
+                # If we accumulated any groups, replace the semantic groups list and trigger reconciliation
+                if accumulated_groups:
+                    # Log first group for debugging
+                    sample_group = accumulated_groups[0]
+                    logger.info(
+                        f"=== LABELER: Sample semantic group from Kafka ===",
+                        operation="_consume_semantic_groups_background",
+                        group_id=sample_group.get('group_id'),
+                        topic_label=sample_group.get('topic_label'),
+                        article_count=sample_group.get('article_count'),
+                        created_at=sample_group.get('created_at'),
+                        keys=list(sample_group.keys())
+                    )
 
-                    # Add or update groups
-                    for group in new_groups:
-                        groups_dict[group['group_id']] = group
-
-                    # Update the list
-                    self.semantic_groups = list(groups_dict.values())
+                    # REPLACE semantic groups list with ALL accumulated groups from Kafka
+                    # This ensures we use ALL semantic groups from the latest clustering run
+                    self.semantic_groups = accumulated_groups
 
                     logger.info(
-                        f"=== LABELER: Received {len(new_groups)} new semantic groups from Kafka ===",
+                        f"=== LABELER: Received {len(accumulated_groups)} new semantic groups from Kafka ===",
                         operation="_consume_semantic_groups_background",
-                        new_groups=len(new_groups),
+                        new_groups=len(accumulated_groups),
                         total_groups=len(self.semantic_groups)
                     )
 
-                    # Trigger reconciliation immediately when new semantic groups arrive
+                    # Trigger reconciliation with ALL accumulated semantic groups
                     logger.info(
                         "=== LABELER: Triggering reconciliation after receiving new semantic groups ===",
                         operation="_consume_semantic_groups_background",
-                        new_groups=len(new_groups)
+                        new_groups=len(accumulated_groups)
                     )
                     await self.process_labels()
-
-                # Small sleep to avoid tight loop (only when no messages)
-                if not new_groups:
-                    await asyncio.sleep(2.0)  # Sleep longer when no messages
                 else:
-                    await asyncio.sleep(0.1)  # Quick loop when receiving messages
+                    # No groups accumulated, sleep before next iteration
+                    await asyncio.sleep(5.0)
 
             except asyncio.CancelledError:
                 logger.info(

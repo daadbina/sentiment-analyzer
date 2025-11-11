@@ -77,7 +77,8 @@ class MLflowConfig:
     """MLflow configuration parameters."""
 
     tracking_uri: str
-    model_name: str | None
+    btc_model_name: str | None
+    conflict_model_name: str | None
     model_version: str | None
     model_stage: str | None
     fallback_model_version: str | None
@@ -90,7 +91,8 @@ class MLflowConfig:
         """Load MLflow configuration from environment variables."""
         return cls(
             tracking_uri=os.environ["MLFLOW_TRACKING_URI"],
-            model_name=os.environ.get("MLFLOW_MODEL_NAME"),
+            btc_model_name=os.environ.get("MLFLOW_BTC_MODEL_NAME"),
+            conflict_model_name=os.environ.get("MLFLOW_CONFLICT_MODEL_NAME"),
             model_version=os.environ.get("MLFLOW_MODEL_VERSION"),
             model_stage=os.environ.get("MLFLOW_MODEL_STAGE"),
             fallback_model_version=os.environ.get("MLFLOW_FALLBACK_MODEL_VERSION"),

@@ -115,6 +115,54 @@ class PostgresClient:
             )
         return self._pool
 
+    async def fetch_one(self, query: str, *args) -> dict[str, Any] | None:
+        """
+        Fetch a single row from the database.
+
+        Args:
+            query: SQL query to execute
+            *args: Query parameters
+
+        Returns:
+            Dictionary representing the row, or None if no rows found
+
+        Raises:
+            PostgresError: If query fails
+        """
+        pool = self._ensure_connected()
+
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(query, *args)
+                return dict(row) if row else None
+        except Exception as e:
+            logger.error(f"Failed to fetch row: {e}", exc_info=True)
+            raise PostgresError(f"Failed to fetch row: {e}", operation="fetch_one")
+
+    async def fetch_all(self, query: str, *args) -> list[dict[str, Any]]:
+        """
+        Fetch all rows from the database.
+
+        Args:
+            query: SQL query to execute
+            *args: Query parameters
+
+        Returns:
+            List of dictionaries representing the rows
+
+        Raises:
+            PostgresError: If query fails
+        """
+        pool = self._ensure_connected()
+
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(query, *args)
+                return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"Failed to fetch rows: {e}", exc_info=True)
+            raise PostgresError(f"Failed to fetch rows: {e}", operation="fetch_all")
+
     async def store_prediction(
         self,
         group_id: str,

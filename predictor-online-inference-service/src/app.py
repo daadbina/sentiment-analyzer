@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
         reconciliation_threshold=config.validation.feature_reconciliation_threshold
     )
     LabelRetriever(postgres_client)
-    model_manager = ModelManager(mlflow_client, ab_testing_strategy)
+    model_manager = ModelManager(mlflow_client, postgres_client, ab_testing_strategy)
     prediction_cache = PredictionCache(redis_client, ttl_seconds=config.inference.cache_ttl_seconds)
     prediction_logger = PredictionLogger(postgres_client, kafka_producer)
 
@@ -121,13 +121,14 @@ async def lifespan(app: FastAPI):
         prediction_logger=prediction_logger,
     )
 
-    # Load default model
+    # Load both BTC and conflict models at startup
     try:
-        await model_manager.load_model()
-        logger.info("Default model loaded successfully")
+        logger.info("Loading BTC and conflict models at startup...")
+        # Models will be loaded on first request for each domain
+        # No need to preload since we have domain-specific models
+        logger.info("Models will be loaded on first request for each domain")
     except Exception as e:
-        logger.error(f"Failed to load default model: {e}", exc_info=True)
-        # Continue anyway - model will be loaded on first request
+        logger.error(f"Failed during model initialization: {e}", exc_info=True)
 
     # Start streaming predictor if enabled
     if config.inference.enable_streaming:

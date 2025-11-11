@@ -106,9 +106,12 @@ class MLflowModelClient:
             )
         return self._client
 
-    async def find_best_model(self) -> Tuple[str, str, str]:
+    async def find_best_model(self, domain: str | None = None) -> Tuple[str, str, str]:
         """
         Find the best performing model from MLflow registry.
+
+        Args:
+            domain: Optional domain filter (btc/conflict/geopolitical)
 
         Returns:
             Tuple of (model_name, model_version, run_id)
@@ -119,20 +122,41 @@ class MLflowModelClient:
         self._ensure_connected()
 
         try:
-            logger.info(f"Searching for best model using metric: {self.config.model_selection_metric}")
+            # Determine metric based on domain
+            # BTC models are regression (use RMSE, lower is better)
+            # Conflict models are classification (use F1, higher is better)
+            if domain == "btc":
+                selection_metric = "rmse"
+                maximize_metric = False  # Lower RMSE is better
+            else:
+                selection_metric = self.config.model_selection_metric
+                maximize_metric = True  # Higher F1 is better
 
-            # Search for all registered models with "sentiment_" prefix
-            all_models = self._client.search_registered_models(filter_string="name LIKE 'sentiment_%'")
+            logger.info(f"Searching for best model using metric: {selection_metric}, domain: {domain}, maximize: {maximize_metric}")
+
+            # Search for models based on domain
+            if domain == "btc":
+                filter_string = "name LIKE 'btc_prediction%'"
+            elif domain == "conflict":
+                filter_string = "name LIKE 'conflict_prediction%'"
+            elif domain == "geopolitical":
+                filter_string = "name LIKE 'geopolitical_prediction%'"
+            else:
+                # Fallback: search for all prediction models
+                filter_string = "name LIKE '%prediction%'"
+
+            all_models = self._client.search_registered_models(filter_string=filter_string)
 
             if not all_models:
-                raise ModelLoadError("No models found in MLflow registry with 'sentiment_' prefix")
+                raise ModelLoadError(f"No models found in MLflow registry with filter: {filter_string}")
 
-            logger.info(f"Found {len(all_models)} registered models")
+            logger.info(f"Found {len(all_models)} registered models for domain: {domain}")
 
             best_model_name = None
             best_model_version = None
             best_run_id = None
-            best_metric_value = -float('inf')
+            # Initialize based on whether we're maximizing or minimizing
+            best_metric_value = -float('inf') if maximize_metric else float('inf')
 
             # Iterate through all models and their versions
             for model in all_models:
@@ -173,12 +197,12 @@ class MLflowModelClient:
                     metrics = run.data.metrics
 
                     # Look for evaluation metric (with eval_ prefix)
-                    metric_key = f"eval_{self.config.model_selection_metric}"
+                    metric_key = f"eval_{selection_metric}"
                     if metric_key not in metrics:
                         # Try without prefix
-                        metric_key = self.config.model_selection_metric
+                        metric_key = selection_metric
                         if metric_key not in metrics:
-                            logger.debug(f"Metric {self.config.model_selection_metric} not found for {model_name}")
+                            logger.debug(f"Metric {selection_metric} not found for {model_name}")
                             continue
 
                     metric_value = metrics[metric_key]
@@ -187,7 +211,8 @@ class MLflowModelClient:
                     )
 
                     # Update best model if this one is better
-                    if metric_value > best_metric_value:
+                    is_better = (metric_value > best_metric_value) if maximize_metric else (metric_value < best_metric_value)
+                    if is_better:
                         best_metric_value = metric_value
                         best_model_name = model_name
                         best_model_version = version_number
@@ -199,12 +224,12 @@ class MLflowModelClient:
 
             if best_model_name is None:
                 raise ModelLoadError(
-                    f"No models found with metric: {self.config.model_selection_metric}"
+                    f"No models found with metric: {selection_metric}"
                 )
 
             logger.info(
                 f"Selected best model: {best_model_name} v{best_model_version} "
-                f"with {self.config.model_selection_metric}={best_metric_value:.4f}"
+                f"with {selection_metric}={best_metric_value:.4f}"
             )
 
             # Store selected model info
@@ -227,6 +252,7 @@ class MLflowModelClient:
         model_version: str | None = None,
         use_fallback: bool = True,
         trace_id: str | None = None,
+        domain: str | None = None,
     ) -> Any:
         """
         Load model from S3 via MLflow registry.
@@ -238,6 +264,7 @@ class MLflowModelClient:
             model_version: Model version to load (uses config default if None)
             use_fallback: Whether to use fallback model on failure
             trace_id: Optional trace ID for distributed tracing
+            domain: Optional domain filter (btc/conflict/geopolitical) for auto-selection
 
         Returns:
             Loaded model instance
@@ -250,12 +277,23 @@ class MLflowModelClient:
 
             # Determine which model to load
             if self.config.auto_select_best_model:
-                logger.info("Auto-selecting best model from MLflow registry")
-                model_name, version, run_id = await self.find_best_model()
+                logger.info(f"Auto-selecting best model from MLflow registry for domain: {domain}")
+                model_name, version, run_id = await self.find_best_model(domain=domain)
             else:
-                if not self.config.model_name:
-                    raise ModelLoadError("MLFLOW_MODEL_NAME must be set when auto_select is disabled")
-                model_name = self.config.model_name
+                # Select model name based on domain
+                if domain == "btc":
+                    if not self.config.btc_model_name:
+                        raise ModelLoadError("MLFLOW_BTC_MODEL_NAME must be set when auto_select is disabled")
+                    model_name = self.config.btc_model_name
+                elif domain == "conflict":
+                    if not self.config.conflict_model_name:
+                        raise ModelLoadError("MLFLOW_CONFLICT_MODEL_NAME must be set when auto_select is disabled")
+                    model_name = self.config.conflict_model_name
+                else:
+                    raise ModelLoadError(f"Unknown domain: {domain}. Must be 'btc' or 'conflict'")
+
+                logger.info(f"Using configured model for domain {domain}: {model_name}")
+
                 version = model_version or self.config.model_version
                 if not version:
                     raise ModelLoadError("MLFLOW_MODEL_VERSION must be set when auto_select is disabled")

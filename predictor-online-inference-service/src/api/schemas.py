@@ -76,9 +76,7 @@ class PredictionResponse(BaseModel):
     domain: str = Field(..., description="Domain")
     prediction_probability: float = Field(
         ...,
-        ge=0.0,
-        le=1.0,
-        description="Prediction probability (0.0-1.0)",
+        description="Prediction value (0.0-1.0 for classification, any value for regression)",
     )
     prediction_confidence: float = Field(
         ...,

@@ -230,8 +230,9 @@ class BatchPredictor:
         model, model_version = await self.model_manager.get_model_for_group(
             group_id,
             trace_id,
+            domain=domain,
         )
-        logger.info(f"Model loaded: version={model_version}, group_id={group_id}")
+        logger.info(f"Model loaded: version={model_version}, group_id={group_id}, domain={domain}")
 
         # Make prediction
         logger.info(f"Making prediction with model version={model_version}")
@@ -240,6 +241,7 @@ class BatchPredictor:
             features,
             model_version,
             trace_id,
+            domain=domain,
         )
         logger.info(
             f"=== PREDICTOR: Prediction complete ===",

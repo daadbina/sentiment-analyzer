@@ -64,7 +64,10 @@ class PredictionBase(BaseModel):
 
     group_id: str
     domain: str
-    prediction_probability: float = Field(..., ge=0.0, le=1.0)
+    prediction_probability: float = Field(
+        ...,
+        description="Prediction value (0.0-1.0 for classification, any value for regression)"
+    )
     prediction_confidence: float = Field(..., ge=0.0, le=1.0)
     model_version: str
 

@@ -230,6 +230,7 @@ class ClusteringConfig(BaseSettings):
     incremental_merge_threshold: float = Field(default=0.0)
     stability_min_score: float = Field(default=0.0)
     stability_history_window: int = Field(default=0)
+    min_credibility: float = Field(default=0.3)  # Minimum publisher credibility for clustering
 
     class Config:
         env_prefix = ""
@@ -280,6 +281,9 @@ class ClusteringConfig(BaseSettings):
         if data.get("stability_history_window") == 0:
             val = os.getenv("STABILITY_HISTORY_WINDOW")
             data["stability_history_window"] = int(val) if val else 0
+        if data.get("min_credibility") == 0.0:
+            val = os.getenv("MIN_CREDIBILITY")
+            data["min_credibility"] = float(val) if val else 0.3  # Default to 0.3 for training data
 
         super().__init__(**data)
 

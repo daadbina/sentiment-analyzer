@@ -196,7 +196,7 @@ class PipelineOrchestrator:
 
             # Step 2: Retrieve embeddings
             embeddings, metadata = self.vector_retriever.retrieve_embeddings(
-                window_start, window_end
+                window_start, window_end, min_credibility=config.clustering.min_credibility
             )
 
             if len(embeddings) == 0:
@@ -352,10 +352,21 @@ class PipelineOrchestrator:
                     )
 
                 self.delta_writer.write_clusters(valid_clusters)
+
+                # Register clusters and track which are new
+                new_clusters = []
                 for cluster in valid_clusters:
-                    self.registry.register_cluster(cluster)
-                self.producer.produce_batch(valid_clusters)
-                self.producer.flush()
+                    success, is_new = self.registry.register_cluster(cluster)
+                    if success and is_new:
+                        new_clusters.append(cluster)
+
+                # Only produce NEW clusters to Kafka (not updates)
+                if new_clusters:
+                    logger.info(f"Producing {len(new_clusters)} NEW clusters to Kafka (out of {len(valid_clusters)} total)")
+                    self.producer.produce_batch(new_clusters)
+                    self.producer.flush()
+                else:
+                    logger.info(f"No new clusters to produce to Kafka (all {len(valid_clusters)} clusters are updates)")
 
             logger.info("Clustering job complete")
             return len(set(labels)), len(valid_clusters), len(invalid_clusters)

@@ -87,7 +87,7 @@ class ClusterRegistry:
         # Note: Tables are created by migrations, not here
         logger.info(f"Initialized ClusterRegistry: {host}:{port}/{database}")
 
-    def register_cluster(self, cluster: Dict) -> bool:
+    def register_cluster(self, cluster: Dict) -> tuple[bool, bool]:
         """
         Register a cluster in the registry.
 
@@ -107,9 +107,12 @@ class ClusterRegistry:
                 - plus other metadata fields
 
         Returns:
-            True if successful
+            Tuple of (success: bool, is_new: bool)
+            - success: True if registration was successful
+            - is_new: True if this is a new cluster, False if it's an update
         """
         session = None
+        is_new = False
         try:
             # Convert numpy types to Python native types
             cluster_converted = convert_numpy_types(cluster)
@@ -126,13 +129,13 @@ class ClusterRegistry:
             # Validate required fields
             if not group_id:
                 logger.error("Missing required field: group_id")
-                return False
+                return False, False
             if not article_ids:
                 logger.error(f"Missing required field: article_ids for cluster {group_id}")
-                return False
+                return False, False
             if not centroid_vector:
                 logger.error(f"Missing required field: centroid_vector for cluster {group_id}")
-                return False
+                return False, False
 
             # Prepare metadata (exclude fields that have dedicated columns)
             cluster_meta = {k: v for k, v in cluster_converted.items()
@@ -168,6 +171,7 @@ class ClusterRegistry:
                 existing_cluster.stability_score = stability_score
                 existing_cluster.updated_at = datetime.utcnow()
                 logger.debug(f"Updated existing cluster in clustering.clusters: {group_id}")
+                is_new = False
             else:
                 # Insert new cluster
                 record = ClusterRecord(
@@ -184,6 +188,7 @@ class ClusterRegistry:
                 )
                 session.add(record)
                 logger.debug(f"Inserted new cluster in clustering.clusters: {group_id}")
+                is_new = True
 
             # 2. Write to public.semantic_groups table (for labeler and other services)
             # Convert centroid_vector to JSON string format for semantic_groups table
@@ -246,15 +251,15 @@ class ClusterRegistry:
 
             logger.info(
                 f"Registered cluster: {group_id} "
-                f"({article_count} articles, similarity={similarity_avg:.4f})"
+                f"({article_count} articles, similarity={similarity_avg:.4f}, is_new={is_new})"
             )
-            return True
+            return True, is_new
 
         except Exception as e:
             logger.error(f"Error registering cluster: {e}", exc_info=True)
             if session:
                 session.rollback()
-            return False
+            return False, False
         finally:
             if session:
                 session.close()

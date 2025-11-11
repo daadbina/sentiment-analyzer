@@ -93,9 +93,13 @@ class TimeWindowManager:
             return False
 
         duration = self.get_window_duration_hours(window_start, window_end)
-        if duration > 168:  # 7 days
-            logger.warning(f"Window duration {duration}h exceeds 7 days")
+        # Allow large windows for training data (up to 180 days)
+        if duration > 4320:  # 180 days
+            logger.warning(f"Window duration {duration}h exceeds 180 days")
             return False
+
+        if duration > 168:  # 7 days
+            logger.info(f"Using large time window: {duration}h ({duration/24:.1f} days)")
 
         return True
 

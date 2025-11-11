@@ -88,9 +88,10 @@ class MetadataAggregator:
             "time_span_hours": float(time_span_hours),
         }
 
-        logger.debug(
+        logger.info(
             f"Aggregated metadata: {len(article_ids)} articles, "
-            f"{len(languages)} languages, {len(sources)} sources"
+            f"{len(languages)} languages, {len(sources)} sources, "
+            f"{len(countries)} countries: {countries}"
         )
 
         return metadata

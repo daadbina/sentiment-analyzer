@@ -5,9 +5,7 @@ Defines the semantic_group_features feature view with all 28 computed features (
 """
 
 from datetime import timedelta
-from feast import Entity, Feature, FeatureView, ValueType, Field
-from feast.infra.offline_stores.file_source import FileSource
-from feast.infra.offline_stores.delta_source import DeltaSource
+from feast import Entity, Feature, FeatureView, ValueType, Field, FileSource
 from feast.types import Float32, Int32
 
 # Define the semantic group entity
@@ -17,9 +15,9 @@ group_id = Entity(
     description="Semantic group ID from clustering service",
 )
 
-# Define the feature source (Delta Lake)
-semantic_group_source = DeltaSource(
-    path="/data/delta/semantic_groups",
+# Define the feature source (File source for compatibility)
+semantic_group_source = FileSource(
+    path="data/feast/offline_store/semantic_groups.parquet",
     timestamp_field="timestamp",
 )
 
@@ -28,7 +26,7 @@ semantic_group_features = FeatureView(
     name="semantic_group_features",
     entities=[group_id],
     ttl=timedelta(days=30),
-    features=[
+    schema=[
         # Source features (4)
         Field(name="num_sources", dtype=Int32),
         Field(name="source_credibility_avg", dtype=Float32),

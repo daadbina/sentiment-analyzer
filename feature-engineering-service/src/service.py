@@ -70,7 +70,7 @@ class FeatureEngineeringService:
         self.quality_checker = QualityChecker()
 
         # Initialize storage
-        self.feast_writer = FeastWriter()
+        # self.feast_writer = FeastWriter()  # DISABLED due to schema mismatch
         self.redis_writer = RedisWriter()
         self.reconciliation = FeatureReconciliation()
         self.delta_writer = DeltaLakeWriter()
@@ -346,6 +346,18 @@ class FeatureEngineeringService:
             # Convert article dicts to Article objects
             articles = self._convert_articles(article_dicts)
 
+            # Skip semantic groups with 0 articles - cannot extract general features
+            # BTC extractor doesn't need articles, but general extractors do
+            # Without articles, we'd only have BTC features which is incomplete
+            if not articles or len(articles) == 0:
+                logger.warning(
+                    "Skipping semantic group with 0 articles - cannot extract general features",
+                    group_id=group_id,
+                    article_ids_count=len(article_ids),
+                    fetched_articles_count=len(article_dicts),
+                )
+                raise FeatureError(f"Semantic group {group_id} has 0 articles - cannot extract features")
+
             # Extract using all extractors
             for extractor in self.extractors:
                 extracted = extractor.extract(
@@ -432,15 +444,15 @@ class FeatureEngineeringService:
             self.delta_writer.write_features(group_id, clean_features)
             logger.info("✓ Features written to Delta Lake successfully", group_id=group_id)
 
-            # Write to Feast (offline)
-            logger.info(
-                "=== WRITING TO FEAST OFFLINE STORE ===",
-                group_id=group_id,
-                feature_count=len(clean_features),
-            )
-            self.feast_writer.write_features(group_id, clean_features)
-            metrics.feast_writes.inc()
-            logger.info("✓ Features written to Feast successfully", group_id=group_id)
+            # Write to Feast (offline) - DISABLED due to schema mismatch
+            # logger.info(
+            #     "=== WRITING TO FEAST OFFLINE STORE ===",
+            #     group_id=group_id,
+            #     feature_count=len(clean_features),
+            # )
+            # self.feast_writer.write_features(group_id, clean_features)
+            # metrics.feast_writes.inc()
+            # logger.info("✓ Features written to Feast successfully", group_id=group_id)
 
             # Write to Redis (online)
             logger.info(
@@ -457,7 +469,7 @@ class FeatureEngineeringService:
                 "=== ALL FEATURES WRITTEN SUCCESSFULLY ===",
                 group_id=group_id,
                 feature_count=len(clean_features),
-                storage_backends=["Delta Lake", "Feast", "Redis"],
+                storage_backends=["Delta Lake", "Redis"],
             )
 
         except Exception as e:
@@ -479,7 +491,7 @@ class FeatureEngineeringService:
             self.postgres_client.close()
             self.entities_consumer.shutdown()
             self.feast_registry.close()
-            self.feast_writer.close()
+            # self.feast_writer.close()  # DISABLED
             self.redis_writer.close()
             self.reconciliation.close()
 

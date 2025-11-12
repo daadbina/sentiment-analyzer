@@ -13,21 +13,14 @@ from feast.data_source import RequestSource
 # Entity definition
 semantic_group = Entity(
     name="semantic_group",
-    join_keys=["group_id"],
+    join_keys=["semantic_group_id"],
     description="Semantic group of related articles from clustering service"
 )
 
-# Data source - using S3/MinIO for offline store
+# Data source - using local file for offline store
 semantic_group_source = FileSource(
-    path="s3://sentiment-analyzer/feast/offline_store/semantic_groups.parquet",
-    timestamp_field="event_timestamp",
-    created_timestamp_column="created_at",
-)
-
-# Push source for real-time feature updates
-semantic_group_push_source = PushSource(
-    name="semantic_group_push",
-    batch_source=semantic_group_source,
+    path="/feature_repo/data/semantic_groups_full.parquet",
+    timestamp_field="created_at",
 )
 
 # Feature view with all 24 features

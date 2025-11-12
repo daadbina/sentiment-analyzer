@@ -31,7 +31,7 @@ class DeltaLakeWriter:
         )
 
     def _sanitize_labels(self, labels: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Sanitize labels for Delta Lake (no nullable types)."""
+        """Sanitize labels for Delta Lake - preserve types, only handle None and complex objects."""
         import json
         sanitized = []
 
@@ -39,22 +39,19 @@ class DeltaLakeWriter:
             sanitized_label = {}
             for key, value in label.items():
                 if value is None:
-                    # Replace None with appropriate defaults
-                    sanitized_label[key] = ""
+                    # Keep None as None - Delta Lake handles nullable types
+                    sanitized_label[key] = None
                 elif isinstance(value, dict):
                     # Convert dicts to JSON strings
                     sanitized_label[key] = json.dumps(value)
                 elif isinstance(value, (list, tuple)):
                     # Convert lists/tuples to JSON strings
                     sanitized_label[key] = json.dumps(value)
-                elif isinstance(value, bool):
-                    # Convert bool to string
-                    sanitized_label[key] = str(value)
-                elif isinstance(value, (int, float)):
-                    # Convert numbers to string
-                    sanitized_label[key] = str(value)
+                elif isinstance(value, (bool, int, float, str)):
+                    # Preserve primitive types as-is
+                    sanitized_label[key] = value
                 else:
-                    # Everything else as string
+                    # Convert other types to string
                     sanitized_label[key] = str(value)
 
             sanitized.append(sanitized_label)

@@ -218,7 +218,7 @@ class SemanticGroupConsumer:
         max_consecutive_timeouts = self.config.kafka.consumer_max_consecutive_timeouts
         try:
             batch_start_time = time.time()
-            logger.info(
+            logger.debug(
                 "Starting to consume semantic groups",
                 operation="consume_batch",
                 timeout_ms=timeout_ms,
@@ -275,7 +275,7 @@ class SemanticGroupConsumer:
 
                     if consecutive_timeouts >= max_consecutive_timeouts:
                         duration_ms = (time.time() - batch_start_time) * 1000
-                        logger.info(
+                        logger.debug(
                             "Max consecutive timeouts reached, exiting consume loop",
                             operation="consume_batch",
                             consecutive_timeouts=consecutive_timeouts,

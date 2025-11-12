@@ -369,18 +369,26 @@ class PipelineOrchestrator:
 
                 # Register clusters and track which are new
                 new_clusters = []
+                updated_clusters = []
                 for cluster in valid_clusters:
                     success, is_new = self.registry.register_cluster(cluster)
-                    if success and is_new:
-                        new_clusters.append(cluster)
+                    if success:
+                        if is_new:
+                            new_clusters.append(cluster)
+                        else:
+                            updated_clusters.append(cluster)
 
-                # Only produce NEW clusters to Kafka (not updates)
-                if new_clusters:
-                    logger.info(f"Producing {len(new_clusters)} NEW clusters to Kafka (out of {len(valid_clusters)} total)")
-                    self.producer.produce_batch(new_clusters)
+                # Produce ALL clusters to Kafka (both new and updates)
+                # This ensures downstream services (labeler, feature-engineering) always get the latest data
+                if valid_clusters:
+                    logger.info(
+                        f"Producing {len(valid_clusters)} clusters to Kafka: "
+                        f"{len(new_clusters)} new, {len(updated_clusters)} updates"
+                    )
+                    self.producer.produce_batch(valid_clusters)
                     self.producer.flush()
                 else:
-                    logger.info(f"No new clusters to produce to Kafka (all {len(valid_clusters)} clusters are updates)")
+                    logger.info("No clusters to produce to Kafka")
 
             logger.info("Clustering job complete")
             return len(set(labels)), len(valid_clusters), len(invalid_clusters)
@@ -406,21 +414,50 @@ class PipelineOrchestrator:
                 for article_id in cluster.get("article_ids", []):
                     article_to_cluster[article_id] = cluster
 
-            # Consume entity messages (batch of 1000 with 5 second timeout)
-            entity_messages = self.entities_consumer.consume_batch(
-                batch_size=1000,
-                timeout_ms=5000
-            )
+            # Consume ALL available entity messages in a loop
+            # Keep consuming until we get 3 consecutive empty batches
+            all_entity_messages = []
+            consecutive_empty_batches = 0
+            max_empty_batches = 3
+            batch_count = 0
 
-            if not entity_messages:
+            logger.info("Starting to consume entity messages for country enrichment...")
+
+            while consecutive_empty_batches < max_empty_batches:
+                batch_count += 1
+                entity_messages = self.entities_consumer.consume_batch(
+                    batch_size=1000,
+                    timeout_ms=5000
+                )
+
+                if entity_messages:
+                    all_entity_messages.extend(entity_messages)
+                    consecutive_empty_batches = 0
+                    logger.info(
+                        f"Consumed batch {batch_count}: {len(entity_messages)} entity messages "
+                        f"(total: {len(all_entity_messages)})"
+                    )
+                else:
+                    consecutive_empty_batches += 1
+                    logger.debug(
+                        f"Empty batch {consecutive_empty_batches}/{max_empty_batches} "
+                        f"(batch {batch_count})"
+                    )
+
+            if not all_entity_messages:
                 logger.info("No entity messages available for enrichment")
                 return clusters
 
-            logger.info(f"Processing {len(entity_messages)} entity messages for country extraction")
+            logger.info(
+                f"Finished consuming entity messages: {len(all_entity_messages)} total messages "
+                f"from {batch_count} batches"
+            )
 
             # Extract countries from entities and map to clusters
             enrichment_count = 0
-            for entity_msg in entity_messages:
+            articles_with_countries = 0
+
+            for entity_msg in all_entity_messages:
                 article_id = entity_msg.get("article_id")
                 entities = entity_msg.get("entities", [])
 
@@ -430,38 +467,48 @@ class PipelineOrchestrator:
                 # Find cluster containing this article
                 cluster = article_to_cluster.get(article_id)
                 if not cluster:
+                    logger.debug(
+                        f"Article {article_id} not found in any cluster (may be from previous clustering run)"
+                    )
                     continue
 
                 # Extract countries from entities
                 entity_countries = self.country_extractor.extract_countries_from_entities(entities)
 
                 if entity_countries:
+                    articles_with_countries += 1
+
                     # Merge with existing countries (from article metadata)
                     existing_countries = set(cluster.get("countries", []))
                     new_countries = set(entity_countries)
                     merged_countries = sorted(list(existing_countries | new_countries))
 
-                    # Update cluster
-                    cluster["countries"] = merged_countries
-                    enrichment_count += 1
+                    # Update cluster (only if new countries were added)
+                    if merged_countries != sorted(list(existing_countries)):
+                        cluster["countries"] = merged_countries
+                        enrichment_count += 1
 
-                    logger.debug(
-                        f"Enriched cluster {cluster.get('group_id')} with countries from article {article_id}: "
-                        f"existing={list(existing_countries)}, new={list(new_countries)}, merged={merged_countries}"
-                    )
+                        logger.debug(
+                            f"Enriched cluster {cluster.get('group_id')} with countries from article {article_id}: "
+                            f"existing={list(existing_countries)}, new={list(new_countries)}, merged={merged_countries}"
+                        )
 
             # Commit offsets
             self.entities_consumer.commit_offsets()
 
             logger.info(
-                f"Country enrichment complete: enriched {enrichment_count} clusters "
-                f"out of {len(clusters)} total clusters"
+                f"Country enrichment complete: "
+                f"processed {len(all_entity_messages)} entity messages, "
+                f"found {articles_with_countries} articles with countries, "
+                f"enriched {enrichment_count} clusters out of {len(clusters)} total clusters"
             )
 
             # Log enrichment statistics
             clusters_with_countries = sum(1 for c in clusters if c.get("countries"))
+            total_countries = sum(len(c.get("countries", [])) for c in clusters)
             logger.info(
-                f"Enrichment statistics: {clusters_with_countries}/{len(clusters)} clusters have countries"
+                f"Enrichment statistics: {clusters_with_countries}/{len(clusters)} clusters have countries "
+                f"({total_countries} total country codes)"
             )
 
             return clusters

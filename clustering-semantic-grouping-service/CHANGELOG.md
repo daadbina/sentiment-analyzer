@@ -14,6 +14,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Incremental clustering for online updates
 - Cluster stability scoring
 
+## [0.2.0] - 2025-11-12
+
+### Added
+- **Dual-Consumer Pattern for Country Extraction**
+  - Created `KafkaEntitiesConsumer` to consume from `entities_extracted` topic
+  - Created `CountryExtractor` utility with comprehensive country name mappings (100+ countries)
+  - Implemented `_enrich_clusters_with_countries()` method in `PipelineOrchestrator`
+  - Clusters now enriched with countries extracted from NER entities (LOCATION/GPE types)
+  - Merges entity-based countries with article-based countries for comprehensive coverage
+
+### Changed
+- **PipelineOrchestrator Enhancement**
+  - Added entities consumer initialization in `__init__()`
+  - Added country enrichment step (Step 4.5) before writing to storage
+  - Updated `close()` method to close entities consumer
+  - Semantic groups now have populated `countries` field instead of empty lists
+
+### Fixed
+- **Empty Countries in Semantic Groups** (CRITICAL FIX)
+  - Resolved issue where semantic groups had empty country lists
+  - Enables conflict predictions to work properly
+  - Enables labeler service to match semantic groups with GDELT/ACLED events by country
+  - Enables geographic features in feature engineering
+
+### Impact
+- ✅ Conflict predictions now functional (country data available)
+- ✅ GDELT/ACLED event matching enabled
+- ✅ Geographic features available for ML models
+- ✅ Neo4j graph can include country relationships
+
 ## [0.1.0] - 2025-11-04
 
 ### Added

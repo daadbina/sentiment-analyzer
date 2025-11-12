@@ -20,6 +20,8 @@ from .delta_lake_writer import DeltaLakeWriter
 from .cluster_registry import ClusterRegistry
 from .cache_manager import CacheManager
 from .kafka_integration import KafkaProducer
+from .kafka_entities_consumer import KafkaEntitiesConsumer
+from .country_extractor import CountryExtractor
 from .outlier_handler import OutlierHandler
 from .incremental_clusterer import IncrementalClusterer
 from .cluster_stability_scorer import ClusterStabilityScorer
@@ -114,6 +116,13 @@ class PipelineOrchestrator:
             schema_registry_url=config.kafka.schema_registry_url,
             topic=config.kafka.output_topic,
         )
+        self.entities_consumer = KafkaEntitiesConsumer(
+            brokers=config.kafka.brokers,
+            schema_registry_url=config.kafka.schema_registry_url,
+            topic="entities_extracted",
+            consumer_group="clustering-entities-consumer-group",
+        )
+        self.country_extractor = CountryExtractor()
         self.outlier_handler = OutlierHandler(
             k_neighbors=config.clustering.outlier_k_neighbors,
             distance_threshold=config.clustering.outlier_distance_threshold,
@@ -339,6 +348,11 @@ class PipelineOrchestrator:
                 f"{len(invalid_clusters)} invalid"
             )
 
+            # Step 4.5: Enrich clusters with countries from entities
+            if valid_clusters:
+                logger.info("Enriching clusters with countries from NER entities...")
+                valid_clusters = self._enrich_clusters_with_countries(valid_clusters)
+
             # Step 5: Write to storage
             if valid_clusters:
                 # Log detailed cluster information for debugging
@@ -375,10 +389,93 @@ class PipelineOrchestrator:
             logger.error(f"Clustering job failed: {e}", exc_info=True)
             raise
 
+    def _enrich_clusters_with_countries(self, clusters: List[Dict]) -> List[Dict]:
+        """
+        Enrich clusters with countries extracted from NER entities.
+
+        Args:
+            clusters: List of cluster dictionaries
+
+        Returns:
+            List of enriched cluster dictionaries with updated countries field
+        """
+        try:
+            # Build article_id to cluster mapping
+            article_to_cluster = {}
+            for cluster in clusters:
+                for article_id in cluster.get("article_ids", []):
+                    article_to_cluster[article_id] = cluster
+
+            # Consume entity messages (batch of 1000 with 5 second timeout)
+            entity_messages = self.entities_consumer.consume_batch(
+                batch_size=1000,
+                timeout_ms=5000
+            )
+
+            if not entity_messages:
+                logger.info("No entity messages available for enrichment")
+                return clusters
+
+            logger.info(f"Processing {len(entity_messages)} entity messages for country extraction")
+
+            # Extract countries from entities and map to clusters
+            enrichment_count = 0
+            for entity_msg in entity_messages:
+                article_id = entity_msg.get("article_id")
+                entities = entity_msg.get("entities", [])
+
+                if not article_id or not entities:
+                    continue
+
+                # Find cluster containing this article
+                cluster = article_to_cluster.get(article_id)
+                if not cluster:
+                    continue
+
+                # Extract countries from entities
+                entity_countries = self.country_extractor.extract_countries_from_entities(entities)
+
+                if entity_countries:
+                    # Merge with existing countries (from article metadata)
+                    existing_countries = set(cluster.get("countries", []))
+                    new_countries = set(entity_countries)
+                    merged_countries = sorted(list(existing_countries | new_countries))
+
+                    # Update cluster
+                    cluster["countries"] = merged_countries
+                    enrichment_count += 1
+
+                    logger.debug(
+                        f"Enriched cluster {cluster.get('group_id')} with countries from article {article_id}: "
+                        f"existing={list(existing_countries)}, new={list(new_countries)}, merged={merged_countries}"
+                    )
+
+            # Commit offsets
+            self.entities_consumer.commit_offsets()
+
+            logger.info(
+                f"Country enrichment complete: enriched {enrichment_count} clusters "
+                f"out of {len(clusters)} total clusters"
+            )
+
+            # Log enrichment statistics
+            clusters_with_countries = sum(1 for c in clusters if c.get("countries"))
+            logger.info(
+                f"Enrichment statistics: {clusters_with_countries}/{len(clusters)} clusters have countries"
+            )
+
+            return clusters
+
+        except Exception as e:
+            logger.error(f"Error enriching clusters with countries: {e}", exc_info=True)
+            # Return original clusters if enrichment fails
+            return clusters
+
     def close(self):
         """Close all connections."""
         try:
             self.producer.close()
+            self.entities_consumer.close()
             self.tracing_manager.shutdown()
             logger.info("Closed PipelineOrchestrator")
         except Exception as e:

@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-11-12
+
+### Changed - Feast HTTP Client Integration
+- **Feast Storage Refactoring** - Updated src/storage/feast_writer.py:
+  - Replaced direct Feast SDK usage with FeastHTTPClient for remote Feast server
+  - Changed from local Feast instance to remote server at 154.53.166.231:6566
+  - Updated push_features_to_feast() to use HTTP API instead of SDK
+  - Maintained same feature schema and push source configuration
+  - Added comprehensive error handling for HTTP communication
+- **Configuration Update** - Updated src/config.py:
+  - Added FeastHTTPConfig class for remote Feast server configuration
+  - Configured server URL, timeout, max retries, push source, and feature view
+  - Environment variable support for all Feast HTTP settings
+- **Service Integration** - Updated src/service.py:
+  - Integrated FeastHTTPClient into service initialization
+  - Passed Feast HTTP client to FeastWriter for feature storage
+  - Maintained backward compatibility with existing feature extraction logic
+
+### Impact
+- **Centralized Feature Store**: All services now use single remote Feast server
+- **Simplified Deployment**: No need for local Feast instances in each service
+- **Improved Reliability**: HTTP-based communication with retry logic
+- **Architecture Compliance**: Implements centralized feature storage pattern
+
+### Technical Details
+- Remote Feast server: 154.53.166.231:6566
+- Redis online store: 154.53.166.231:6379
+- MinIO S3 offline store: http://154.53.166.231:9900
+- Feature view: semantic_group_features (24 features)
+- Push source: semantic_group_push_source
+
 ## [0.2.4] - 2025-11-09
 
 ### Added - BTC Price Feature Integration

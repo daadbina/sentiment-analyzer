@@ -15,6 +15,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TLS enforcement for external connections
 - Advanced statistical drift detection
 - Auto-scaling based on label volume
+- Country extraction using NER client
+
+---
+
+## [0.10.0] - 2025-11-12
+
+### Changed - Timeout Logic for Clustering Intervals
+- **4-Hour Wait Period** - Updated src/service.py:
+  - Removed 3-batch exit logic that caused premature service termination
+  - Changed to 4-hour wait period (14400 seconds) to match clustering interval
+  - Service now waits for full clustering cycle before processing labels
+  - Added elapsed time and remaining time logging for better observability
+  - Prevents service from exiting after just a few seconds of empty batches
+
+### Impact
+- **Continuous Operation**: Labeler runs continuously without premature exits
+- **Clustering Alignment**: Waits for complete 4-hour clustering cycle
+- **Better Observability**: Enhanced logging shows wait progress
+- **Architecture Compliance**: Aligns with clustering service schedule
+
+### Technical Details
+- Max wait time: 4 hours (14400 seconds)
+- Batch timeout: 1 second per Kafka poll
+- Max messages per batch: 1000
+- Logging: elapsed_seconds, remaining_seconds
+
+### Before vs After
+- **Before**: Stopped after 3 consecutive empty batches (~3 seconds)
+- **After**: Waits up to 4 hours for semantic groups from clustering
 
 ---
 

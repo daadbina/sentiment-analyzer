@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2025-11-12
+
+### Removed - Feature Engineering Duplication
+- **Deleted Feature Engineer** - Removed src/data/feature_engineer.py (222 lines):
+  - Eliminated duplicate feature calculation logic
+  - Feature engineering now ONLY happens in feature-engineering-service
+  - Trainer retrieves pre-calculated features from Feast
+  - Removed FeatureEngineer class and all calculation methods
+
+### Added - Preprocessor Enhancements
+- **Constant Feature Detection** - Enhanced src/data/preprocessor.py:
+  - Added detect_constant_features() method to identify zero-variance features
+  - Automatically removes constant features during fit()
+  - Stores removed feature names in constant_features_ attribute
+  - Logs detected constant features for debugging
+  - Prevents training on features with no predictive power
+- **Preprocessor Persistence** - Updated src/service.py:
+  - Save preprocessor to MLflow as sklearn artifact
+  - Log preprocessing metadata (feature names, constant features, scaler type)
+  - Store preprocessing configuration for reproducibility
+  - Preprocessor versioned alongside model in MLflow registry
+  - Enables predictor to load exact same preprocessing pipeline
+
+### Changed - Separate Model Pipelines
+- **BTC and Conflict Separation** - Updated src/service.py:
+  - Created separate train_btc_model() method for BTC price prediction
+  - Created separate train_conflict_model() method for conflict prediction
+  - BTC model uses 17 features (4 base + 13 BTC-specific)
+  - Conflict model uses 24 general features (excludes BTC features)
+  - Each model has its own preprocessor saved to MLflow
+  - Preprocessor names: btc_prediction_preprocessor, conflict_prediction_preprocessor
+
+### Impact
+- **No Feature Duplication**: Single source of truth for feature calculation
+- **Automatic Feature Filtering**: Constant features removed automatically
+- **Preprocessor Sharing**: Predictor uses exact same preprocessing as trainer
+- **Model Separation**: BTC and conflict models properly isolated
+- **Architecture Compliance**: Implements centralized feature engineering pattern
+
+### Technical Details
+- Constant features detected: num_sources, source_diversity_score, intra_cluster_similarity_std, embedding_drift_score
+- Preprocessor artifact type: sklearn-model
+- MLflow metadata: feature_names, constant_features, scaler_type
+- BTC features: 17 total (4 base + 13 BTC-specific)
+- Conflict features: 24 general features
+
 ## [1.0.5] - 2025-11-09
 
 ### Added - BTC Price Feature Integration

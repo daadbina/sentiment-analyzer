@@ -95,13 +95,13 @@ class DeltaLakeWriter:
                 )
             except Exception as schema_error:
                 error_str = str(schema_error)
-                logger.info(
-                    f"Delta Lake write error caught",
+                logger.warning(
+                    f"Delta Lake write error, attempting overwrite",
                     operation="write_labels",
                     error_message=error_str,
                     error_type=type(schema_error).__name__
                 )
-                # If schema mismatch, drop and recreate the table
+                # If schema mismatch persists, drop and recreate the table
                 if "Schema" in error_str or "schema" in error_str:
                     logger.warning(
                         f"Schema mismatch detected, recreating table",

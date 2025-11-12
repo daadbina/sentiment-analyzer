@@ -200,6 +200,16 @@ class FeatureEngineeringService:
                 # Extract features
                 features = self._extract_features(message)
 
+                # Skip if no features extracted (e.g., group has 0 articles)
+                if not features:
+                    logger.info(
+                        "No features extracted, skipping semantic group",
+                        group_id=group_id,
+                    )
+                    # Commit offset to skip this message
+                    self.consumer.commit_offset()
+                    return
+
                 # Log extracted features
                 logger.info(
                     "Features extracted from semantic group",
@@ -356,7 +366,8 @@ class FeatureEngineeringService:
                     article_ids_count=len(article_ids),
                     fetched_articles_count=len(article_dicts),
                 )
-                raise FeatureError(f"Semantic group {group_id} has 0 articles - cannot extract features")
+                # Return empty features dict to skip this group gracefully
+                return {}
 
             # Extract using all extractors
             for extractor in self.extractors:

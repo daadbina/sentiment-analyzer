@@ -36,10 +36,10 @@ $services = @(
 $pidFile = "development/services.pids"
 $cmdPidFile = "development/cmd_pids.txt"
 
-# Configuration for external services
-$redisHost = "localhost"
+# Configuration for external services - REMOTE INFRASTRUCTURE
+$redisHost = "154.53.166.231"
 $redisPort = 6379
-$qdrantHost = "localhost"
+$qdrantHost = "154.53.166.231"
 $qdrantPort = 6333
 $kafkaHost = "154.53.166.231"
 $kafkaPort = 9092
@@ -49,14 +49,15 @@ $postgresUser = "adminsentiment"
 $postgresPassword = "wp2400!!!!"
 $postgresDb = "sentiment"
 $schemaRegistryUrl = "http://154.53.166.231:8081"
-$neo4jHost = "localhost"
+$neo4jHost = "154.53.166.231"
 $neo4jPort = 7687
 $neo4jUser = "neo4j"
 $neo4jPassword = "wqPamir2600"
-$s3Endpoint = "http://154.53.166.231:9900"
+$s3Endpoint = "http://154.53.166.231:9001"
 $s3AccessKey = "minioadmin"
 $s3SecretKey = "minioadmin"
-$mlflowUrl = "http://localhost:5000"
+$mlflowUrl = "http://154.53.166.231:5000"
+$feastUrl = "http://154.53.166.231:6566"
 $deltaLakePath = "data/delta_lake"
 
 function Flush-Redis {

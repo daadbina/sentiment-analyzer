@@ -65,26 +65,50 @@ class SentimentAnalyzer:
             Sentiment score in range [-1.0, 1.0]
         """
         if not text or not isinstance(text, str):
-            logger.debug("Empty or invalid text for sentiment analysis")
+            logger.warning("Empty or invalid text for sentiment analysis, returning neutral (0.0)")
             return 0.0
+
+        # Check text length and log warning if too short
+        text_stripped = text.strip()
+        if len(text_stripped) == 0:
+            logger.warning("Text is empty after stripping whitespace, returning neutral (0.0)")
+            return 0.0
+
+        if len(text_stripped) < 10:
+            logger.info(
+                f"Text is very short ({len(text_stripped)} chars), "
+                f"sentiment may not be accurate: '{text_stripped[:50]}...'"
+            )
 
         try:
             # Use VADER for English
             if language == "en" and self.vader_available:
-                return self._analyze_vader(text)
+                score = self._analyze_vader(text)
+                logger.info(
+                    f"Sentiment analysis complete: language={language}, "
+                    f"text_length={len(text_stripped)}, score={score:.3f}, "
+                    f"text_preview='{text_stripped[:100]}...'"
+                )
+                return score
 
             # Use TextBlob as fallback for other languages
             if self.textblob_available:
-                return self._analyze_textblob(text)
+                score = self._analyze_textblob(text)
+                logger.info(
+                    f"Sentiment analysis complete: language={language}, "
+                    f"text_length={len(text_stripped)}, score={score:.3f}, "
+                    f"text_preview='{text_stripped[:100]}...'"
+                )
+                return score
 
             # Default to neutral if no analyzer available
             logger.warning(
-                f"No sentiment analyzer available for language {language}, returning neutral"
+                f"No sentiment analyzer available for language {language}, returning neutral (0.0)"
             )
             return 0.0
 
         except Exception as e:
-            logger.error(f"Error analyzing sentiment: {e}")
+            logger.error(f"Error analyzing sentiment: {e}", exc_info=True)
             return 0.0
 
     def _analyze_vader(self, text: str) -> float:

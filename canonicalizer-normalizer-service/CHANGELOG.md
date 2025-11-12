@@ -5,6 +5,30 @@ All notable changes to the canonicalizer-normalizer-service will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2025-11-12
+
+### Changed
+- **Enhanced Sentiment Analysis Logging**
+  - Added INFO level logging in `SentimentAnalyzer.analyze()` to log sentiment score and text preview
+  - Added WARNING level logging for empty or invalid text
+  - Added INFO level logging for very short text (< 10 chars) with accuracy warning
+  - Added text length validation and logging before sentiment analysis
+  - Changed empty text logging from DEBUG to WARNING level for better visibility
+
+### Fixed
+- **Sentiment Feature Debugging** (Part of CRITICAL FIX for constant sentiment features)
+  - Added comprehensive logging to diagnose why sentiment features are constant
+  - Log normalized_title and normalized_body lengths before sentiment analysis
+  - Log sentiment_score result at INFO level instead of DEBUG
+  - Added text preview in logs to verify content is being analyzed
+  - This enables diagnosis of whether empty content is causing constant 0.0 sentiment scores
+
+### Impact
+- ✅ Better visibility into sentiment analysis process
+- ✅ Easier debugging of constant sentiment feature issue
+- ✅ Warnings when content is too short for accurate sentiment analysis
+- ✅ Ability to verify if normalized content is empty
+
 ## [3.0.0] - 2024-01-21
 
 ### Added

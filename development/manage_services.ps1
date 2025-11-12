@@ -3,7 +3,7 @@
 
 param(
     [Parameter(Mandatory=$false)]
-    [ValidateSet("start", "stop", "status", "restart", "crawl", "clustering", "flush-kafka", "flush-redis", "flush-qdrant", "flush-database", "flush-neo4j", "flush-s3", "flush-mlflow", "flush-feast", "flush-deltalake", "flush-schema-registry", "flush-all", "inspect-all")]
+    [ValidateSet("start", "stop", "status", "restart", "crawl", "crawl-train", "clustering", "flush-kafka", "flush-redis", "flush-qdrant", "flush-database", "flush-neo4j", "flush-s3", "flush-mlflow", "flush-feast", "flush-deltalake", "flush-schema-registry", "flush-all", "inspect-all")]
     [string]$Action = "start",
 
     [Parameter(Mandatory=$false)]
@@ -52,10 +52,10 @@ $schemaRegistryUrl = "http://154.53.166.231:8081"
 $neo4jHost = "154.53.166.231"
 $neo4jPort = 7687
 $neo4jUser = "neo4j"
-$neo4jPassword = "wqPamir2600"
-$s3Endpoint = "http://154.53.166.231:9001"
+$neo4jPassword = "sentiment_password_2024"  # Updated to match docker-compose.infrastructure.yml
+$s3Endpoint = "http://154.53.166.231:9001"  # MinIO API port (9001, not 9900)
 $s3AccessKey = "minioadmin"
-$s3SecretKey = "minioadmin"
+$s3SecretKey = "minioadmin123"  # Correct password from docker-compose.yml
 $mlflowUrl = "http://154.53.166.231:5000"
 $feastUrl = "http://154.53.166.231:6566"
 $deltaLakePath = "data/delta_lake"
@@ -576,6 +576,43 @@ except Exception as e:
 function Flush-Feast {
     Write-Host "Flushing Feast feature store..." -ForegroundColor Yellow
     try {
+        # Flush remote Feast Redis store (feast:* keys)
+        Write-Host "  Flushing Feast Redis keys (feast:*)..." -ForegroundColor Gray
+
+        $socket = New-Object System.Net.Sockets.TcpClient
+        $socket.Connect($redisHost, $redisPort)
+        $stream = $socket.GetStream()
+        $writer = New-Object System.IO.StreamWriter($stream)
+        $reader = New-Object System.IO.StreamReader($stream)
+
+        # Get all feast:* keys
+        $writer.WriteLine("KEYS feast:*")
+        $writer.Flush()
+        $response = $reader.ReadLine()
+
+        # Parse response and delete keys
+        if ($response -match '\*(\d+)') {
+            $keyCount = [int]$matches[1]
+            if ($keyCount -gt 0) {
+                for ($i = 0; $i -lt $keyCount; $i++) {
+                    $key = $reader.ReadLine()
+                    if ($key -match '\$\d+') {
+                        $key = $reader.ReadLine()
+                    }
+                    # Delete the key
+                    $writer.WriteLine("DEL $key")
+                    $writer.Flush()
+                    $delResponse = $reader.ReadLine()
+                }
+                Write-Host "    Deleted $keyCount Feast keys from Redis" -ForegroundColor Gray
+            } else {
+                Write-Host "    No Feast keys found in Redis" -ForegroundColor Gray
+            }
+        }
+
+        $socket.Close()
+
+        # Clean up local Feast directories (if any)
         $feastPaths = @(
             "data/feast",
             "feast",
@@ -586,18 +623,13 @@ function Flush-Feast {
         foreach ($path in $feastPaths) {
             if (Test-Path $path) {
                 Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
-                Write-Host "    Deleted: $path" -ForegroundColor Gray
+                Write-Host "    Deleted local: $path" -ForegroundColor Gray
                 $deleted = $true
             }
         }
 
-        if ($deleted) {
-            Write-Host "  [OK] Feast feature store flushed" -ForegroundColor Green
-            return $true
-        } else {
-            Write-Host "  [OK] Feast feature store is clean (no directories found)" -ForegroundColor Green
-            return $true
-        }
+        Write-Host "  [OK] Feast feature store flushed (remote + local)" -ForegroundColor Green
+        return $true
     }
     catch {
         Write-Host "  [ERROR] Feast flush failed: $_" -ForegroundColor Red
@@ -1100,6 +1132,60 @@ function Initiate-Clustering {
     }
 }
 
+function Initiate-CrawlTrain {
+    param(
+        [string[]]$Categories = @("War, Conflict and Unrest"),
+        [string[]]$Sentiments = @("positive", "negative"),
+        [int]$MaxDatasets = 10
+    )
+
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host "INITIATING TRAINING DATA CRAWL" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Categories: $($Categories -join ', ')" -ForegroundColor Yellow
+    Write-Host "Sentiments: $($Sentiments -join ', ')" -ForegroundColor Yellow
+    Write-Host "Max Datasets: $MaxDatasets" -ForegroundColor Yellow
+    Write-Host ""
+
+    try {
+        $body = @{
+            categories = $Categories
+            sentiments = $Sentiments
+            max_datasets = $MaxDatasets
+        } | ConvertTo-Json
+
+        Write-Host "Sending training data crawl request to http://localhost:8000/crawl/training-data..." -ForegroundColor Yellow
+        $response = Invoke-RestMethod -Method Post `
+                                      -Uri "http://localhost:8000/crawl/training-data" `
+                                      -ContentType "application/json" `
+                                      -Body $body `
+                                      -ErrorAction Stop
+
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Green
+        Write-Host "TRAINING DATA CRAWL INITIATED SUCCESSFULLY" -ForegroundColor Green
+        Write-Host "========================================" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "Response:" -ForegroundColor Yellow
+        Write-Host "Job ID: $($response.job_id)" -ForegroundColor White
+        Write-Host "Articles Crawled: $($response.articles_crawled)" -ForegroundColor White
+        Write-Host "Articles Published: $($response.articles_published)" -ForegroundColor White
+        Write-Host "Articles Failed: $($response.articles_failed)" -ForegroundColor White
+        Write-Host "Status: $($response.status)" -ForegroundColor White
+        Write-Host ""
+    }
+    catch {
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Red
+        Write-Host "TRAINING DATA CRAWL INITIATION FAILED" -ForegroundColor Red
+        Write-Host "========================================" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Error: $_" -ForegroundColor Red
+        Write-Host ""
+    }
+}
+
 # Execute action
 switch ($Action) {
     "start" {
@@ -1120,6 +1206,9 @@ switch ($Action) {
     }
     "crawl" {
         Initiate-Crawl -FeedId $Service
+    }
+    "crawl-train" {
+        Initiate-CrawlTrain
     }
     "clustering" {
         Initiate-Clustering
@@ -1258,6 +1347,7 @@ switch ($Action) {
         Write-Host "Usage:" -ForegroundColor Yellow
         Write-Host "  .\manage_services.ps1 -Action start|stop|status|restart [-Service service-name]" -ForegroundColor Yellow
         Write-Host "  .\manage_services.ps1 -Action crawl [-Service feed-id]" -ForegroundColor Yellow
+        Write-Host "  .\manage_services.ps1 -Action crawl-train" -ForegroundColor Yellow
         Write-Host "  .\manage_services.ps1 -Action clustering" -ForegroundColor Yellow
         Write-Host "  .\manage_services.ps1 -Action inspect-all" -ForegroundColor Yellow
         Write-Host "  .\manage_services.ps1 -Action flush-kafka|flush-redis|flush-qdrant|flush-database|flush-neo4j|flush-s3|flush-mlflow|flush-feast|flush-deltalake|flush-schema-registry|flush-all" -ForegroundColor Yellow

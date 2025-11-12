@@ -46,6 +46,12 @@ class ModelLoader:
         self._baseline_model: Any | None = None
         self._is_using_baseline = False
 
+        # Preprocessor caching
+        self._btc_preprocessor: Any | None = None
+        self._conflict_preprocessor: Any | None = None
+        self._btc_preprocessor_version: str | None = None
+        self._conflict_preprocessor_version: str | None = None
+
         logger.info(
             "Initialized ModelLoader",
             extra={"tracking_uri": config.tracking_uri, "model_name": config.model_name},
@@ -157,6 +163,111 @@ class ModelLoader:
 
             # Try fallback to baseline
             return await self.fallback_to_baseline_model(trace_id=trace_id)
+
+    @trace_span("model_loader.load_preprocessor")
+    async def load_preprocessor(
+        self,
+        pipeline_name: str,
+        preprocessor_version: str | None = None,
+        trace_id: str | None = None,
+    ) -> Any:
+        """
+        Load preprocessor from MLflow.
+
+        Args:
+            pipeline_name: Pipeline name ("btc_prediction" or "conflict_prediction")
+            preprocessor_version: Specific preprocessor version to load (None = latest)
+            trace_id: Trace ID for correlation
+
+        Returns:
+            Loaded preprocessor
+
+        Raises:
+            ModelLoadError: If preprocessor loading fails
+        """
+        try:
+            # Determine which preprocessor to load
+            if pipeline_name == "btc_prediction":
+                cache_attr = "_btc_preprocessor"
+                version_attr = "_btc_preprocessor_version"
+            elif pipeline_name == "conflict_prediction":
+                cache_attr = "_conflict_preprocessor"
+                version_attr = "_conflict_preprocessor_version"
+            else:
+                raise ValueError(f"Unknown pipeline name: {pipeline_name}")
+
+            # Check if preprocessor already loaded with same version
+            cached_preprocessor = getattr(self, cache_attr)
+            cached_version = getattr(self, version_attr)
+
+            if cached_preprocessor and cached_version == preprocessor_version:
+                logger.debug(
+                    f"Preprocessor already loaded for {pipeline_name}",
+                    extra={"preprocessor_version": preprocessor_version, "trace_id": trace_id},
+                )
+                return cached_preprocessor
+
+            start_time = datetime.now()
+
+            # Construct preprocessor model name
+            preprocessor_model_name = f"{pipeline_name}_preprocessor"
+
+            logger.info(
+                f"Loading preprocessor from MLflow for {pipeline_name}",
+                extra={
+                    "preprocessor_model_name": preprocessor_model_name,
+                    "preprocessor_version": preprocessor_version,
+                    "trace_id": trace_id,
+                },
+            )
+
+            # Set MLflow tracking URI
+            mlflow.set_tracking_uri(self.config.tracking_uri)
+
+            # Load preprocessor
+            if preprocessor_version:
+                preprocessor_uri = f"models:/{preprocessor_model_name}/{preprocessor_version}"
+            else:
+                preprocessor_uri = f"models:/{preprocessor_model_name}/Production"
+
+            preprocessor = mlflow.sklearn.load_model(preprocessor_uri)
+
+            # Cache the preprocessor
+            setattr(self, cache_attr, preprocessor)
+            setattr(self, version_attr, preprocessor_version or "Production")
+
+            # Calculate load time
+            load_time_ms = (datetime.now() - start_time).total_seconds() * 1000
+
+            logger.info(
+                f"Preprocessor loaded successfully for {pipeline_name}",
+                extra={
+                    "preprocessor_version": preprocessor_version or "Production",
+                    "load_time_ms": load_time_ms,
+                    "trace_id": trace_id,
+                },
+            )
+
+            return preprocessor
+
+        except Exception as e:
+            logger.error(
+                f"Failed to load preprocessor for {pipeline_name}",
+                extra={
+                    "preprocessor_model_name": f"{pipeline_name}_preprocessor",
+                    "preprocessor_version": preprocessor_version,
+                    "error": str(e),
+                    "trace_id": trace_id,
+                },
+                exc_info=True,
+            )
+            raise ModelLoadError(
+                message=f"Failed to load preprocessor for {pipeline_name}: {str(e)}",
+                details={
+                    "pipeline_name": pipeline_name,
+                    "preprocessor_version": preprocessor_version,
+                },
+            ) from e
 
     @trace_span("model_loader.validate_model")
     async def validate_model(self, trace_id: str | None = None) -> bool:
@@ -325,3 +436,19 @@ class ModelLoader:
     def is_using_baseline(self) -> bool:
         """Check if using baseline model."""
         return self._is_using_baseline
+
+    def get_btc_preprocessor(self) -> Any | None:
+        """Get currently loaded BTC preprocessor."""
+        return self._btc_preprocessor
+
+    def get_conflict_preprocessor(self) -> Any | None:
+        """Get currently loaded conflict preprocessor."""
+        return self._conflict_preprocessor
+
+    def get_btc_preprocessor_version(self) -> str | None:
+        """Get currently loaded BTC preprocessor version."""
+        return self._btc_preprocessor_version
+
+    def get_conflict_preprocessor_version(self) -> str | None:
+        """Get currently loaded conflict preprocessor version."""
+        return self._conflict_preprocessor_version

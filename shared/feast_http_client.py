@@ -145,26 +145,34 @@ class FeastHTTPClient:
     ) -> Dict[str, Any]:
         """
         Push features to Feast online/offline store.
-        
+
         Args:
             push_source_name: Name of the push source (e.g., "semantic_group_push")
             df: DataFrame with features to push
             to: Target store - "online", "offline", or "online_and_offline"
-        
+
         Returns:
             Response dictionary from Feast server
-        
+
         Raises:
             requests.HTTPError: If request fails
         """
+        # Convert DataFrame to dict, handling timestamp serialization
+        df_copy = df.copy()
+
+        # Convert all timestamp columns to ISO format strings
+        for col in df_copy.columns:
+            if pd.api.types.is_datetime64_any_dtype(df_copy[col]):
+                df_copy[col] = df_copy[col].dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
+
         payload = {
             "push_source_name": push_source_name,
-            "df": df.to_dict(orient="records"),
+            "df": df_copy.to_dict(orient="records"),
             "to": to
         }
-        
+
         logger.debug(f"Pushing {len(df)} feature rows to {to} store")
-        
+
         try:
             response = requests.post(
                 f"{self.base_url}/push",
@@ -172,11 +180,11 @@ class FeastHTTPClient:
                 timeout=self.timeout * 2  # Push operations may take longer
             )
             response.raise_for_status()
-            
+
             result = response.json()
             logger.info(f"Successfully pushed {len(df)} feature rows")
             return result
-            
+
         except requests.exceptions.RequestException as e:
             logger.error(f"Error pushing features: {e}")
             raise

@@ -11,11 +11,18 @@ class KafkaInitializer:
     
     def __init__(self, bootstrap_servers: str):
         """Initialize Kafka initializer.
-        
+
         Args:
             bootstrap_servers: Kafka bootstrap servers
         """
-        self.admin_client = AdminClient({'bootstrap.servers': bootstrap_servers})
+        logger.info(f"KafkaInitializer: Creating AdminClient with bootstrap.servers={bootstrap_servers}")
+        config = {
+            'bootstrap.servers': bootstrap_servers,
+            'client.id': 'canonicalizer-admin-client',
+            'debug': 'broker,admin'
+        }
+        logger.info(f"AdminClient config: {config}")
+        self.admin_client = AdminClient(config)
     
     def ensure_topics_exist(self, topics: List[Dict[str, any]]) -> None:
         """Ensure all required topics exist, create if missing.

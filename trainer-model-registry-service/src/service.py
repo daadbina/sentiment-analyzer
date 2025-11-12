@@ -1112,6 +1112,7 @@ class TrainerService:
                                 mlflow.log_param("pipeline", pipeline_name)
                                 mlflow.log_param("model_type", model_type)
                                 mlflow.log_param("is_best_model", model_type == best_model_type)
+                                mlflow.log_param("scaling_method", preprocessor.scaling_method)
 
                                 # Log metrics
                                 for metric_name, metric_value in metrics.items():
@@ -1130,6 +1131,20 @@ class TrainerService:
                                 else:
                                     mlflow.sklearn.log_model(model_instance.model, "model")
 
+                                # Log preprocessor as sklearn model
+                                logger.info("Logging preprocessor to MLflow")
+                                mlflow.sklearn.log_model(preprocessor, "preprocessor")
+
+                                # Log preprocessing metadata
+                                preprocessing_metadata = {
+                                    "feature_names": preprocessor.get_feature_names() or [],
+                                    "constant_features_removed": preprocessor.get_constant_features() or [],
+                                    "n_features": len(preprocessor.get_feature_names() or []),
+                                    "scaling_method": preprocessor.scaling_method,
+                                }
+                                mlflow.log_dict(preprocessing_metadata, "preprocessing_metadata.json")
+                                logger.info(f"Logged preprocessing metadata: {preprocessing_metadata}")
+
                                 # Register model in MLflow Model Registry
                                 run_id = mlflow.active_run().info.run_id
                                 model_uri = f"runs:/{run_id}/model"
@@ -1137,6 +1152,12 @@ class TrainerService:
 
                                 model_version = mlflow.register_model(model_uri, model_name)
                                 logger.info(f"Model registered in MLflow: {model_name} version {model_version.version}")
+
+                                # Register preprocessor in MLflow Model Registry
+                                preprocessor_uri = f"runs:/{run_id}/preprocessor"
+                                preprocessor_name = f"{pipeline_name}_preprocessor"
+                                preprocessor_version = mlflow.register_model(preprocessor_uri, preprocessor_name)
+                                logger.info(f"Preprocessor registered in MLflow: {preprocessor_name} version {preprocessor_version.version}")
 
                                 # Promote best model to Production stage
                                 if model_type == best_model_type:
@@ -1146,6 +1167,14 @@ class TrainerService:
                                         stage="Production"
                                     )
                                     logger.info(f"Best model promoted to Production: {model_name} v{model_version.version}")
+
+                                    # Also promote preprocessor to Production
+                                    self.mlflow_client.transition_model_stage(
+                                        model_name=preprocessor_name,
+                                        version=int(preprocessor_version.version),
+                                        stage="Production"
+                                    )
+                                    logger.info(f"Preprocessor promoted to Production: {preprocessor_name} v{preprocessor_version.version}")
                         finally:
                             # Restore stdout
                             sys.stdout = old_stdout

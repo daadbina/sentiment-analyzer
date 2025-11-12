@@ -19,7 +19,7 @@ class KafkaEntitiesConsumer:
         schema_registry_url: str,
         topic: str = "entities_extracted",
         consumer_group: str = "clustering-entities-consumer-group",
-        max_poll_interval_ms: int = 300000,
+        max_poll_interval_ms: int = 600000,  # 10 minutes (increased from 5 minutes)
     ):
         """
         Initialize Kafka entities consumer.
@@ -29,7 +29,7 @@ class KafkaEntitiesConsumer:
             schema_registry_url: Schema Registry URL
             topic: Topic to consume (default: entities_extracted)
             consumer_group: Consumer group ID
-            max_poll_interval_ms: Max poll interval
+            max_poll_interval_ms: Max poll interval (default: 10 minutes)
         """
         self.topic = topic
         self.schema_registry_client = SchemaRegistryClient(

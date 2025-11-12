@@ -783,23 +783,10 @@ class ModelManager:
                     f"trace_id={trace_id}, feature_count={len(general_features)}"
                 )
 
-                # Drop constant features (features with zero variance identified during training)
-                # These 4 features were removed during model training because they had zero variance
-                constant_features_to_drop = [
-                    "semantic_group_features:num_sources",
-                    "semantic_group_features:source_diversity_score",
-                    "semantic_group_features:intra_cluster_similarity_std",
-                    "semantic_group_features:embedding_drift_score",
-                ]
-
-                for feature_name in constant_features_to_drop:
-                    if feature_name in general_features:
-                        del general_features[feature_name]
-
-                logger.info(
-                    f"Dropped {len(constant_features_to_drop)} constant features, "
-                    f"remaining: {len(general_features)} features (expected 20 for conflict model)"
-                )
+                # NOTE: Constant feature removal is now handled by the preprocessor
+                # The preprocessor was trained with constant feature detection and will
+                # automatically remove the same features during inference.
+                # No manual feature dropping is needed here.
 
                 return general_features
 

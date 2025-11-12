@@ -133,3 +133,4 @@ check_database_counts.py
 check_group_ids_consistency.py
 reset_labeler_cache_only.py
 get_sample_group_id.py
+feast_remote

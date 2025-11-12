@@ -175,6 +175,233 @@ class ModelManager:
 
         return model, model_version
 
+    async def predict_btc(
+        self,
+        features: dict[str, Any],
+        trace_id: str | None = None,
+    ) -> dict[str, float]:
+        """
+        Make BTC price prediction using BTC model and preprocessor.
+
+        Args:
+            features: Feature dictionary (24 base features from Feast)
+            trace_id: Optional trace ID for distributed tracing
+
+        Returns:
+            Dictionary containing:
+                - prediction_value: float (predicted BTC price change %)
+                - prediction_confidence: float (0.0-1.0)
+
+        Raises:
+            InferenceError: If prediction fails
+        """
+        with trace_span(
+            "model_predict_btc",
+            attributes={"trace_id": trace_id},
+        ):
+            try:
+                logger.info(
+                    f"=== BTC PREDICTION START ===",
+                    extra={"trace_id": trace_id, "feature_count": len(features)},
+                )
+
+                # Load BTC model
+                btc_model = await self.model_loader.lazy_load_model(
+                    model_version=None,  # Use latest
+                    trace_id=trace_id,
+                )
+                model_version = self.model_loader.get_model_version()
+
+                # Load BTC preprocessor from MLflow
+                btc_preprocessor = await self.model_loader.load_preprocessor(
+                    pipeline_name="btc_prediction",
+                    preprocessor_version=None,  # Use Production
+                    trace_id=trace_id,
+                )
+
+                logger.info(
+                    f"BTC model and preprocessor loaded: model_version={model_version}",
+                    extra={"trace_id": trace_id},
+                )
+
+                # Build BTC features (17 features: 4 base + 13 BTC-specific)
+                timestamp_str = features.get("semantic_group_features:timestamp") or features.get("timestamp")
+                if timestamp_str:
+                    try:
+                        timestamp = datetime.fromisoformat(str(timestamp_str))
+                    except Exception:
+                        timestamp = datetime.utcnow()
+                else:
+                    timestamp = datetime.utcnow()
+
+                btc_features = await self.btc_feature_builder.build_btc_features(
+                    features,
+                    timestamp=timestamp,
+                )
+
+                logger.info(
+                    f"Built {len(btc_features)} BTC features",
+                    extra={"trace_id": trace_id, "feature_names": list(btc_features.keys())},
+                )
+
+                # Preprocess features
+                input_data = self._prepare_input(btc_features, btc_preprocessor)
+
+                logger.info(
+                    f"Preprocessed BTC features: shape={input_data.shape}",
+                    extra={"trace_id": trace_id},
+                )
+
+                # Make prediction (regression model)
+                prediction = btc_model.predict(input_data)
+                predicted_value = float(prediction[0]) if isinstance(prediction, np.ndarray) else float(prediction)
+
+                # Calculate confidence (for regression, use a simple heuristic)
+                confidence = 0.7  # Default confidence for regression
+
+                result = {
+                    "prediction_value": predicted_value,
+                    "prediction_confidence": confidence,
+                }
+
+                logger.info(
+                    f"=== BTC PREDICTION COMPLETE: value={predicted_value:.4f}, confidence={confidence:.4f} ===",
+                    extra={"trace_id": trace_id},
+                )
+
+                return result
+
+            except Exception as e:
+                logger.error(
+                    f"BTC prediction failed: {e}",
+                    extra={"trace_id": trace_id},
+                    exc_info=True,
+                )
+                raise InferenceError(
+                    message=f"BTC prediction failed: {str(e)}",
+                    details={"trace_id": trace_id},
+                ) from e
+
+    async def predict_conflict(
+        self,
+        features: dict[str, Any],
+        trace_id: str | None = None,
+    ) -> dict[str, float]:
+        """
+        Make conflict prediction using conflict model and preprocessor.
+
+        Args:
+            features: Feature dictionary (24 base features from Feast)
+            trace_id: Optional trace ID for distributed tracing
+
+        Returns:
+            Dictionary containing:
+                - prediction_probability: float (0.0-1.0)
+                - prediction_confidence: float (0.0-1.0)
+
+        Raises:
+            InferenceError: If prediction fails
+        """
+        with trace_span(
+            "model_predict_conflict",
+            attributes={"trace_id": trace_id},
+        ):
+            try:
+                logger.info(
+                    f"=== CONFLICT PREDICTION START ===",
+                    extra={"trace_id": trace_id, "feature_count": len(features)},
+                )
+
+                # Load conflict model
+                conflict_model = await self.model_loader.lazy_load_model(
+                    model_version=None,  # Use latest
+                    trace_id=trace_id,
+                )
+                model_version = self.model_loader.get_model_version()
+
+                # Load conflict preprocessor from MLflow
+                conflict_preprocessor = await self.model_loader.load_preprocessor(
+                    pipeline_name="conflict_prediction",
+                    preprocessor_version=None,  # Use Production
+                    trace_id=trace_id,
+                )
+
+                logger.info(
+                    f"Conflict model and preprocessor loaded: model_version={model_version}",
+                    extra={"trace_id": trace_id},
+                )
+
+                # Filter to 24 general features (no BTC features)
+                general_feature_names = [
+                    # Source features (4)
+                    "num_sources", "source_credibility_avg", "source_credibility_std", "source_diversity_score",
+                    # Temporal features (4)
+                    "time_span_hours", "publication_velocity", "temporal_concentration", "days_since_first_article",
+                    # Sentiment features (4)
+                    "sentiment_mean", "sentiment_std", "sentiment_polarity_ratio", "sentiment_volatility",
+                    # Entity features (4)
+                    "entity_count", "entity_diversity", "entity_prominence", "entity_concentration",
+                    # Content features (4)
+                    "avg_word_count", "avg_title_length", "language_diversity", "domain_diversity",
+                    # Embedding features (4)
+                    "centroid_magnitude", "intra_cluster_similarity_mean", "intra_cluster_similarity_std", "cluster_density",
+                ]
+
+                conflict_features = {}
+                for feature_name in general_feature_names:
+                    prefixed_name = f"semantic_group_features:{feature_name}"
+                    if prefixed_name in features:
+                        conflict_features[prefixed_name] = features[prefixed_name]
+                    elif feature_name in features:
+                        conflict_features[f"semantic_group_features:{feature_name}"] = features[feature_name]
+
+                logger.info(
+                    f"Filtered to {len(conflict_features)} conflict features",
+                    extra={"trace_id": trace_id, "feature_names": list(conflict_features.keys())},
+                )
+
+                # Preprocess features
+                input_data = self._prepare_input(conflict_features, conflict_preprocessor)
+
+                logger.info(
+                    f"Preprocessed conflict features: shape={input_data.shape}",
+                    extra={"trace_id": trace_id},
+                )
+
+                # Make prediction (classification model)
+                if hasattr(conflict_model, 'predict_proba'):
+                    prediction_proba = conflict_model.predict_proba(input_data)
+                    probability = float(prediction_proba[0][1])
+                    confidence = abs(probability - 0.5) * 2.0
+                else:
+                    # Fallback if not a classifier
+                    prediction = conflict_model.predict(input_data)
+                    probability = float(prediction[0])
+                    confidence = 0.7
+
+                result = {
+                    "prediction_probability": probability,
+                    "prediction_confidence": confidence,
+                }
+
+                logger.info(
+                    f"=== CONFLICT PREDICTION COMPLETE: probability={probability:.4f}, confidence={confidence:.4f} ===",
+                    extra={"trace_id": trace_id},
+                )
+
+                return result
+
+            except Exception as e:
+                logger.error(
+                    f"Conflict prediction failed: {e}",
+                    extra={"trace_id": trace_id},
+                    exc_info=True,
+                )
+                raise InferenceError(
+                    message=f"Conflict prediction failed: {str(e)}",
+                    details={"trace_id": trace_id},
+                ) from e
+
     async def predict(
         self,
         model: PyFuncModel,
@@ -184,7 +411,37 @@ class ModelManager:
         domain: str | None = None,
     ) -> dict[str, float]:
         """
-        Make prediction using model.
+        Make prediction using model (legacy method - delegates to predict_btc or predict_conflict).
+
+        Args:
+            model: Loaded model instance (ignored, loads from MLflow)
+            features: Feature dictionary (24 features from Feast)
+            model_version: Model version identifier (ignored, uses latest)
+            trace_id: Optional trace ID for distributed tracing
+            domain: Domain for prediction (btc/conflict/geopolitical)
+
+        Returns:
+            Dictionary containing prediction results
+
+        Raises:
+            InferenceError: If prediction fails
+        """
+        # Delegate to domain-specific methods
+        if domain and domain.lower() == "btc":
+            return await self.predict_btc(features, trace_id)
+        else:
+            return await self.predict_conflict(features, trace_id)
+
+    async def _predict_legacy(
+        self,
+        model: PyFuncModel,
+        features: dict[str, Any],
+        model_version: str,
+        trace_id: str | None = None,
+        domain: str | None = None,
+    ) -> dict[str, float]:
+        """
+        Legacy prediction method (kept for reference, not used).
 
         Args:
             model: Loaded model instance

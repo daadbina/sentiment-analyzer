@@ -96,6 +96,26 @@ class FeastConfig(BaseSettings):
         extra = "ignore"
 
 
+class FeastHTTPConfig(BaseSettings):
+    """Feast HTTP server configuration for remote feature store."""
+
+    server_url: str = Field(
+        default="http://154.53.166.231:6566",
+        alias="FEAST_SERVER_URL"
+    )
+    timeout: int = Field(default=10, alias="FEAST_TIMEOUT")
+    max_retries: int = Field(default=3, alias="FEAST_MAX_RETRIES")
+    push_source_name: str = Field(
+        default="semantic_group_push",
+        alias="FEAST_PUSH_SOURCE_NAME"
+    )
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = False
+        extra = "ignore"
+
+
 class FeatureConfig(BaseSettings):
     """Feature computation configuration."""
 

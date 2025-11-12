@@ -70,8 +70,8 @@ class FeatureEngineeringService:
         self.quality_checker = QualityChecker()
 
         # Initialize storage
-        # self.feast_writer = FeastWriter()  # DISABLED due to schema mismatch
-        self.redis_writer = RedisWriter()
+        self.feast_writer = FeastWriter()  # ENABLED - using HTTP client
+        # self.redis_writer = RedisWriter()  # DISABLED - replaced by Feast
         self.reconciliation = FeatureReconciliation()
         self.delta_writer = DeltaLakeWriter()
 
@@ -434,7 +434,7 @@ class FeatureEngineeringService:
                 removed_columns=list(metadata_columns & set(features.keys())),
             )
 
-            # Write to Delta Lake (offline)
+            # Write to Delta Lake (offline) - for backup and historical analysis
             logger.info(
                 "=== WRITING TO DELTA LAKE ===",
                 group_id=group_id,
@@ -444,32 +444,36 @@ class FeatureEngineeringService:
             self.delta_writer.write_features(group_id, clean_features)
             logger.info("✓ Features written to Delta Lake successfully", group_id=group_id)
 
-            # Write to Feast (offline) - DISABLED due to schema mismatch
-            # logger.info(
-            #     "=== WRITING TO FEAST OFFLINE STORE ===",
-            #     group_id=group_id,
-            #     feature_count=len(clean_features),
-            # )
-            # self.feast_writer.write_features(group_id, clean_features)
-            # metrics.feast_writes.inc()
-            # logger.info("✓ Features written to Feast successfully", group_id=group_id)
-
-            # Write to Redis (online)
+            # Write to Feast (online and offline stores via HTTP)
             logger.info(
-                "=== WRITING TO REDIS ONLINE STORE ===",
+                "=== WRITING TO FEAST (ONLINE + OFFLINE) ===",
                 group_id=group_id,
                 feature_count=len(clean_features),
-                redis_key=f"features:{group_id}",
             )
-            self.redis_writer.write_features(group_id, clean_features)
-            metrics.redis_writes.inc()
-            logger.info("✓ Features written to Redis successfully", group_id=group_id)
+            self.feast_writer.write_features(
+                group_id=group_id,
+                features=clean_features,
+                to="online_and_offline"
+            )
+            metrics.feast_writes.inc()
+            logger.info("✓ Features written to Feast successfully", group_id=group_id)
+
+            # Direct Redis writes DISABLED - replaced by Feast online store
+            # logger.info(
+            #     "=== WRITING TO REDIS ONLINE STORE ===",
+            #     group_id=group_id,
+            #     feature_count=len(clean_features),
+            #     redis_key=f"features:{group_id}",
+            # )
+            # self.redis_writer.write_features(group_id, clean_features)
+            # metrics.redis_writes.inc()
+            # logger.info("✓ Features written to Redis successfully", group_id=group_id)
 
             logger.info(
                 "=== ALL FEATURES WRITTEN SUCCESSFULLY ===",
                 group_id=group_id,
                 feature_count=len(clean_features),
-                storage_backends=["Delta Lake", "Redis"],
+                storage_backends=["Delta Lake", "Feast (Online + Offline)"],
             )
 
         except Exception as e:
@@ -491,8 +495,8 @@ class FeatureEngineeringService:
             self.postgres_client.close()
             self.entities_consumer.shutdown()
             self.feast_registry.close()
-            # self.feast_writer.close()  # DISABLED
-            self.redis_writer.close()
+            self.feast_writer.close()  # ENABLED
+            # self.redis_writer.close()  # DISABLED - replaced by Feast
             self.reconciliation.close()
 
             logger.info("Service shutdown complete")

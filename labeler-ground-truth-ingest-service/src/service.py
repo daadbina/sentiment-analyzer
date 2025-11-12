@@ -557,15 +557,18 @@ class LabelerService:
                 # This ensures we get ALL 216+ groups from clustering, not just the first 10
                 accumulated_groups = []
                 consecutive_empty_batches = 0
-                max_empty_batches = 3  # Stop after 3 consecutive empty batches
+                max_wait_seconds = 4 * 3600  # 4 hours (clustering interval)
+                batch_start_time = time.time()
 
                 logger.info(
                     "=== LABELER: Starting to accumulate semantic groups from Kafka ===",
-                    operation="_consume_semantic_groups_background"
+                    operation="_consume_semantic_groups_background",
+                    max_wait_hours=4
                 )
 
-                # Keep consuming until we get 3 consecutive empty batches
-                while consecutive_empty_batches < max_empty_batches and self.running:
+                # Keep consuming until 4 hours have elapsed (clustering interval)
+                # This allows the labeler to wait for the next clustering cycle
+                while (time.time() - batch_start_time) < max_wait_seconds and self.running:
                     new_groups = await self.kafka_consumer.consume_batch(
                         timeout_ms=1000,  # 1 second timeout per batch
                         max_messages=1000 # Large batch size to get many groups at once
@@ -574,18 +577,24 @@ class LabelerService:
                     if new_groups:
                         accumulated_groups.extend(new_groups)
                         consecutive_empty_batches = 0  # Reset counter
+                        elapsed_seconds = time.time() - batch_start_time
                         logger.info(
                             f"=== LABELER: Accumulated {len(new_groups)} groups (total: {len(accumulated_groups)}) ===",
                             operation="_consume_semantic_groups_background",
                             batch_size=len(new_groups),
-                            total_accumulated=len(accumulated_groups)
+                            total_accumulated=len(accumulated_groups),
+                            elapsed_seconds=elapsed_seconds,
+                            remaining_seconds=max_wait_seconds - elapsed_seconds
                         )
                     else:
                         consecutive_empty_batches += 1
+                        elapsed_seconds = time.time() - batch_start_time
                         logger.info(
-                            f"=== LABELER: Empty batch {consecutive_empty_batches}/{max_empty_batches} ===",
+                            f"=== LABELER: Empty batch (consecutive: {consecutive_empty_batches}) ===",
                             operation="_consume_semantic_groups_background",
-                            consecutive_empty=consecutive_empty_batches
+                            consecutive_empty=consecutive_empty_batches,
+                            elapsed_seconds=elapsed_seconds,
+                            remaining_seconds=max_wait_seconds - elapsed_seconds
                         )
 
                 # If we accumulated any groups, replace the semantic groups list and trigger reconciliation

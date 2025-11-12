@@ -54,7 +54,8 @@ class TrainerService:
         self.kafka_producer = None
         self.feature_retriever = None
         self.label_retriever = None
-        self.preprocessor = None
+        self.btc_preprocessor = None  # Separate preprocessor for BTC prediction
+        self.conflict_preprocessor = None  # Separate preprocessor for conflict prediction
         self.splitter = None
         self.trainer = None
         self.hyperparameter_tuner = None
@@ -104,7 +105,14 @@ class TrainerService:
                 # Initialize components
                 self.feature_retriever = FeatureRetriever(self.feast_client)
                 self.label_retriever = LabelRetriever(self.postgres_client)
-                self.preprocessor = DataPreprocessor()
+
+                # Separate preprocessors for BTC and conflict models
+                # BTC uses 17 features (4 from FE + 13 from btc_truth)
+                # Conflict uses 24 general features (excludes BTC-specific)
+                self.btc_preprocessor = DataPreprocessor(scaling_method="standard")
+                self.conflict_preprocessor = DataPreprocessor(scaling_method="standard")
+                logger.info("Initialized separate preprocessors for BTC and conflict models")
+
                 self.splitter = DataSplitter(
                     test_size=config.training.test_set_size,
                     validation_size=config.training.validation_set_size,
@@ -408,10 +416,12 @@ class TrainerService:
                     logger.error(f"Insufficient BTC training data: {len(y_btc)} samples (minimum {min_samples_required} required)")
                     raise TrainerError(f"Insufficient BTC training data: {len(y_btc)} samples")
 
-                # Preprocess data
-                logger.info("Preprocessing BTC data")
-                X_btc_processed, _ = self.preprocessor.preprocess(X_btc_final, y_btc, fit=True)
+                # Preprocess data using BTC-specific preprocessor
+                logger.info("Preprocessing BTC data with BTC preprocessor")
+                X_btc_processed, _ = self.btc_preprocessor.preprocess(X_btc_final, y_btc, fit=True)
                 logger.info(f"BTC data after preprocessing: {X_btc_processed.shape}")
+                logger.info(f"BTC preprocessor feature names: {self.btc_preprocessor.get_feature_names()}")
+                logger.info(f"BTC preprocessor constant features removed: {self.btc_preprocessor.get_constant_features()}")
 
                 # Split data (no stratification for regression)
                 logger.info("Splitting BTC data")
@@ -466,11 +476,11 @@ class TrainerService:
                 best_btc_model_type, best_btc_metrics = self.evaluator.get_best_model(task_type="regression")
                 logger.info(f"Best BTC model: {best_btc_model_type} with R²={best_btc_metrics.get('r2', 'N/A')}")
 
-                # Save BTC models and preprocessor to local, S3, and MLflow
-                logger.info("Saving BTC models to local/S3/MLflow")
+                # Save BTC models and BTC preprocessor to local, S3, and MLflow
+                logger.info("Saving BTC models and BTC preprocessor to local/S3/MLflow")
                 await self._save_models_and_preprocessor(
                     models=btc_models,
-                    preprocessor=self.preprocessor,
+                    preprocessor=self.btc_preprocessor,
                     pipeline_name="btc_prediction",
                     best_model_type=best_btc_model_type,
                     evaluation_results=btc_eval_results
@@ -687,10 +697,12 @@ class TrainerService:
                 if min_class_samples < min_class_required:
                     logger.warning(f"Low sample count for minority class: {min_class_samples} samples")
 
-                # Preprocess data
-                logger.info("Preprocessing conflict data")
-                X_conflict_processed, _ = self.preprocessor.preprocess(X_conflict_final, y_conflict, fit=True)
+                # Preprocess data using conflict-specific preprocessor
+                logger.info("Preprocessing conflict data with conflict preprocessor")
+                X_conflict_processed, _ = self.conflict_preprocessor.preprocess(X_conflict_final, y_conflict, fit=True)
                 logger.info(f"Conflict data after preprocessing: {X_conflict_processed.shape}")
+                logger.info(f"Conflict preprocessor feature names: {self.conflict_preprocessor.get_feature_names()}")
+                logger.info(f"Conflict preprocessor constant features removed: {self.conflict_preprocessor.get_constant_features()}")
 
                 # Split data with stratification
                 logger.info("Splitting conflict data with stratification")
@@ -721,11 +733,11 @@ class TrainerService:
                 best_conflict_model_type, best_conflict_metrics = self.evaluator.get_best_model(task_type="classification")
                 logger.info(f"Best conflict model: {best_conflict_model_type} with AUC={best_conflict_metrics.get('auc', 'N/A')}")
 
-                # Save conflict models and preprocessor to local, S3, and MLflow
-                logger.info("Saving conflict models to local/S3/MLflow")
+                # Save conflict models and conflict preprocessor to local, S3, and MLflow
+                logger.info("Saving conflict models and conflict preprocessor to local/S3/MLflow")
                 await self._save_models_and_preprocessor(
                     models=conflict_models,
-                    preprocessor=self.preprocessor,
+                    preprocessor=self.conflict_preprocessor,
                     pipeline_name="conflict_prediction",
                     best_model_type=best_conflict_model_type,
                     evaluation_results=conflict_eval_results

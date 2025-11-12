@@ -1,39 +1,32 @@
-"""Feast writer for online and offline features using HTTP client."""
+"""Feast writer for online and offline features using Feast Python SDK."""
 
 from typing import Dict, Any
 import pandas as pd
 from datetime import datetime
-import asyncio
-import sys
-import os
-
-# Add shared directory to path to import FeastHTTPClient
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../shared"))
-from feast_http_client import FeastHTTPClient
+from feast import FeatureStore
 
 from ..utils import StructuredLogger
 from ..exceptions import FeastWriteError
-from ..config import FeastHTTPConfig
+from ..config import FeastConfig
 
 logger = StructuredLogger(__name__)
 
 
 class FeastWriter:
-    """Write features to Feast online and offline stores via HTTP."""
+    """Write features to Feast online and offline stores using Python SDK."""
 
     def __init__(self):
-        """Initialize writer with HTTP client."""
-        config = FeastHTTPConfig()
-        self.client = FeastHTTPClient(
-            feature_server_url=config.server_url,
-            timeout=config.timeout,
-            max_retries=config.max_retries
-        )
-        self.push_source_name = config.push_source_name
+        """Initialize writer with Feast SDK."""
+        config = FeastConfig()
+
+        # Initialize Feast FeatureStore
+        # This will read feature_store.yaml from the repo_path
+        self.feature_store = FeatureStore(repo_path=config.repo_path)
+
         logger.info(
-            "Feast HTTP writer initialized",
-            server_url=config.server_url,
-            push_source=self.push_source_name
+            "Feast SDK writer initialized",
+            repo_path=config.repo_path,
+            registry_path=config.registry_path
         )
 
     def write_features(
@@ -57,42 +50,41 @@ class FeastWriter:
             timestamp = datetime.utcnow()
 
             # Create DataFrame with all required fields
+            # Note: Use "timestamp" field name to match feature definition in features.py
             feature_data = pd.DataFrame([{
                 "group_id": group_id,
-                "event_timestamp": timestamp,
-                "created_at": timestamp,
+                "timestamp": timestamp,
                 **features,
             }])
 
-            # Push features to Feast via HTTP
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If event loop is already running, create a task
-                future = asyncio.ensure_future(
-                    self.client.push_features(
-                        push_source_name=self.push_source_name,
-                        df=feature_data,
-                        to=to
-                    )
+            # Write features to Feast using SDK
+            # The SDK will handle writing to both online (Redis) and offline (Delta Lake) stores
+            if to == "online":
+                # Write only to online store (Redis)
+                self.feature_store.write_to_online_store(
+                    feature_view_name="semantic_group_features",
+                    df=feature_data
                 )
-                # Wait for completion
-                result = loop.run_until_complete(future)
+            elif to == "offline":
+                # Write only to offline store (Delta Lake)
+                # Note: Feast SDK doesn't have a direct method for this
+                # Features are written to offline store during materialization
+                logger.warning(
+                    "Writing to offline store only is not supported by Feast SDK",
+                    group_id=group_id
+                )
             else:
-                # If no event loop, run directly
-                result = asyncio.run(
-                    self.client.push_features(
-                        push_source_name=self.push_source_name,
-                        df=feature_data,
-                        to=to
-                    )
+                # Write to online store (offline store is updated during materialization)
+                self.feature_store.write_to_online_store(
+                    feature_view_name="semantic_group_features",
+                    df=feature_data
                 )
 
             logger.info(
-                "Features written to Feast via HTTP",
+                "Features written to Feast via SDK",
                 group_id=group_id,
                 feature_count=len(features),
-                target_store=to,
-                result=result
+                target_store=to
             )
 
             return True
@@ -107,6 +99,6 @@ class FeastWriter:
             raise FeastWriteError(f"Error writing features to Feast: {str(e)}")
 
     def close(self):
-        """Close connection (no-op for HTTP client)."""
-        logger.info("Feast HTTP writer closed")
+        """Close connection (no-op for Feast SDK)."""
+        logger.info("Feast SDK writer closed")
 

@@ -589,7 +589,8 @@ class LabelerService:
                     else:
                         consecutive_empty_batches += 1
                         elapsed_seconds = time.time() - batch_start_time
-                        logger.info(
+                        # Use DEBUG level to reduce log noise when waiting for semantic groups
+                        logger.debug(
                             f"=== LABELER: Empty batch (consecutive: {consecutive_empty_batches}) ===",
                             operation="_consume_semantic_groups_background",
                             consecutive_empty=consecutive_empty_batches,

@@ -17,7 +17,7 @@ from ..metrics import MetricsCollector
 from ..models.model_manager import ModelManager
 from ..storage.prediction_cache import PredictionCache
 from ..storage.prediction_logger import PredictionLogger
-from ..utils.trace import TracingContext, trace_span
+from ..utils.trace import TracingContext, trace_span, generate_trace_id
 
 logger = logging.getLogger(__name__)
 
@@ -86,15 +86,16 @@ class StreamingPredictor:
         # Close Kafka consumer
         await self.kafka_consumer.disconnect()
 
-    async def _handle_message(self, message: dict[str, Any]) -> None:
+    async def _handle_message(self, message: dict[str, Any], topic: str) -> None:
         """
         Handle incoming Kafka message.
 
         Args:
             message: Kafka message containing semantic group data
+            topic: Kafka topic name
         """
         # Generate trace ID for this message
-        trace_id = TracingContext.generate_trace_id()
+        trace_id = generate_trace_id()
 
         with trace_span(
             "handle_streaming_message",
@@ -105,12 +106,15 @@ class StreamingPredictor:
             try:
                 # Extract group data
                 group_id = message.get("group_id")
-                domain = message.get("domain")
+                domains = message.get("domains", [])
+
+                # Extract primary domain from domains array
+                domain = domains[0] if domains else None
 
                 if not group_id or not domain:
                     logger.warning(
-                        "Invalid message: missing group_id or domain",
-                        extra={"trace_id": trace_id},
+                        "Invalid message: missing group_id or domains",
+                        extra={"trace_id": trace_id, "group_id": group_id, "domains": domains},
                     )
                     return
 

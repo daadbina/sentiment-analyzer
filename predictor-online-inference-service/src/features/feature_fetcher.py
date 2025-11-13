@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from ..clients.feast_http_client import FeastHTTPClient
+from ..clients.feast_client import FeastClient
 from ..exceptions import FeatureFetchError
 from ..metrics import feature_freshness_seconds
 from ..utils.trace import trace_span
@@ -71,21 +71,21 @@ class FeatureFetcher:
 
     def __init__(
         self,
-        feast_http_client: FeastHTTPClient,
+        feast_client: FeastClient,
         feature_view_name: str = "semantic_group_features",
     ):
         """
         Initialize feature fetcher.
 
         Args:
-            feast_http_client: Feast HTTP client instance
+            feast_client: Feast SDK client instance
             feature_view_name: Name of the feature view to query
         """
-        self.feast_http_client = feast_http_client
+        self.feast_client = feast_client
         self.feature_view_name = feature_view_name
 
         logger.info(
-            f"Initialized feature fetcher with Feast HTTP client: "
+            f"Initialized feature fetcher with Feast SDK client: "
             f"feature_view={feature_view_name}"
         )
 
@@ -122,21 +122,41 @@ class FeatureFetcher:
         ):
             try:
                 logger.info(
-                    f"=== PREDICTOR: Fetching features from Feast HTTP ===",
+                    f"=== PREDICTOR: Fetching features from Feast SDK ===",
                     extra={"trace_id": trace_id, "group_id": group_id},
                 )
 
                 # Prepare entity rows for Feast query
                 entity_rows = [{"group_id": group_id}]
 
-                # Fetch features from Feast via HTTP
-                result = await self.feast_http_client.get_online_features(
-                    feature_view_name=self.feature_view_name,
+                # Build feature list with feature view prefix (same format as trainer)
+                # All 28 features from semantic_group_features view
+                features = [f"{self.feature_view_name}:{f}" for f in [
+                    # Source features (4)
+                    "num_sources", "source_credibility_avg", "source_credibility_std", "source_diversity_score",
+                    # Temporal features (4)
+                    "time_span_hours", "publication_velocity", "temporal_concentration", "days_since_first_article",
+                    # Sentiment features (4)
+                    "sentiment_mean", "sentiment_std", "sentiment_polarity_ratio", "sentiment_volatility",
+                    # Entity features (4)
+                    "entity_count", "entity_diversity", "entity_prominence", "entity_concentration",
+                    # Content features (4)
+                    "avg_word_count", "avg_title_length", "language_diversity", "domain_diversity",
+                    # Embedding features (4)
+                    "centroid_magnitude", "intra_cluster_similarity_mean", "intra_cluster_similarity_std", "embedding_drift_score",
+                    # BTC price features (4)
+                    "btc_change_pct_10h", "btc_volatility_score", "btc_volume", "btc_label_spike",
+                ]]
+
+                # Fetch features from Feast using SDK (same as trainer)
+                # Returns list of dicts, one per entity row
+                feature_results = await self.feast_client.get_online_features(
+                    feature_names=features,
                     entity_rows=entity_rows,
-                    features=None,  # Get all features
+                    trace_id=trace_id,
                 )
 
-                if not result or "features" not in result:
+                if not feature_results:
                     logger.error(f"No features returned from Feast for group_id={group_id}")
                     raise FeatureFetchError(
                         f"No features returned from Feast for group_id={group_id}",
@@ -145,9 +165,8 @@ class FeatureFetcher:
                         trace_id=trace_id,
                     )
 
-                # Extract features from result
-                # Feast returns features in format: {"features": [{feature_name: value, ...}]}
-                feature_data = result["features"][0] if result["features"] else {}
+                # Extract features from first result (we only queried one entity)
+                feature_data = feature_results[0]
 
                 logger.info(f"Raw feature data from Feast: {len(feature_data)} keys")
                 logger.info(f"Raw feature keys: {list(feature_data.keys())[:20]}")  # First 20

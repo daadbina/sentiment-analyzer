@@ -119,7 +119,6 @@ test_all_tasks.py
 mlartifacts
 fix_imports_and_errors.py
 feature-engineering-service\apply_features.py
-sentiment-analyzer.svg
 check_kafka_topic.py
 check_kafka_topics.py
 check_neo4j_all_nodes.py
@@ -134,3 +133,6 @@ check_group_ids_consistency.py
 reset_labeler_cache_only.py
 get_sample_group_id.py
 feast_remote
+.benchmarks
+
+init-mlflow-db.sql

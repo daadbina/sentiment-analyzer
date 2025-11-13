@@ -38,14 +38,23 @@ class S3Client:
             ExternalServiceError: If connection fails
         """
         try:
+            from botocore.config import Config
+
+            # Configure S3 client with signature version v4 for MinIO compatibility
+            s3_config = Config(
+                signature_version='s3v4',
+                s3={'addressing_style': 'path'}
+            )
+
             self.client = boto3.client(
                 "s3",
                 region_name=self.config.region,
                 aws_access_key_id=self.config.access_key_id,
                 aws_secret_access_key=self.config.secret_access_key,
                 endpoint_url=self.config.endpoint_url,
+                config=s3_config,
             )
-            logger.info("S3 client connected")
+            logger.info(f"S3 client connected to {self.config.endpoint_url}")
         except Exception as e:
             logger.error(f"Failed to connect to S3: {e}")
             raise ExternalServiceError(

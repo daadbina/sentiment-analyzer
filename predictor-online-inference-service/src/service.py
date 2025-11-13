@@ -19,6 +19,7 @@ from .clients import (
     RedisClient,
 )
 from .clients.s3_client import S3Client
+from .clients.feast_http_client import FeastHTTPClient
 from .config import Config, get_config
 from .exceptions import ServiceError
 from .features import (
@@ -66,6 +67,7 @@ class PredictorService:
 
         # Clients
         self.feast_client: FeastClient | None = None
+        self.feast_http_client: FeastHTTPClient | None = None
         self.s3_client: S3Client | None = None
         self.mlflow_client: MLflowModelClient | None = None
         self.redis_client: RedisClient | None = None
@@ -158,6 +160,11 @@ class PredictorService:
 
         # Create clients
         self.feast_client = FeastClient(self.config.feast)
+        self.feast_http_client = FeastHTTPClient(
+            server_url="http://154.53.166.231:6566",  # Remote Feast server
+            timeout=30,
+            max_retries=3,
+        )
         self.s3_client = S3Client(self.config.s3)
         self.mlflow_client = MLflowModelClient(self.config.mlflow, s3_client=self.s3_client)
         self.redis_client = RedisClient(self.config.redis)
@@ -209,7 +216,10 @@ class PredictorService:
         self.drift_detector = DriftDetector(metrics=self.metrics, drift_threshold=0.05)
 
         # Initialize existing components
-        self.feature_fetcher = FeatureFetcher(self.feast_client, self.redis_client)
+        self.feature_fetcher = FeatureFetcher(
+            feast_client=self.feast_client,
+            feature_view_name="semantic_group_features",
+        )
 
         self.feature_validator = FeatureValidator(
             feature_freshness_threshold_seconds=self.config.validation.feature_freshness_threshold_seconds

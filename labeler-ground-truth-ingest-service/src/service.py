@@ -974,16 +974,16 @@ class LabelerService:
                     total_enriched=len(enriched_event_labels)
                 )
 
+                # Always use unique labels for storage (even if empty)
+                enriched_event_labels = unique_event_labels_for_storage
+
                 # Only process unique labels (skip duplicates)
-                if not unique_event_labels_for_storage:
+                if not enriched_event_labels:
                     logger.info(
                         "=== LABELER: No new event labels to write - all are duplicates ===",
                         operation="process_labels"
                     )
                     # Continue to crypto labels processing
-                else:
-                    # Use unique labels for storage
-                    enriched_event_labels = unique_event_labels_for_storage
 
             # Write event labels to storage using outbox pattern
             if enriched_event_labels:

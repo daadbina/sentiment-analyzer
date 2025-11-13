@@ -72,7 +72,11 @@ class FeatureRetriever:
                 if isinstance(end_date, str):
                     end_date_ts = pd.Timestamp(end_date, tz='UTC')
                 else:
-                    end_date_ts = pd.Timestamp(end_date, tz='UTC')
+                    # If datetime already has timezone, use tz_convert instead of tz parameter
+                    if hasattr(end_date, 'tzinfo') and end_date.tzinfo is not None:
+                        end_date_ts = pd.Timestamp(end_date).tz_convert('UTC')
+                    else:
+                        end_date_ts = pd.Timestamp(end_date, tz='UTC')
 
                 entity_df = pd.DataFrame(
                     {

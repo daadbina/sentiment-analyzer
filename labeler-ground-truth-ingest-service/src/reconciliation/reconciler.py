@@ -10,6 +10,29 @@ from src.utils.trace import get_logger
 logger = get_logger(__name__, config.logging.log_level)
 
 
+# Lazy import NER client to avoid circular dependencies
+_ner_client = None
+
+
+def _get_ner_client():
+    """Get or initialize NER client (lazy loading)."""
+    global _ner_client
+    if _ner_client is None:
+        try:
+            from src.clients.ner_client import NERClient
+            _ner_client = NERClient()
+            logger.info("NER client initialized for country extraction in reconciler")
+        except Exception as e:
+            logger.warning(
+                f"Failed to initialize NER client in reconciler: {str(e)}. "
+                "Country extraction for reconciled matches will be skipped.",
+                operation="init_ner_client",
+                error_type=type(e).__name__
+            )
+            _ner_client = False  # Mark as failed to avoid repeated attempts
+    return _ner_client if _ner_client is not False else None
+
+
 class TemporalMatcher:
     """Temporal matching for labels and semantic groups."""
 
@@ -308,6 +331,8 @@ class LabelReconciler:
             country_threshold=0.6,
             event_type_threshold=0.4
         )
+        # NER client will be lazily initialized when needed
+        self.ner_client = None
 
     async def reconcile(
         self,
@@ -488,6 +513,180 @@ class LabelReconciler:
                 str(e)
             )
 
+    async def _enrich_with_ner_countries(
+        self,
+        result: Dict[str, Any],
+        semantic_groups: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Enrich reconciled match with NER-extracted countries when no countries are identified.
+
+        Extracts countries from:
+        1. Label description/title (GDELT data)
+        2. Semantic group topic_label
+
+        Avoids duplicates by deduplicating extracted countries.
+
+        Args:
+            result: Reconciliation result with label and group_id
+            semantic_groups: List of semantic groups for lookup
+
+        Returns:
+            Enriched result with countries added to label if missing
+        """
+        try:
+            label = result.get("label", {})
+            label_countries = label.get("countries", [])
+
+            # DEBUG: Log entry to method
+            logger.debug(
+                f"_enrich_with_ner_countries called",
+                operation="enrich_ner_countries",
+                event_id=label.get("event_id"),
+                has_countries=bool(label_countries),
+                countries_count=len(label_countries) if label_countries else 0
+            )
+
+            # Only extract if no countries are present
+            if label_countries:
+                logger.debug(
+                    f"Label already has countries, skipping NER extraction",
+                    operation="enrich_ner_countries",
+                    event_id=label.get("event_id"),
+                    existing_countries=label_countries
+                )
+                return result
+
+            # Initialize NER client if needed
+            if self.ner_client is None:
+                self.ner_client = _get_ner_client()
+
+            if self.ner_client is None:
+                logger.debug(
+                    f"NER client not available, skipping country extraction",
+                    operation="enrich_ner_countries",
+                    event_id=label.get("event_id")
+                )
+                return result
+
+            extracted_countries = []
+
+            # Extract from label description/title (GDELT data)
+            label_text = (
+                label.get("description") or
+                label.get("title") or
+                label.get("event_type") or
+                ""
+            )
+
+            if label_text:
+                try:
+                    label_language = label.get("language", "en")
+                    label_id = label.get("event_id", "unknown")
+
+                    countries_from_label = await self.ner_client.extract_countries(
+                        text=label_text,
+                        language=label_language,
+                        article_id=label_id
+                    )
+
+                    if countries_from_label:
+                        extracted_countries.extend(countries_from_label)
+                        logger.info(
+                            f"Extracted {len(countries_from_label)} countries from label text",
+                            operation="enrich_ner_countries",
+                            event_id=label_id,
+                            countries=countries_from_label
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to extract countries from label text: {str(e)}",
+                        operation="enrich_ner_countries",
+                        event_id=label.get("event_id"),
+                        error_type=type(e).__name__
+                    )
+
+            # Extract from semantic group topic_label
+            group_id = result.get("group_id")
+            if group_id:
+                # Find the matching semantic group
+                matching_group = next(
+                    (g for g in semantic_groups if g.get("group_id") == group_id),
+                    None
+                )
+
+                if matching_group:
+                    group_topic = (
+                        matching_group.get("topic_label") or
+                        matching_group.get("cluster_metadata", {}).get("topic_label") or
+                        ""
+                    )
+
+                    if group_topic:
+                        try:
+                            countries_from_group = await self.ner_client.extract_countries(
+                                text=group_topic,
+                                language="en",  # Topic labels are typically in English
+                                article_id=f"group_{group_id}"
+                            )
+
+                            if countries_from_group:
+                                extracted_countries.extend(countries_from_group)
+                                logger.info(
+                                    f"Extracted {len(countries_from_group)} countries from group topic",
+                                    operation="enrich_ner_countries",
+                                    group_id=group_id,
+                                    countries=countries_from_group
+                                )
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to extract countries from group topic: {str(e)}",
+                                operation="enrich_ner_countries",
+                                group_id=group_id,
+                                error_type=type(e).__name__
+                            )
+
+            # Deduplicate extracted countries (case-insensitive)
+            if extracted_countries:
+                seen = set()
+                unique_countries = []
+                for country in extracted_countries:
+                    country_lower = country.lower()
+                    if country_lower not in seen:
+                        seen.add(country_lower)
+                        unique_countries.append(country)
+
+                # Update label with extracted countries
+                label["countries"] = unique_countries
+                result["label"] = label
+
+                logger.info(
+                    f"Enriched reconciled match with {len(unique_countries)} NER-extracted countries",
+                    operation="enrich_ner_countries",
+                    event_id=label.get("event_id"),
+                    group_id=group_id,
+                    countries=unique_countries
+                )
+            else:
+                logger.debug(
+                    f"No countries extracted from label or group",
+                    operation="enrich_ner_countries",
+                    event_id=label.get("event_id"),
+                    group_id=group_id
+                )
+
+            return result
+
+        except Exception as e:
+            logger.error(
+                f"Failed to enrich with NER countries: {str(e)}",
+                operation="enrich_ner_countries",
+                event_id=label.get("event_id"),
+                error_type=type(e).__name__
+            )
+            # Return original result on error
+            return result
+
     async def reconcile_batch(
         self,
         labels: List[Dict[str, Any]],
@@ -496,6 +695,8 @@ class LabelReconciler:
         """Reconcile batch of labels."""
         results = []
         total_labels = len(labels)
+        ner_enrichment_attempts = 0
+        ner_enrichment_success = 0
 
         logger.info(
             f"Starting batch reconciliation",
@@ -508,6 +709,17 @@ class LabelReconciler:
             result = await self.reconcile(label, semantic_groups)
             if result:
                 result["label"] = label
+
+                # Enrich with NER-extracted countries if no countries present
+                label_had_no_countries = not label.get("countries")
+                result = await self._enrich_with_ner_countries(result, semantic_groups)
+
+                # Track NER enrichment stats
+                if label_had_no_countries:
+                    ner_enrichment_attempts += 1
+                    if result.get("label", {}).get("countries"):
+                        ner_enrichment_success += 1
+
                 results.append(result)
 
             # Log progress every 1000 labels
@@ -536,7 +748,9 @@ class LabelReconciler:
             f"Batch reconciliation completed",
             operation="reconcile_batch",
             total_labels=len(labels),
-            matched_labels=len(results)
+            matched_labels=len(results),
+            ner_enrichment_attempts=ner_enrichment_attempts,
+            ner_enrichment_success=ner_enrichment_success
         )
 
         return results

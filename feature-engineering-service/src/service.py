@@ -382,6 +382,8 @@ class FeatureEngineeringService:
                 "Features extracted",
                 group_id=group_id,
                 feature_count=len(features),
+                feature_names=list(features.keys())[:20],  # First 20 feature names
+                sample_features={k: features[k] for k in list(features.keys())[:5]},  # First 5 features with values
             )
             return features
 
@@ -468,17 +470,6 @@ class FeatureEngineeringService:
             )
             metrics.feast_writes.inc()
             logger.info("✓ Features written to Feast successfully", group_id=group_id)
-
-            # Direct Redis writes DISABLED - replaced by Feast online store
-            # logger.info(
-            #     "=== WRITING TO REDIS ONLINE STORE ===",
-            #     group_id=group_id,
-            #     feature_count=len(clean_features),
-            #     redis_key=f"features:{group_id}",
-            # )
-            # self.redis_writer.write_features(group_id, clean_features)
-            # metrics.redis_writes.inc()
-            # logger.info("✓ Features written to Redis successfully", group_id=group_id)
 
             logger.info(
                 "=== ALL FEATURES WRITTEN SUCCESSFULLY ===",

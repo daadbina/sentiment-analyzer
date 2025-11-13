@@ -142,7 +142,7 @@ class SemanticGroupConsumer:
             logger.info("Offset committed")
             return True
         except Exception as e:
-            logger.error("Error committing offset", error=str(e))
+            logger.error("Error committing offset", error=str(e), exc_info=True)
             return False
 
     def close(self):

@@ -90,7 +90,7 @@ class TrainerService:
                 self.postgres_client = PostgreSQLClient(config.postgres)
                 await self.postgres_client.connect()
 
-                self.feast_client = FeastClient(config.feast)
+                self.feast_client = FeastClient(config.feast, server_url=config.feast.server_url)
                 self.feast_client.connect()
 
                 self.mlflow_client = MLflowClientWrapper(config.mlflow)
@@ -107,8 +107,8 @@ class TrainerService:
                 self.label_retriever = LabelRetriever(self.postgres_client)
 
                 # Separate preprocessors for BTC and conflict models
-                # BTC uses 17 features (4 from FE + 13 from btc_truth)
-                # Conflict uses 24 general features (excludes BTC-specific)
+                # BTC uses 28 features (24 base from Feast + 4 BTC-specific)
+                # Conflict uses 24 base features (excludes BTC-specific)
                 self.btc_preprocessor = DataPreprocessor(scaling_method="standard")
                 self.conflict_preprocessor = DataPreprocessor(scaling_method="standard")
                 logger.info("Initialized separate preprocessors for BTC and conflict models")
@@ -512,10 +512,15 @@ class TrainerService:
         end_date: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Execute conflict prediction training pipeline (CLASSIFICATION).
+        Execute country-pair conflict prediction training pipeline (CLASSIFICATION).
 
-        Trains classification models to predict conflict between countries.
-        Uses sentiment features + entity features (excludes BTC features).
+        Trains classification models to predict conflict probability between country pairs.
+        Uses 24 base features from Feast + country pair information.
+
+        For each semantic group with countries [A, B, C] and label:
+        - Generates country pairs: (A,B), (A,C), (B,C)
+        - Retrieves 24 base features from Feast
+        - Labels: 1 if conflict occurred (label_realized=1), 0 otherwise
 
         Args:
             start_date: Optional start date for data retrieval
@@ -530,7 +535,7 @@ class TrainerService:
         with tracer.start_as_current_span("train_conflict_prediction_pipeline"):
             try:
                 logger.info("=" * 80)
-                logger.info("STARTING CONFLICT PREDICTION PIPELINE (CLASSIFICATION)")
+                logger.info("STARTING COUNTRY-PAIR CONFLICT PREDICTION PIPELINE (CLASSIFICATION)")
                 logger.info("=" * 80)
 
                 # Set default dates
@@ -551,138 +556,32 @@ class TrainerService:
 
                 logger.info(f"Training window: {start_date} to {end_date}")
 
-                # Retrieve labels - for conflict we need binary labels
-                logger.info("Retrieving conflict labels (binary)")
-                y = await self.label_retriever.retrieve_labels(
+                # Build country-pair training data
+                logger.info("Building country-pair conflict training data...")
+                X_conflict_final, y_conflict = await self._build_country_pair_training_data(
                     start_date=start_date,
-                    end_date=end_date,
+                    end_date=end_date
                 )
 
-                if y.empty:
-                    logger.error("No labels retrieved for conflict training!")
-                    raise TrainerError("No conflict training data available")
+                if X_conflict_final.empty or y_conflict.empty:
+                    logger.error("No country-pair training data available!")
+                    raise TrainerError("No country-pair conflict training data available")
 
-                # Extract group IDs
-                group_ids = y['group_id'].unique().tolist()
-                group_ids = [gid for gid in group_ids if gid is not None]
-                logger.info(f"Found {len(group_ids)} unique groups in labels")
+                logger.info(f"Country-pair training data: X shape={X_conflict_final.shape}, y shape={y_conflict.shape}")
+                logger.info(f"Label distribution: {y_conflict.value_counts().to_dict()}")
 
-                if not group_ids:
-                    raise TrainerError("No semantic groups found in labeled data")
+                # Separate country columns from features
+                country_columns = ['country1', 'country2']
+                feature_columns = [col for col in X_conflict_final.columns if col not in country_columns]
 
-                # Retrieve features
-                logger.info("Retrieving features for conflict prediction")
-                X = self.feature_retriever.retrieve_features(
-                    entity_ids=group_ids,
-                    start_date=start_date,
-                    end_date=end_date,
-                )
+                logger.info(f"Feature columns ({len(feature_columns)}): {feature_columns}")
+                logger.info(f"Country columns: {country_columns}")
 
-                if X.empty:
-                    logger.error("No features retrieved for conflict training!")
-                    raise TrainerError("No conflict training data available")
+                # For training, we'll use only the 24 base features (exclude country columns)
+                # Country information is implicit in the training data structure
+                X_features_only = X_conflict_final[feature_columns].copy()
 
-                # Filter to conflict-relevant features (EXCLUDE BTC features)
-                # Note: Features in Feast have the prefix 'semantic_group_features:'
-                conflict_feature_names = [
-                    'sentiment_mean', 'sentiment_std', 'sentiment_polarity_ratio', 'sentiment_volatility',
-                    'entity_count', 'entity_diversity', 'entity_prominence', 'entity_concentration',
-                    'num_sources', 'source_credibility_avg', 'source_credibility_std', 'source_diversity_score',
-                    'time_span_hours', 'publication_velocity', 'temporal_concentration', 'days_since_first_article',
-                    'avg_word_count', 'avg_title_length', 'language_diversity', 'domain_diversity',
-                    'centroid_magnitude', 'intra_cluster_similarity_mean', 'intra_cluster_similarity_std', 'embedding_drift_score',
-                ]
-
-                # Keep only conflict features that exist in X (with or without prefix)
-                available_conflict_features = []
-                for col in X.columns:
-                    if col == 'group_id':
-                        continue
-                    # Check if column name (with or without prefix) matches any conflict feature
-                    col_name = col.replace('semantic_group_features:', '')
-                    if col_name in conflict_feature_names:
-                        available_conflict_features.append(col)
-                logger.info(f"Conflict features available: {available_conflict_features}")
-
-                # Keep group_id for alignment
-                if 'group_id' in X.columns:
-                    X_conflict = X[['group_id'] + available_conflict_features].copy()
-                else:
-                    X_conflict = X[available_conflict_features].copy()
-
-                logger.info(f"Filtered to {X_conflict.shape[1]} conflict-relevant features (BTC features excluded)")
-
-                # For conflict prediction, we use label_realized as binary target
-                if 'label_realized' not in y.columns:
-                    logger.error("label_realized not found in labels - cannot train conflict prediction model")
-                    raise TrainerError("Conflict target variable not available")
-
-                # Handle null values in label_realized
-                null_count = y['label_realized'].isnull().sum()
-                if null_count > 0:
-                    logger.warning(f"Found {null_count} null values in label_realized, dropping them")
-                    y = y.dropna(subset=['label_realized'])
-                    logger.info(f"After dropping nulls: {len(y)} labels remaining")
-
-                # Align features with labels
-                logger.info("Aligning features with labels by group_id")
-                X_indexed = X_conflict.set_index('group_id') if 'group_id' in X_conflict.columns else X_conflict
-
-                aligned_X_list = []
-                aligned_y_list = []
-                matched_labels = 0
-
-                for idx, label_row in y.iterrows():
-                    group_id = label_row['group_id']
-                    if group_id in X_indexed.index:
-                        feature_row = X_indexed.loc[group_id]
-                        if isinstance(feature_row, pd.DataFrame):
-                            feature_row = feature_row.iloc[0]
-
-                        aligned_X_list.append(feature_row)
-                        aligned_y_list.append(label_row['label_realized'])
-                        matched_labels += 1
-
-                logger.info(f"Alignment results: {matched_labels} matched labels")
-
-                if not aligned_X_list:
-                    logger.error("No labels could be aligned with conflict features!")
-                    raise TrainerError("No labels could be aligned with conflict features")
-
-                # Create aligned dataframes
-                X_conflict_final = pd.DataFrame(aligned_X_list).reset_index(drop=True)
-                y_conflict = pd.Series(aligned_y_list, dtype=int).reset_index(drop=True)
-
-                logger.info(f"Conflict training data: X shape={X_conflict_final.shape}, y shape={y_conflict.shape}")
-                logger.info(f"Conflict label distribution: {y_conflict.value_counts().to_dict()}")
-
-                # CRITICAL: Filter to only samples with real features (not all NULL)
-                # Training on all-NULL samples adds noise and reduces model performance
-                # We'll use a rule-based approach for samples without features
-                logger.info("Filtering samples with real features")
-
-                # Count NULL values per row
-                null_counts_per_row = X_conflict_final.isnull().sum(axis=1)
-                total_features = X_conflict_final.shape[1]
-
-                # Keep only rows with at least SOME real data (not all NULL)
-                has_features_mask = null_counts_per_row < total_features
-
-                X_conflict_filtered = X_conflict_final[has_features_mask].copy()
-                y_conflict_filtered = y_conflict[has_features_mask].copy()
-
-                logger.info(f"Filtered conflict data: {len(X_conflict_filtered)} samples with features (removed {len(X_conflict_final) - len(X_conflict_filtered)} all-NULL samples)")
-                logger.info(f"Filtered label distribution: {y_conflict_filtered.value_counts().to_dict()}")
-
-                # Calculate base rate for samples without features (for rule-based prediction)
-                no_features_mask = ~has_features_mask
-                if no_features_mask.sum() > 0:
-                    no_features_realized_rate = y_conflict[no_features_mask].mean()
-                    logger.info(f"Base rate for samples without features: {no_features_realized_rate:.3f} ({y_conflict[no_features_mask].sum()}/{no_features_mask.sum()})")
-
-                # Use filtered data for training
-                X_conflict_final = X_conflict_filtered
-                y_conflict = y_conflict_filtered
+                logger.info(f"Training features shape: {X_features_only.shape}")
 
                 # Validate minimum dataset size
                 min_samples_required = 50
@@ -692,14 +591,18 @@ class TrainerService:
 
                 # Validate minimum samples per class
                 class_counts = y_conflict.value_counts().to_dict()
+                if len(class_counts) < 2:
+                    logger.error(f"Only one class present in training data: {class_counts}")
+                    raise TrainerError("Need at least 2 classes for classification")
+
                 min_class_samples = min(class_counts.values())
                 min_class_required = 10
                 if min_class_samples < min_class_required:
                     logger.warning(f"Low sample count for minority class: {min_class_samples} samples")
 
-                # Preprocess data using conflict-specific preprocessor
+                # Preprocess data using conflict-specific preprocessor (features only, no country columns)
                 logger.info("Preprocessing conflict data with conflict preprocessor")
-                X_conflict_processed, _ = self.conflict_preprocessor.preprocess(X_conflict_final, y_conflict, fit=True)
+                X_conflict_processed, _ = self.conflict_preprocessor.preprocess(X_features_only, y_conflict, fit=True)
                 logger.info(f"Conflict data after preprocessing: {X_conflict_processed.shape}")
                 logger.info(f"Conflict preprocessor feature names: {self.conflict_preprocessor.get_feature_names()}")
                 logger.info(f"Conflict preprocessor constant features removed: {self.conflict_preprocessor.get_constant_features()}")
@@ -881,19 +784,20 @@ class TrainerService:
         btc_records: List[dict]
     ) -> Tuple[pd.DataFrame, pd.Series]:
         """
-        Build training dataset from BTC records.
+        Build training dataset from BTC records with Feast features.
 
         For each BTC timestamp T:
-        1. Get BTC features at time T (volatility, volume, spike, etc.)
-        2. Calculate forward price change from T to T+10h (target)
-
-        Uses ONLY BTC price data, no semantic/sentiment features.
+        1. Find nearest semantic group by timestamp
+        2. Retrieve 24 base features from Feast for that group
+        3. Get 4 BTC-specific features from btc_truth table
+        4. Combine into 28-feature vector
+        5. Calculate forward price change from T to T+10h (target)
 
         Args:
             btc_records: List of BTC records with timestamp and close price
 
         Returns:
-            Tuple of (features DataFrame, targets Series)
+            Tuple of (features DataFrame with 28 features, targets Series)
         """
         try:
             from datetime import timedelta
@@ -901,46 +805,92 @@ class TrainerService:
             X_list = []
             y_list = []
             skipped_no_future = 0
-            skipped_no_features = 0
+            skipped_no_group = 0
+            skipped_no_feast_features = 0
+            skipped_no_btc_features = 0
 
-            logger.info(f"Processing {len(btc_records)} BTC records...")
+            logger.info(f"Processing {len(btc_records)} BTC records with Feast features...")
 
             for i, record in enumerate(btc_records):
                 timestamp_t = record["timestamp"]
                 price_t = record["close"]
 
-                # Calculate future timestamp
+                # Calculate future timestamp for target
                 timestamp_future = timestamp_t + timedelta(hours=10)
 
-                # Get BTC features at time T from btc_truth table
-                # Filter by BTCUSDT only to avoid mixing different cryptocurrencies
-                query_features = """
+                # Step 1: Find nearest semantic group by timestamp (within ±2 hours)
+                query_group = """
+                    SELECT group_id, created_at
+                    FROM semantic_groups
+                    WHERE created_at >= $1 AND created_at <= $2
+                    ORDER BY ABS(EXTRACT(EPOCH FROM (created_at - $3)))
+                    LIMIT 1
+                """
+
+                start_window = timestamp_t - timedelta(hours=2)
+                end_window = timestamp_t + timedelta(hours=2)
+
+                row_group = await self.postgres_client.fetch_one(
+                    query_group,
+                    start_window,
+                    end_window,
+                    timestamp_t
+                )
+
+                if not row_group:
+                    skipped_no_group += 1
+                    continue
+
+                group_id = row_group["group_id"]
+                group_timestamp = row_group["created_at"]
+
+                # Step 2: Retrieve 24 base features from Feast
+                try:
+                    feast_features_df = self.feature_retriever.retrieve_features(
+                        entity_ids=[group_id],
+                        start_date=group_timestamp - timedelta(hours=1),
+                        end_date=group_timestamp + timedelta(hours=1)
+                    )
+
+                    if feast_features_df.empty:
+                        skipped_no_feast_features += 1
+                        continue
+
+                    # Extract first row (should only be one row per group_id)
+                    feast_features = feast_features_df.iloc[0].to_dict()
+
+                    # Remove group_id and timestamp columns if present
+                    feast_features = {k: v for k, v in feast_features.items()
+                                    if k not in ['group_id', 'timestamp', 'event_timestamp']}
+
+                except Exception as e:
+                    logger.warning(f"Failed to retrieve Feast features for group {group_id}: {e}")
+                    skipped_no_feast_features += 1
+                    continue
+
+                # Step 3: Get 4 BTC-specific features from btc_truth table
+                query_btc = """
                     SELECT
-                        change_pct_10h,
-                        volatility_score,
+                        close,
                         volume,
-                        label_spike,
-                        open,
-                        high,
-                        low,
-                        close
+                        volatility_score,
+                        label_spike
                     FROM btc_truth
                     WHERE timestamp = $1
                     AND event_id LIKE 'binance_BTCUSDT_%'
                     LIMIT 1
                 """
 
-                row_features = await self.postgres_client.fetch_one(
-                    query_features,
+                row_btc = await self.postgres_client.fetch_one(
+                    query_btc,
                     timestamp_t
                 )
 
-                if not row_features:
-                    skipped_no_features += 1
+                if not row_btc:
+                    skipped_no_btc_features += 1
                     continue
 
-                # Get future BTC price for target calculation
-                # Filter by BTCUSDT only to avoid mixing different cryptocurrencies
+                # Step 4: Get future BTC price for target calculation
                 query_future = """
                     SELECT close
                     FROM btc_truth
@@ -969,70 +919,28 @@ class TrainerService:
                 # Calculate target: forward price change from T to T+10h
                 target = ((price_future - price_t) / price_t) * 100.0
 
-                # Build feature vector from BTC data with selected features
-                open_price = float(row_features['open']) if row_features['open'] is not None else price_t
-                high_price = float(row_features['high']) if row_features['high'] is not None else price_t
-                low_price = float(row_features['low']) if row_features['low'] is not None else price_t
-                close_price = float(row_features['close']) if row_features['close'] is not None else price_t
-                volume = float(row_features['volume']) if row_features['volume'] is not None else 0.0
-
-                # Calculate key derived features (reduced set to avoid overfitting)
-                price_range_pct = ((high_price - low_price) / close_price * 100.0) if close_price > 0 and high_price > low_price else 0.0
-                body_size_pct = (abs(close_price - open_price) / close_price * 100.0) if close_price > 0 else 0.0
-                is_bullish = 1 if close_price > open_price else 0
-
-                # Price position in range (key indicator)
-                price_range = high_price - low_price if high_price > low_price else 0.0
-                close_position_in_range = ((close_price - low_price) / price_range) if price_range > 0 else 0.5
-
-                # Momentum features (using backward change as proxy)
-                backward_change = float(row_features['change_pct_10h']) if row_features['change_pct_10h'] is not None else 0.0
-                momentum_strength = abs(backward_change)
-
-                # Volume features
-                volume_normalized = volume / 1000000.0  # Normalize volume to millions
-
-                # Cyclical time encoding (to capture periodic patterns)
-                import math
-                hour_sin = math.sin(2 * math.pi * timestamp_t.hour / 24)
-                hour_cos = math.cos(2 * math.pi * timestamp_t.hour / 24)
-                day_sin = math.sin(2 * math.pi * timestamp_t.weekday() / 7)
-                day_cos = math.cos(2 * math.pi * timestamp_t.weekday() / 7)
-
-                features = {
-                    # Core price features
-                    'btc_close': close_price,
-                    'btc_high': high_price,
-                    'btc_low': low_price,
-                    'btc_open': open_price,
-                    # Key derived features
-                    'btc_price_range_pct': price_range_pct,
-                    'btc_body_size_pct': body_size_pct,
-                    'btc_close_position_in_range': close_position_in_range,
-                    'btc_is_bullish': is_bullish,
-                    # Momentum features
-                    'btc_change_pct_10h_backward': backward_change,
-                    'btc_momentum_strength': momentum_strength,
-                    # Volume and volatility
-                    'btc_volume': volume_normalized,
-                    'btc_volatility_score': float(row_features['volatility_score']) if row_features['volatility_score'] is not None else 0.0,
-                    'btc_label_spike': int(row_features['label_spike']) if row_features['label_spike'] is not None else 0,
-                    # Cyclical time features
-                    'btc_hour_sin': hour_sin,
-                    'btc_hour_cos': hour_cos,
-                    'btc_day_sin': day_sin,
-                    'btc_day_cos': day_cos,
+                # Step 5: Combine 24 Feast features + 4 BTC features = 28 total
+                btc_features = {
+                    'btc_close': float(row_btc['close']) if row_btc['close'] is not None else price_t,
+                    'btc_volume': float(row_btc['volume']) / 1000000.0 if row_btc['volume'] is not None else 0.0,  # Normalize to millions
+                    'btc_volatility_score': float(row_btc['volatility_score']) if row_btc['volatility_score'] is not None else 0.0,
+                    'btc_label_spike': int(row_btc['label_spike']) if row_btc['label_spike'] is not None else 0,
                 }
 
-                X_list.append(features)
+                # Combine all features (24 from Feast + 4 BTC = 28 total)
+                combined_features = {**feast_features, **btc_features}
+
+                X_list.append(combined_features)
                 y_list.append(target)
 
                 if (i + 1) % 500 == 0:
                     logger.info(f"Processed {i + 1}/{len(btc_records)} BTC records...")
 
             logger.info(f"Built training data: {len(X_list)} samples")
+            logger.info(f"Skipped {skipped_no_group} records without nearby semantic group")
+            logger.info(f"Skipped {skipped_no_feast_features} records without Feast features")
+            logger.info(f"Skipped {skipped_no_btc_features} records without BTC features")
             logger.info(f"Skipped {skipped_no_future} records without future price")
-            logger.info(f"Skipped {skipped_no_features} records without BTC features")
 
             if not X_list:
                 return pd.DataFrame(), pd.Series(dtype=float)
@@ -1041,7 +949,7 @@ class TrainerService:
             y = pd.Series(y_list, dtype=float)
 
             logger.info(f"BTC training data shape: X={X.shape}, y={y.shape}")
-            logger.info(f"BTC features: {list(X.columns)}")
+            logger.info(f"BTC features ({len(X.columns)} total): {list(X.columns)}")
             logger.info(f"Target distribution: min={y.min():.2f}%, max={y.max():.2f}%, mean={y.mean():.2f}%, std={y.std():.2f}%")
 
             return X, y
@@ -1049,6 +957,162 @@ class TrainerService:
         except Exception as e:
             logger.error(f"Failed to build BTC training data: {e}", exc_info=True)
             return pd.DataFrame(), pd.Series(dtype=float)
+
+    async def _build_country_pair_training_data(
+        self,
+        start_date: datetime,
+        end_date: datetime
+    ) -> Tuple[pd.DataFrame, pd.Series]:
+        """
+        Build training dataset for country-pair conflict prediction.
+
+        For each semantic group with countries and labels:
+        1. Retrieve 24 base features from Feast
+        2. Get countries from reconciliation_log
+        3. Generate all country pairs from the countries list
+        4. Create training samples: (group_id, country1, country2, 24 features) -> conflict_label
+        5. Label = 1 if label_realized=1 (conflict occurred), 0 otherwise
+
+        Args:
+            start_date: Start date for data retrieval
+            end_date: End date for data retrieval
+
+        Returns:
+            Tuple of (features DataFrame with 24 features + country pair, targets Series)
+        """
+        try:
+            from itertools import combinations
+
+            X_list = []
+            y_list = []
+            skipped_no_countries = 0
+            skipped_single_country = 0
+            skipped_no_features = 0
+            skipped_no_label = 0
+
+            logger.info(f"Building country-pair conflict training data from {start_date} to {end_date}...")
+
+            # Step 1: Query ground_truth for labels with group_id
+            query_labels = """
+                SELECT
+                    group_id,
+                    label_realized,
+                    label_confidence,
+                    created_at
+                FROM ground_truth
+                WHERE created_at >= $1 AND created_at <= $2
+                AND group_id IS NOT NULL
+                ORDER BY created_at DESC
+            """
+
+            label_rows = await self.postgres_client.fetch_all(
+                query_labels,
+                start_date,
+                end_date
+            )
+
+            if not label_rows:
+                logger.warning("No labels found for country-pair conflict training")
+                return pd.DataFrame(), pd.Series(dtype=int)
+
+            logger.info(f"Found {len(label_rows)} labels with group_id")
+
+            # Step 2: For each label, get countries from reconciliation_log
+            for label_row in label_rows:
+                group_id = label_row["group_id"]
+                label_realized = label_row["label_realized"]
+                label_created_at = label_row["created_at"]
+
+                if label_realized is None:
+                    skipped_no_label += 1
+                    continue
+
+                # Query reconciliation_log for countries
+                query_countries = """
+                    SELECT countries
+                    FROM reconciliation_log
+                    WHERE group_id = $1
+                    AND countries IS NOT NULL
+                    AND array_length(countries, 1) >= 2
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """
+
+                country_row = await self.postgres_client.fetch_one(
+                    query_countries,
+                    group_id
+                )
+
+                if not country_row or not country_row["countries"]:
+                    skipped_no_countries += 1
+                    continue
+
+                countries = country_row["countries"]
+
+                if len(countries) < 2:
+                    skipped_single_country += 1
+                    continue
+
+                # Step 3: Retrieve 24 base features from Feast for this group
+                try:
+                    feast_features_df = self.feature_retriever.retrieve_features(
+                        entity_ids=[group_id],
+                        start_date=label_created_at - timedelta(hours=1),
+                        end_date=label_created_at + timedelta(hours=1)
+                    )
+
+                    if feast_features_df.empty:
+                        skipped_no_features += 1
+                        continue
+
+                    # Extract first row
+                    feast_features = feast_features_df.iloc[0].to_dict()
+
+                    # Remove group_id and timestamp columns
+                    feast_features = {k: v for k, v in feast_features.items()
+                                    if k not in ['group_id', 'timestamp', 'event_timestamp']}
+
+                except Exception as e:
+                    logger.warning(f"Failed to retrieve Feast features for group {group_id}: {e}")
+                    skipped_no_features += 1
+                    continue
+
+                # Step 4: Generate all country pairs
+                country_pairs = list(combinations(sorted(countries), 2))
+
+                # Step 5: Create training samples for each country pair
+                for country1, country2 in country_pairs:
+                    # Combine features with country pair
+                    sample_features = {
+                        **feast_features,
+                        'country1': country1,
+                        'country2': country2,
+                    }
+
+                    X_list.append(sample_features)
+                    y_list.append(int(label_realized))
+
+            logger.info(f"Built country-pair training data: {len(X_list)} samples")
+            logger.info(f"Skipped {skipped_no_countries} groups without countries")
+            logger.info(f"Skipped {skipped_single_country} groups with single country")
+            logger.info(f"Skipped {skipped_no_features} groups without Feast features")
+            logger.info(f"Skipped {skipped_no_label} groups without label")
+
+            if not X_list:
+                return pd.DataFrame(), pd.Series(dtype=int)
+
+            X = pd.DataFrame(X_list)
+            y = pd.Series(y_list, dtype=int)
+
+            logger.info(f"Country-pair training data shape: X={X.shape}, y={y.shape}")
+            logger.info(f"Features ({len(X.columns)} total): {list(X.columns)}")
+            logger.info(f"Label distribution: {y.value_counts().to_dict()}")
+
+            return X, y
+
+        except Exception as e:
+            logger.error(f"Failed to build country-pair training data: {e}", exc_info=True)
+            return pd.DataFrame(), pd.Series(dtype=int)
 
     async def _save_models_and_preprocessor(
         self,
@@ -1091,10 +1155,14 @@ class TrainerService:
                     pickle.dump(preprocessor, f)
                 logger.info(f"Preprocessor saved to temp: {preprocessor_local_path}")
 
-                # Upload preprocessor to S3
+                # Upload preprocessor to S3 (non-blocking - log warning if fails)
                 preprocessor_s3_key = f"models/{pipeline_name}/preprocessor.pkl"
-                self.s3_client.upload_file(str(preprocessor_local_path), preprocessor_s3_key)
-                logger.info(f"Preprocessor uploaded to S3: {preprocessor_s3_key}")
+                try:
+                    self.s3_client.upload_file(str(preprocessor_local_path), preprocessor_s3_key)
+                    logger.info(f"Preprocessor uploaded to S3: {preprocessor_s3_key}")
+                except Exception as s3_error:
+                    logger.warning(f"Failed to upload preprocessor to S3 (non-critical): {s3_error}")
+                    logger.info("Continuing with MLflow model registration...")
 
                 # Save each model
                 for model_type, (model_instance, metrics) in models.items():
@@ -1105,10 +1173,14 @@ class TrainerService:
                             pickle.dump(model_instance.model, f)
                         logger.info(f"Model saved to temp: {model_local_path}")
 
-                        # Upload model to S3
+                        # Upload model to S3 (non-blocking - log warning if fails)
                         model_s3_key = f"models/{pipeline_name}/{model_type}/model.pkl"
-                        self.s3_client.upload_file(str(model_local_path), model_s3_key)
-                        logger.info(f"Model uploaded to S3: {model_s3_key}")
+                        try:
+                            self.s3_client.upload_file(str(model_local_path), model_s3_key)
+                            logger.info(f"Model uploaded to S3: {model_s3_key}")
+                        except Exception as s3_error:
+                            logger.warning(f"Failed to upload {model_type} to S3 (non-critical): {s3_error}")
+                            logger.info("Continuing with MLflow model registration...")
 
                         # Log model to MLflow (suppress Unicode errors on Windows)
                         import sys

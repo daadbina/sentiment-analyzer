@@ -6,6 +6,6 @@ offline_store:
   type: file
 online_store:
   type: redis
-  connection_string: "redis://localhost:6379"
+  connection_string: "154.53.166.231:6379"
 entity_key_serialization_version: 2
 

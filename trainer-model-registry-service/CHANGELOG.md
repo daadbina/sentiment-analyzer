@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2025-11-13
+
+### Changed - BTC Model Feast Integration ✅ CRITICAL FIX
+- **Complete Rewrite of BTC Training Data Builder** - Updated src/service.py:
+  - Rewrote `_build_btc_training_data()` method to use Feast features
+  - **OLD**: Used 17 BTC-only features calculated locally from btc_truth table
+  - **NEW**: Uses 28 features (24 base from Feast + 4 BTC-specific)
+  - For each BTC timestamp, finds nearest semantic group (±2 hour window)
+  - Retrieves 24 base features from Feast for that semantic group
+  - Extracts 4 BTC-specific features from btc_truth: btc_close, btc_volume, btc_volatility_score, btc_label_spike
+  - Combines into 28-feature training vector
+  - Removed ALL old BTC feature calculation code (price_range_pct, body_size_pct, momentum_strength, cyclical time features, etc.)
+  - Updated comments from "17 features" to "28 features"
+
+### Changed - Conflict Model Country-Pair Prediction ✅ MAJOR REDESIGN
+- **New Country-Pair Conflict Prediction** - Updated src/service.py:
+  - Created new `_build_country_pair_training_data()` method
+  - **OLD**: Predicted general event realization (binary) for semantic groups
+  - **NEW**: Predicts conflict probability between specific country pairs
+  - Queries ground_truth for labels with group_id
+  - Joins with reconciliation_log to get countries array (TEXT[])
+  - Generates all country pairs using itertools.combinations()
+  - For countries [A, B, C], creates pairs: (A,B), (A,C), (B,C)
+  - Retrieves 24 base features from Feast for each semantic group
+  - Creates training samples: (group_id, country1, country2, 24 features) -> conflict_label
+  - Label = 1 if label_realized=1 (conflict occurred), 0 otherwise
+  - Trains on 24 base features only (country info implicit in data structure)
+- **Rewritten Conflict Training Pipeline** - Updated `train_conflict_prediction_pipeline()`:
+  - Updated docstring to reflect country-pair prediction
+  - Calls `_build_country_pair_training_data()` instead of old feature retrieval
+  - Separates country columns from feature columns
+  - Removed 142 lines of old feature filtering and alignment code
+  - Simplified data preparation (no more manual alignment by group_id)
+
+### Removed - Old Code Cleanup
+- **BTC Feature Calculation Code** - Removed from src/service.py:
+  - Deleted 53 lines of local BTC feature calculation (lines 972-1025 in old version)
+  - Removed: price_range_pct, body_size_pct, close_position_in_range, is_bullish
+  - Removed: momentum_strength, volume_normalized, cyclical time encoding (hour_sin, hour_cos, day_sin, day_cos)
+  - All BTC features now come from Feast or btc_truth table
+- **Old Conflict Training Code** - Removed from src/service.py:
+  - Deleted 142 lines of old conflict data retrieval and alignment (lines 554-698 in old version)
+  - Removed manual feature filtering by conflict_feature_names list
+  - Removed manual alignment loop by group_id
+  - Removed all-NULL sample filtering (no longer needed with Feast)
+
+### Impact
+- **BTC Model**: Now properly uses centralized feature engineering from Feast
+- **Conflict Model**: Now predicts country-pair conflicts as originally intended
+- **Code Quality**: Removed 195 lines of duplicate/obsolete code
+- **Architecture Compliance**: Both models now follow centralized feature engineering pattern
+- **No Workarounds**: Precise implementation, no fallback logic, no mock data
+
+### Technical Details
+- BTC features: 28 total (24 base from Feast + 4 BTC-specific from btc_truth)
+- Conflict features: 24 base from Feast + country pair information
+- Semantic group alignment: ±2 hour window for BTC timestamps
+- Country pair generation: itertools.combinations(sorted(countries), 2)
+- Minimum samples: 50 for training, 10 per class for classification
+
 ## [1.1.0] - 2025-11-12
 
 ### Removed - Feature Engineering Duplication

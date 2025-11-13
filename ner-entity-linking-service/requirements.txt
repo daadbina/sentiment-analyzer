@@ -9,6 +9,7 @@ kafka-python==2.0.2
 fastavro==1.12.1
 
 # NLP & NER Models
+torch==2.1.1
 transformers==4.35.2
 nltk==3.8.1
 unidecode==1.3.0

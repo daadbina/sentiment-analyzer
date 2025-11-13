@@ -13,6 +13,45 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+# All 28 features in semantic_group_features view
+ALL_SEMANTIC_GROUP_FEATURES = [
+    # Source features (4)
+    "num_sources",
+    "source_credibility_avg",
+    "source_credibility_std",
+    "source_diversity_score",
+    # Temporal features (4)
+    "time_span_hours",
+    "publication_velocity",
+    "temporal_concentration",
+    "days_since_first_article",
+    # Sentiment features (4)
+    "sentiment_mean",
+    "sentiment_std",
+    "sentiment_polarity_ratio",
+    "sentiment_volatility",
+    # Entity features (4)
+    "entity_count",
+    "entity_diversity",
+    "entity_prominence",
+    "entity_concentration",
+    # Content features (4)
+    "avg_word_count",
+    "avg_title_length",
+    "language_diversity",
+    "domain_diversity",
+    # Embedding features (4)
+    "centroid_magnitude",
+    "intra_cluster_similarity_mean",
+    "intra_cluster_similarity_std",
+    "embedding_drift_score",
+    # BTC price features (4)
+    "btc_change_pct_10h",
+    "btc_volatility_score",
+    "btc_volume",
+    "btc_label_spike",
+]
+
 
 class FeastHTTPClient:
     """
@@ -77,12 +116,32 @@ class FeastHTTPClient:
         session = await self._get_session()
         url = f"{self.server_url}/get-online-features"
 
+        # Convert entity_rows from list of dicts to dict of lists
+        # From: [{"group_id": "123"}, {"group_id": "456"}]
+        # To: {"group_id": ["123", "456"]}
+        entities_dict: Dict[str, List[Any]] = {}
+        for row in entity_rows:
+            for key, value in row.items():
+                if key not in entities_dict:
+                    entities_dict[key] = []
+                entities_dict[key].append(value)
+
+        # Use the Feast HTTP API format with features list
+        # Format: {"features": ["view:feature1", "view:feature2"], "entities": {"entity_name": [values]}}
+        if features is None:
+            # Get all 28 features - use view:feature format
+            feature_refs = [f"{feature_view_name}:{f}" for f in ALL_SEMANTIC_GROUP_FEATURES]
+        else:
+            # Get specific features - use view:feature format
+            feature_refs = [f"{feature_view_name}:{f}" for f in features]
+
         payload = {
-            "feature_service": feature_view_name,
-            "entities": entity_rows,
+            "features": feature_refs,
+            "entities": entities_dict,
+            "full_feature_names": False,
         }
-        if features:
-            payload["features"] = features
+
+        logger.info(f"Feast HTTP request payload: features_count={len(feature_refs)}, entities={list(entities_dict.keys())}, entity_count={len(next(iter(entities_dict.values())))}")
 
         for attempt in range(self.max_retries):
             try:

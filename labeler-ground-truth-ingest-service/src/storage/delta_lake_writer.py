@@ -85,14 +85,40 @@ class DeltaLakeWriter:
             df["written_at"] = datetime.utcnow().isoformat()
             df["batch_size"] = str(len(labels))
 
-            # Try to write to Delta Lake
+            # Try to write to Delta Lake with resource exhaustion handling
             try:
+                # Use pyarrow engine for better memory efficiency
                 write_deltalake(
                     self.path,
                     df,
                     mode="append",
-                    engine="rust"
+                    engine="pyarrow"
                 )
+            except OSError as os_error:
+                # Handle resource exhaustion errors (paging file too small, etc.)
+                if "os error 1455" in str(os_error).lower() or "paging file" in str(os_error).lower():
+                    logger.warning(
+                        f"Resource exhaustion detected, retrying with minimal settings",
+                        operation="write_labels",
+                        error=str(os_error)
+                    )
+                    # Retry with default engine
+                    try:
+                        write_deltalake(
+                            self.path,
+                            df,
+                            mode="append",
+                        )
+                        logger.info("Successfully wrote to Delta Lake after retry")
+                    except Exception as retry_error:
+                        logger.error(
+                            f"Failed to write to Delta Lake after retry",
+                            operation="write_labels",
+                            error=str(retry_error)
+                        )
+                        raise
+                else:
+                    raise
             except Exception as schema_error:
                 error_str = str(schema_error)
                 logger.warning(
@@ -118,7 +144,7 @@ class DeltaLakeWriter:
                         self.path,
                         df,
                         mode="overwrite",
-                        engine="rust"
+                        engine="pyarrow"
                     )
                     logger.info(f"Successfully recreated table with new schema")
                 else:
@@ -173,8 +199,23 @@ class DeltaLakeWriter:
                     reconciliation_path,
                     df,
                     mode="append",
-                    engine="rust"
+                    engine="pyarrow"
                 )
+            except OSError as os_error:
+                # Handle resource exhaustion errors
+                if "os error 1455" in str(os_error).lower() or "paging file" in str(os_error).lower():
+                    logger.warning(
+                        f"Resource exhaustion detected in reconciliation write, retrying",
+                        operation="write_reconciliation_results",
+                        error=str(os_error)
+                    )
+                    write_deltalake(
+                        reconciliation_path,
+                        df,
+                        mode="append",
+                    )
+                else:
+                    raise
             except Exception as schema_error:
                 # If schema mismatch, drop and recreate the table
                 if "Schema" in str(schema_error) or "schema" in str(schema_error):
@@ -189,7 +230,7 @@ class DeltaLakeWriter:
                         reconciliation_path,
                         df,
                         mode="overwrite",
-                        engine="rust"
+                        engine="pyarrow"
                     )
                 else:
                     raise
@@ -237,8 +278,23 @@ class DeltaLakeWriter:
                         validation_path,
                         df_valid,
                         mode="append",
-                        engine="rust"
+                        engine="pyarrow"
                     )
+                except OSError as os_error:
+                    # Handle resource exhaustion errors
+                    if "os error 1455" in str(os_error).lower() or "paging file" in str(os_error).lower():
+                        logger.warning(
+                            f"Resource exhaustion detected in validation write, retrying",
+                            operation="write_validation_results",
+                            error=str(os_error)
+                        )
+                        write_deltalake(
+                            validation_path,
+                            df_valid,
+                            mode="append",
+                        )
+                    else:
+                        raise
                 except Exception as schema_error:
                     if "Schema" in str(schema_error) or "schema" in str(schema_error):
                         logger.warning(
@@ -252,7 +308,7 @@ class DeltaLakeWriter:
                             validation_path,
                             df_valid,
                             mode="overwrite",
-                            engine="rust"
+                            engine="pyarrow"
                         )
                     else:
                         raise
@@ -269,8 +325,23 @@ class DeltaLakeWriter:
                         validation_path,
                         df_invalid,
                         mode="append",
-                        engine="rust"
+                        engine="pyarrow"
                     )
+                except OSError as os_error:
+                    # Handle resource exhaustion errors
+                    if "os error 1455" in str(os_error).lower() or "paging file" in str(os_error).lower():
+                        logger.warning(
+                            f"Resource exhaustion detected in validation write, retrying",
+                            operation="write_validation_results",
+                            error=str(os_error)
+                        )
+                        write_deltalake(
+                            validation_path,
+                            df_invalid,
+                            mode="append",
+                        )
+                    else:
+                        raise
                 except Exception as schema_error:
                     if "Schema" in str(schema_error) or "schema" in str(schema_error):
                         logger.warning(
@@ -284,7 +355,7 @@ class DeltaLakeWriter:
                             validation_path,
                             df_invalid,
                             mode="overwrite",
-                            engine="rust"
+                            engine="pyarrow"
                         )
                     else:
                         raise

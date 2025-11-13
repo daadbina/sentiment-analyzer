@@ -21,6 +21,7 @@ from .clients import (
     RedisClient,
     S3Client,
 )
+from .clients.feast_http_client import FeastHTTPClient
 from .config import get_config
 from .features import FeatureFetcher, FeatureReconciliationChecker, FeatureValidator
 from .inference import BatchPredictor
@@ -53,6 +54,11 @@ async def lifespan(app: FastAPI):
 
     # Initialize clients
     feast_client = FeastClient(config.feast)
+    feast_http_client = FeastHTTPClient(
+        server_url="http://154.53.166.231:6566",  # Remote Feast server
+        timeout=30,
+        max_retries=3,
+    )
     s3_client = S3Client(config.s3)
     mlflow_client = MLflowModelClient(config.mlflow, s3_client=s3_client)
     redis_client = RedisClient(config.redis)
@@ -79,7 +85,10 @@ async def lifespan(app: FastAPI):
     )
 
     # Initialize components
-    feature_fetcher = FeatureFetcher(feast_client, redis_client)
+    feature_fetcher = FeatureFetcher(
+        feast_client=feast_client,
+        feature_view_name="semantic_group_features",
+    )
     feature_validator = FeatureValidator(
         feature_freshness_threshold_seconds=config.validation.feature_freshness_threshold_seconds
     )

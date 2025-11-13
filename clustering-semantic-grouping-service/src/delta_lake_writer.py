@@ -118,14 +118,36 @@ class DeltaLakeWriter:
                         # Convert lists to JSON strings
                         df[col] = df[col].apply(lambda x: str(x) if isinstance(x, list) else x)
 
-            # Write to Delta Lake
+            # Write to Delta Lake with resource exhaustion handling
             try:
+                # Use pyarrow engine for better memory efficiency
                 write_deltalake(
                     self.table_path,
                     df,
                     mode=mode,
                     overwrite_schema=False,
+                    engine="pyarrow",
                 )
+            except OSError as os_error:
+                # Handle resource exhaustion errors (paging file too small, etc.)
+                if "os error 1455" in str(os_error).lower() or "paging file" in str(os_error).lower():
+                    logger.warning(
+                        f"Resource exhaustion detected, retrying with minimal settings: {os_error}"
+                    )
+                    # Retry with default engine
+                    try:
+                        write_deltalake(
+                            self.table_path,
+                            df,
+                            mode=mode,
+                            overwrite_schema=False,
+                        )
+                        logger.info("Successfully wrote to Delta Lake after retry")
+                    except Exception as retry_error:
+                        logger.error(f"Failed to write to Delta Lake after retry: {retry_error}")
+                        raise
+                else:
+                    raise
             except Exception as write_error:
                 # If schema mismatch, delete table and recreate with overwrite
                 if "Schema of data does not match table schema" in str(write_error):
@@ -141,6 +163,7 @@ class DeltaLakeWriter:
                         df,
                         mode="overwrite",
                         overwrite_schema=True,
+                        engine="pyarrow",
                     )
                     logger.info("Delta Lake table recreated successfully")
                 else:

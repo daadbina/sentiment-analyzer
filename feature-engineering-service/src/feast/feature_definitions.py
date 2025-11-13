@@ -4,7 +4,7 @@ from datetime import timedelta
 from pathlib import Path
 from feast import Entity, FeatureView, ValueType, Field, PushSource
 from feast.infra.offline_stores.file_source import FileSource
-from feast.types import Float32, Int32, String, UnixTimestamp
+from feast.types import Float32, Int32, String, UnixTimestamp, Bool
 from ..utils import StructuredLogger
 
 logger = StructuredLogger(__name__)
@@ -83,11 +83,22 @@ def create_semantic_group_source(push_source_name: str = "semantic_group_feature
             "intra_cluster_similarity_mean": [0.0],
             "intra_cluster_similarity_std": [0.0],
             "embedding_drift_score": [0.0],
-            # BTC price features (4)
+            "countries": [""],
+            "has_conflict": [False],
+            # BTC price features (13)
             "btc_change_pct_10h": [0.0],
             "btc_volatility_score": [0.0],
             "btc_volume": [0.0],
-            "btc_label_spike": [False],
+            "btc_label_spike": [0],
+            "btc_timestamp": ["2025-01-01 00:00:00"],
+            "btc_close": [0.0],
+            "btc_atr_14": [0.0],
+            "btc_ema_slope_12": [0.0],
+            "btc_rsi_14": [0.0],
+            "btc_macd": [0.0],
+            "btc_macd_signal": [0.0],
+            "btc_macd_histogram": [0.0],
+            "btc_bb_width": [0.0],
         })
 
         # Ensure timestamp is datetime64[ns, UTC] type
@@ -120,7 +131,7 @@ def create_semantic_group_feature_view(
         ttl_days: Time-to-live in days
 
     Returns:
-        FeatureView with all 28 semantic group features (24 base + 4 BTC)
+        FeatureView with all 41 semantic group features (24 base + 2 embedding + 13 BTC + 2 reconciliation)
     """
     logger.debug("Creating semantic group feature view", push_source_name=push_source_name, ttl_days=ttl_days)
 
@@ -132,7 +143,7 @@ def create_semantic_group_feature_view(
     source = create_semantic_group_source(push_source_name)
     logger.debug("Push source created", source_name=source.name)
 
-    logger.debug("Creating FeatureView with 28 features (24 base + 4 BTC)")
+    logger.debug("Creating FeatureView with 41 features")
     return FeatureView(
         name="semantic_group_features",
         entities=[group_id],
@@ -166,16 +177,27 @@ def create_semantic_group_feature_view(
             Field(name="avg_title_length", dtype=Float32),
             Field(name="language_diversity", dtype=Int32),
             Field(name="domain_diversity", dtype=Int32),
-            # Embedding features (4)
+            # Embedding features (6)
             Field(name="centroid_magnitude", dtype=Float32),
             Field(name="intra_cluster_similarity_mean", dtype=Float32),
             Field(name="intra_cluster_similarity_std", dtype=Float32),
             Field(name="embedding_drift_score", dtype=Float32),
-            # BTC price features (4)
+            Field(name="countries", dtype=String),
+            Field(name="has_conflict", dtype=Bool),
+            # BTC price features (13)
             Field(name="btc_change_pct_10h", dtype=Float32),
             Field(name="btc_volatility_score", dtype=Float32),
             Field(name="btc_volume", dtype=Float32),
-            Field(name="btc_label_spike", dtype=Int32),  # Boolean stored as Int32
+            Field(name="btc_label_spike", dtype=Int32),
+            Field(name="btc_timestamp", dtype=String),
+            Field(name="btc_close", dtype=Float32),
+            Field(name="btc_atr_14", dtype=Float32),
+            Field(name="btc_ema_slope_12", dtype=Float32),
+            Field(name="btc_rsi_14", dtype=Float32),
+            Field(name="btc_macd", dtype=Float32),
+            Field(name="btc_macd_signal", dtype=Float32),
+            Field(name="btc_macd_histogram", dtype=Float32),
+            Field(name="btc_bb_width", dtype=Float32),
         ],
         source=source,
         description="Semantic group features for news realization and BTC price prediction",

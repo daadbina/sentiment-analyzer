@@ -22,7 +22,7 @@ from .extractors import (
 )
 from .transformers import FeatureAggregator, FeatureNormalizer
 from .validation import FeatureValidator, QualityChecker
-from .storage import FeastWriter, RedisWriter, FeatureReconciliation, DeltaLakeWriter
+from .storage import FeastWriter, RedisWriter, FeatureReconciliation, DeltaLakeWriter, BtcFeaturesWriter
 from .drift import DriftDetector
 from .utils import StructuredLogger, TraceContext, FeatureLineage
 from .metrics import metrics
@@ -57,7 +57,7 @@ class FeatureEngineeringService:
             SentimentExtractor(),
             EntityExtractor(),
             ContentExtractor(),
-            EmbeddingExtractor(),
+            EmbeddingExtractor(self.postgres_client),  # Pass postgres_client for countries lookup
             BtcPriceExtractor(self.postgres_client),  # BTC price features
         ]
 
@@ -70,13 +70,18 @@ class FeatureEngineeringService:
         self.quality_checker = QualityChecker()
 
         # Initialize storage
-        self.feast_writer = FeastWriter()  # ENABLED - using HTTP client
+        self.feast_writer = FeastWriter()  # ENABLED - using SDK push() to remote Redis
         # self.redis_writer = RedisWriter()  # DISABLED - replaced by Feast
         self.reconciliation = FeatureReconciliation()
         self.delta_writer = DeltaLakeWriter()
+        self.btc_writer = BtcFeaturesWriter()  # BTC features parquet writer
 
         # Initialize drift detection
         self.drift_detector = DriftDetector()
+
+        # BTC features generation state
+        self.btc_features_last_generated = None
+        self.btc_features_interval_seconds = 3600  # Generate every hour
 
     def start(self):
         """Start the service."""
@@ -152,11 +157,17 @@ class FeatureEngineeringService:
     def _consume_loop(self):
         """Main consumption loop."""
         try:
+            # Generate initial BTC features on startup
+            self._generate_btc_features()
+
             while True:
                 try:
                     # Consume entities batch (non-blocking)
                     if self.entities_consumer.consumer:
                         self.entities_consumer.consume_batch(timeout_seconds=0.1, max_messages=50)
+
+                    # Check if we need to regenerate BTC features
+                    self._check_and_generate_btc_features()
 
                     # Consume message
                     message = self.consumer.consume_message(timeout_ms=1000)
@@ -457,19 +468,19 @@ class FeatureEngineeringService:
             self.delta_writer.write_features(group_id, clean_features)
             logger.info("✓ Features written to Delta Lake successfully", group_id=group_id)
 
-            # Write to Feast (online and offline stores via HTTP)
+            # Write to Feast offline store via SDK
             logger.info(
-                "=== WRITING TO FEAST (ONLINE + OFFLINE) ===",
+                "=== WRITING TO FEAST OFFLINE STORE ===",
                 group_id=group_id,
                 feature_count=len(clean_features),
             )
             self.feast_writer.write_features(
                 group_id=group_id,
                 features=clean_features,
-                to="online_and_offline"
+                to="offline"
             )
             metrics.feast_writes.inc()
-            logger.info("✓ Features written to Feast successfully", group_id=group_id)
+            logger.info("✓ Features written to Feast offline store successfully", group_id=group_id)
 
             logger.info(
                 "=== ALL FEATURES WRITTEN SUCCESSFULLY ===",
@@ -487,6 +498,60 @@ class FeatureEngineeringService:
             )
             raise FeatureError(f"Error writing features: {str(e)}")
 
+    def _check_and_generate_btc_features(self):
+        """Check if BTC features need to be regenerated and generate if needed."""
+        try:
+            current_time = time.time()
+
+            # Check if we need to regenerate
+            if self.btc_features_last_generated is None:
+                return  # Already generated on startup
+
+            time_since_last_gen = current_time - self.btc_features_last_generated
+
+            if time_since_last_gen >= self.btc_features_interval_seconds:
+                self._generate_btc_features()
+
+        except Exception as e:
+            logger.error("Error checking BTC features generation", error=str(e))
+
+    def _generate_btc_features(self):
+        """Generate historical BTC features and save to parquet."""
+        try:
+            logger.info("=== GENERATING HISTORICAL BTC FEATURES ===")
+
+            # Get BTC extractor
+            btc_extractor = None
+            for extractor in self.extractors:
+                if isinstance(extractor, BtcPriceExtractor):
+                    btc_extractor = extractor
+                    break
+
+            if not btc_extractor:
+                logger.error("BTC extractor not found in extractors list")
+                return
+
+            # Generate features for last 1000 BTC records
+            features_list = btc_extractor.generate_historical_btc_features(limit=1000)
+
+            if not features_list:
+                logger.warning("No BTC features generated")
+                return
+
+            # Write to parquet
+            self.btc_writer.write_features(features_list)
+
+            # Update last generated timestamp
+            self.btc_features_last_generated = time.time()
+
+            logger.info(
+                f"✓ BTC features generated and saved successfully: "
+                f"{len(features_list)} records"
+            )
+
+        except Exception as e:
+            logger.error("Error generating BTC features", error=str(e), exc_info=True)
+
     def shutdown(self):
         """Shutdown service."""
         try:
@@ -500,6 +565,7 @@ class FeatureEngineeringService:
             self.feast_writer.close()  # ENABLED
             # self.redis_writer.close()  # DISABLED - replaced by Feast
             self.reconciliation.close()
+            self.btc_writer.close()
 
             logger.info("Service shutdown complete")
 

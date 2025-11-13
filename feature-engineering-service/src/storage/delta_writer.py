@@ -17,7 +17,7 @@ logger = StructuredLogger(__name__)
 class DeltaLakeWriter:
     """Write features to Delta Lake offline store."""
 
-    def __init__(self, delta_path: str = "/data/delta/features"):
+    def __init__(self, delta_path: str = "C:/data/features"):
         """Initialize Delta Lake writer.
 
         Args:

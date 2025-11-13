@@ -5,6 +5,86 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2025-11-13
+
+### Changed - Centralized Offline Store Location
+- **Updated features.py** - Changed FileSource path:
+  - Changed from `data/semantic_groups.parquet` to `../feast/offline_store/semantic_groups.parquet`
+  - Centralized location at project root: `feast/offline_store/semantic_groups.parquet`
+  - Both feature-engineering and trainer services now use the same offline store location
+- **Created .feastignore** - Added to prevent Feast from importing service code
+- **Updated FeastWriter** - Modified src/storage/feast_writer.py:
+  - Changed to write to offline store only (not online store)
+  - Updated `write_features()` default parameter to `to="offline"`
+  - Reason: Online store (Redis) not being populated correctly, offline store is local and reliable
+- **Updated service.py** - Changed Feast write call:
+  - Changed from `to="online_and_offline"` to `to="offline"`
+  - Updated log messages to reflect offline store only
+- **Architecture Decision**:
+  - Feature-engineering-service writes to `feast/offline_store/semantic_groups.parquet`
+  - Trainer reads from same location via Feast SDK with Delta Lake fallback
+  - Online store (Redis) not used for now
+
+## [0.3.2] - 2025-11-13
+
+### Fixed - Feast Writer Using PushSource
+- **Updated FeastWriter** - Modified src/storage/feast_writer.py:
+  - Changed from `write_to_online_store()` to `push()` method for PushSource
+  - Added push_source_name configuration ("semantic_group_push_source")
+  - Properly handles timestamp conversion to datetime type
+  - Pushes features to remote Redis online store (154.53.166.231:6379)
+- **Updated features.py** - Added PushSource definition:
+  - Added semantic_group_push_source with batch_source
+  - Changed entity to use join_keys=["group_id"]
+  - FeatureView now uses PushSource instead of FileSource
+- **Deleted feast_http_writer.py** - Removed incomplete HTTP API implementation
+- **Updated service.py** - Switched back to FeastWriter (SDK push method)
+- **Cleaned up feast directories**:
+  - Deleted root feast/ directory (was creating local files)
+  - Deleted C:\feast\ directory (was creating local registry)
+  - Both feature_store.yaml files kept (feast_remote/ for server, feature-engineering-service/ for SDK)
+
+## [0.3.1] - 2025-11-13
+
+### Changed - Remote Feast HTTP Writer Implementation (DEPRECATED)
+- **New Feast HTTP Writer** - Created src/storage/feast_http_writer.py:
+  - FeastHTTPWriter class for pushing features to remote Feast server via HTTP API
+  - Uses Feast push API endpoint (/push) to write features to online and offline stores
+  - Implements retry logic with configurable max_retries (default: 3)
+  - Comprehensive error handling for timeout, connection errors, and HTTP errors
+  - Converts features to DataFrame-like format for Feast push API
+  - Logs detailed information about push operations and failures
+- **Service Integration** - Updated src/service.py:
+  - Replaced FeastWriter (local SDK) with FeastHTTPWriter (remote HTTP API)
+  - Changed from local Feast instance to remote server at 154.53.166.231:6566
+  - Maintained same feature writing interface (write_features method)
+  - All 28 features now pushed to centralized remote Feast server
+- **Configuration Update** - Updated src/config.py:
+  - Fixed push_source_name from "semantic_group_push" to "semantic_group_push_source"
+  - Matches push source name defined in remote Feast server features.py
+- **Storage Package Update** - Updated src/storage/__init__.py:
+  - Added FeastHTTPWriter to exports
+  - Maintained backward compatibility with existing storage interfaces
+
+### Impact
+- **Centralized Feature Store**: Feature-engineering now writes to same remote Feast server used by trainer and predictor
+- **Architecture Fix**: Resolved mismatch where feature-engineering wrote locally but trainer/predictor read remotely
+- **Data Consistency**: All services now share the same feature store (single source of truth)
+- **Scalability**: HTTP-based push allows feature-engineering to run anywhere without local Feast instance
+
+### Technical Details
+- Remote Feast server: 154.53.166.231:6566
+- Push endpoint: http://154.53.166.231:6566/push
+- Push source: semantic_group_push_source
+- Feature view: semantic_group_features (28 features: 24 base + 4 BTC)
+- Online store: Redis at 154.53.166.231:6379
+- Offline store: File-based parquet on remote server
+
+### Root Cause Fixed
+- **Problem**: Feature-engineering wrote to LOCAL Feast (feature-engineering-service/data/), but trainer/predictor read from REMOTE Feast (154.53.166.231:6566)
+- **Result**: Trainer got "Feature not found" errors because remote Feast had no features
+- **Solution**: Feature-engineering now pushes features to remote Feast server via HTTP API
+
 ## [0.3.0] - 2025-11-12
 
 ### Changed - Feast HTTP Client Integration

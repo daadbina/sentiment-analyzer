@@ -13,10 +13,10 @@
       "name": "features",
       "type": {
         "type": "map",
-        "values": ["null", "double", "int", "string"],
+        "values": ["null", "double", "int", "string", "boolean"],
         "doc": "Computed features as key-value pairs"
       },
-      "doc": "Feature dictionary with 24 computed features"
+      "doc": "Feature dictionary with computed features (supports boolean, numeric, and string types)"
     },
     {
       "name": "timestamp",

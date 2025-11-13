@@ -23,6 +23,41 @@ class SemanticGroupConsumer:
         self.topic = "semantic_groups"
         self.schema_registry_client: Optional[SchemaRegistryClient] = None
         self.avro_deserializer: Optional[AvroDeserializer] = None
+        self._offset_reset_count = 0  # Track offset resets
+
+    def _error_callback(self, err):
+        """Handle Kafka errors.
+
+        Args:
+            err: Kafka error
+        """
+        error_code = err.code()
+        error_str = str(err)
+
+        # Handle offset out of range errors
+        if error_code == KafkaError.OFFSET_OUT_OF_RANGE:
+            self._offset_reset_count += 1
+            logger.warning(
+                "Kafka offset out of range - consumer will reset to earliest",
+                error=error_str,
+                reset_count=self._offset_reset_count,
+                topic=self.topic,
+                action="auto_reset_to_earliest",
+            )
+        # Handle other errors
+        elif error_code == KafkaError._PARTITION_EOF:
+            # End of partition - not an error
+            logger.debug("Reached end of partition", topic=self.topic)
+        elif error_code in [KafkaError._TIMED_OUT, KafkaError.REQUEST_TIMED_OUT]:
+            logger.warning("Kafka request timed out", error=error_str)
+        elif error_code == KafkaError._ALL_BROKERS_DOWN:
+            logger.error("All Kafka brokers are down", error=error_str)
+        else:
+            logger.warning(
+                "Kafka consumer error",
+                error=error_str,
+                error_code=error_code,
+            )
 
     def connect(self) -> bool:
         """Connect to Kafka.
@@ -42,13 +77,28 @@ class SemanticGroupConsumer:
             consumer_config = {
                 "bootstrap.servers": self.config.kafka.brokers,
                 "group.id": self.config.kafka.consumer_group,
-                "auto.offset.reset": "earliest",
+                "auto.offset.reset": self.config.kafka.auto_offset_reset,  # From config
                 "enable.auto.commit": False,
                 "isolation.level": "read_committed",  # Exactly-once semantics
+                "session.timeout.ms": self.config.kafka.session_timeout_ms,
+                "heartbeat.interval.ms": 10000,  # 10 seconds
+                "max.poll.interval.ms": self.config.kafka.max_poll_interval_ms,
+                # Error handling
+                "error_cb": self._error_callback,
+                # Logging
+                "log_level": 3,  # Warning level
             }
 
             self.consumer = Consumer(consumer_config)
             self.consumer.subscribe([self.topic])
+
+            logger.info(
+                "Kafka consumer configuration",
+                auto_offset_reset=self.config.kafka.auto_offset_reset,
+                enable_auto_commit=False,
+                session_timeout_ms=self.config.kafka.session_timeout_ms,
+                max_poll_interval_ms=self.config.kafka.max_poll_interval_ms,
+            )
 
             logger.info(
                 "Kafka consumer connected",
@@ -80,11 +130,28 @@ class SemanticGroupConsumer:
                 return None
 
             if msg.error():
-                if msg.error().code() == KafkaError._PARTITION_EOF:
+                error_code = msg.error().code()
+
+                if error_code == KafkaError._PARTITION_EOF:
                     # End of partition, not an error
                     return None
+                elif error_code == KafkaError.OFFSET_OUT_OF_RANGE:
+                    # Offset out of range - will be handled by auto.offset.reset
+                    self._offset_reset_count += 1
+                    logger.warning(
+                        "Offset out of range during poll - resetting to earliest",
+                        error=str(msg.error()),
+                        reset_count=self._offset_reset_count,
+                        partition=msg.partition(),
+                        topic=msg.topic(),
+                    )
+                    return None
                 else:
-                    logger.warning("Consumer error", error=str(msg.error()))
+                    logger.warning(
+                        "Consumer error during poll",
+                        error=str(msg.error()),
+                        error_code=error_code,
+                    )
                     return None
 
             # Deserialize Avro message
@@ -145,9 +212,109 @@ class SemanticGroupConsumer:
             logger.error("Error committing offset", error=str(e), exc_info=True)
             return False
 
+    def reset_offsets_to_beginning(self) -> bool:
+        """Reset consumer offsets to beginning of topic.
+
+        Useful for recovery scenarios when offsets are out of range.
+
+        Returns:
+            True if reset successful
+        """
+        if not self.consumer:
+            raise KafkaErrorException("Consumer not connected")
+
+        try:
+            # Get topic partitions
+            metadata = self.consumer.list_topics(self.topic, timeout=10)
+            if self.topic not in metadata.topics:
+                logger.error("Topic not found", topic=self.topic)
+                return False
+
+            partitions = metadata.topics[self.topic].partitions
+
+            # Seek to beginning for each partition
+            from confluent_kafka import TopicPartition, OFFSET_BEGINNING
+
+            for partition_id in partitions.keys():
+                tp = TopicPartition(self.topic, partition_id, OFFSET_BEGINNING)
+                self.consumer.seek(tp)
+                logger.info(
+                    "Reset offset to beginning",
+                    topic=self.topic,
+                    partition=partition_id,
+                )
+
+            logger.info(
+                "All offsets reset to beginning",
+                topic=self.topic,
+                partition_count=len(partitions),
+            )
+            return True
+
+        except Exception as e:
+            logger.error(
+                "Error resetting offsets",
+                error=str(e),
+                exc_info=True,
+            )
+            return False
+
+    def get_offset_info(self) -> Dict[str, Any]:
+        """Get current offset information for debugging.
+
+        Returns:
+            Dictionary with offset information
+        """
+        if not self.consumer:
+            return {"error": "Consumer not connected"}
+
+        try:
+            # Get assigned partitions
+            assignment = self.consumer.assignment()
+
+            if not assignment:
+                return {"error": "No partitions assigned"}
+
+            offset_info = {}
+            for tp in assignment:
+                # Get committed offset
+                committed = self.consumer.committed([tp], timeout=5)
+                committed_offset = committed[0].offset if committed else -1
+
+                # Get current position
+                position = self.consumer.position([tp])
+                current_offset = position[0].offset if position else -1
+
+                # Get watermarks (low and high)
+                low, high = self.consumer.get_watermark_offsets(tp, timeout=5)
+
+                offset_info[f"partition_{tp.partition}"] = {
+                    "committed_offset": committed_offset,
+                    "current_offset": current_offset,
+                    "low_watermark": low,
+                    "high_watermark": high,
+                    "lag": high - current_offset if current_offset >= 0 else -1,
+                }
+
+            offset_info["reset_count"] = self._offset_reset_count
+
+            logger.info("Offset information retrieved", offset_info=offset_info)
+            return offset_info
+
+        except Exception as e:
+            logger.error("Error getting offset info", error=str(e), exc_info=True)
+            return {"error": str(e)}
+
     def close(self):
         """Close consumer connection."""
         if self.consumer:
+            # Log final offset info before closing
+            if self._offset_reset_count > 0:
+                logger.info(
+                    "Consumer closing with offset resets",
+                    reset_count=self._offset_reset_count,
+                )
+
             self.consumer.close()
             logger.info("Kafka consumer closed")
 

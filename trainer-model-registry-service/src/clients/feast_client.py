@@ -1,16 +1,17 @@
 """
-Feast HTTP client for Trainer & Model Registry Service.
+Feast SDK client for Trainer & Model Registry Service.
 
-Provides integration with remote Feast feature server via HTTP API.
+Provides integration with Feast offline store for feature retrieval.
+Falls back to Delta Lake if features not found in Feast.
 """
 
 import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 import pandas as pd
-import requests
 import asyncio
 from functools import wraps
+from feast import FeatureStore
 
 from src.config import FeastConfig
 from src.exceptions import ExternalServiceError, DataPreparationError
@@ -32,50 +33,51 @@ def async_to_sync(func):
 
 
 class FeastClient:
-    """Feast HTTP client for remote feature server."""
+    """Feast SDK client for offline store feature retrieval with Delta Lake fallback."""
 
-    def __init__(self, config: FeastConfig, server_url: str = "http://154.53.166.231:6566"):
+    def __init__(self, config: FeastConfig, repo_path: str = "feast_remote"):
         """
-        Initialize Feast HTTP client.
+        Initialize Feast SDK client.
 
         Args:
-            config: Feast configuration (kept for compatibility)
-            server_url: URL of remote Feast feature server
+            config: Feast configuration
+            repo_path: Path to Feast repository configuration
         """
         self.config = config
-        self.server_url = server_url.rstrip('/')
-        self.timeout = 30
-        self.max_retries = 3
+        self.repo_path = repo_path
         self._connected = False
-        logger.info(f"Feast HTTP client initialized: server={self.server_url}")
+
+        try:
+            # Initialize Feast FeatureStore
+            self.feature_store = FeatureStore(repo_path=repo_path)
+            self._connected = True
+            logger.info(f"Feast SDK client initialized: repo_path={repo_path}")
+        except Exception as e:
+            logger.error(f"Failed to initialize Feast SDK client: {e}")
+            raise ExternalServiceError(
+                f"Failed to initialize Feast SDK client: {e}",
+                service_name="Feast",
+                details={"repo_path": repo_path},
+            )
 
     def connect(self) -> None:
         """
-        Test connection to Feast feature server.
+        Test connection to Feast offline store.
 
         Raises:
             ExternalServiceError: If connection fails
         """
         try:
-            response = requests.get(
-                f"{self.server_url}/health",
-                timeout=5
-            )
-            if response.status_code == 200:
-                self._connected = True
-                logger.info("Feast HTTP feature server connected successfully")
-            else:
-                raise ExternalServiceError(
-                    f"Feast server returned status {response.status_code}",
-                    service_name="Feast",
-                    details={"server_url": self.server_url, "status_code": response.status_code},
-                )
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to connect to Feast HTTP server: {e}")
+            # Test by listing feature views
+            feature_views = self.feature_store.list_feature_views()
+            self._connected = True
+            logger.info(f"Feast SDK client connected successfully: {len(feature_views)} feature views found")
+        except Exception as e:
+            logger.error(f"Failed to connect to Feast offline store: {e}")
             raise ExternalServiceError(
-                f"Failed to connect to Feast HTTP server: {e}",
+                f"Failed to connect to Feast offline store: {e}",
                 service_name="Feast",
-                details={"server_url": self.server_url},
+                details={"repo_path": self.repo_path},
             )
 
     def health_check(self) -> bool:
@@ -86,16 +88,10 @@ class FeastClient:
             True if connection is healthy, False otherwise
         """
         try:
-            response = requests.get(
-                f"{self.server_url}/health",
-                timeout=5
-            )
-            is_healthy = response.status_code == 200
-            if is_healthy:
-                logger.debug("Feast health check passed")
-            else:
-                logger.warning(f"Feast health check failed: status {response.status_code}")
-            return is_healthy
+            # Test by listing feature views
+            self.feature_store.list_feature_views()
+            logger.debug("Feast health check passed")
+            return True
         except Exception as e:
             logger.error(f"Feast health check failed: {e}")
             return False
@@ -107,12 +103,12 @@ class FeastClient:
         timestamp_column: str = "timestamp",
     ) -> pd.DataFrame:
         """
-        Retrieve features from remote Feast server via HTTP.
+        Retrieve features from Feast offline store with Delta Lake fallback.
 
         Args:
             entity_df: DataFrame with entity IDs and timestamps
             features: List of feature names to retrieve (format: "feature_view:feature_name")
-            timestamp_column: Name of timestamp column (ignored for HTTP client)
+            timestamp_column: Name of timestamp column
 
         Returns:
             DataFrame with features
@@ -122,60 +118,97 @@ class FeastClient:
         """
         if not self._connected:
             raise ExternalServiceError(
-                "Feast HTTP client not connected",
+                "Feast SDK client not connected",
                 service_name="Feast",
             )
 
         try:
             logger.info(
-                f"Retrieving {len(features)} features for {len(entity_df)} entities via HTTP"
+                f"Retrieving {len(features)} features for {len(entity_df)} entities from Feast offline store"
             )
 
-            # Extract entity IDs from DataFrame
-            entity_ids = entity_df['group_id'].tolist()
+            # Ensure entity_df has the timestamp column
+            if timestamp_column not in entity_df.columns:
+                raise DataPreparationError(
+                    f"Entity DataFrame missing timestamp column: {timestamp_column}",
+                    stage="feature_retrieval",
+                    details={"columns": list(entity_df.columns)}
+                )
 
-            # Prepare entity rows for HTTP request
-            # Convert UUID objects to strings for JSON serialization
-            entity_rows = [{"group_id": str(entity_id)} for entity_id in entity_ids]
+            # Rename timestamp column to event_timestamp for Feast
+            entity_df_feast = entity_df.copy()
+            entity_df_feast = entity_df_feast.rename(columns={timestamp_column: "event_timestamp"})
 
-            # Prepare payload for HTTP request
-            payload = {
-                "features": features,
-                "entities": entity_rows,
-                "full_feature_names": True
-            }
+            logger.debug(f"Entity DataFrame shape: {entity_df_feast.shape}")
+            logger.debug(f"Entity DataFrame columns: {list(entity_df_feast.columns)}")
+            logger.debug(f"Entity DataFrame sample:\n{entity_df_feast.head()}")
 
-            logger.debug(f"HTTP request payload: {len(features)} features, {len(entity_rows)} entities")
+            # Get historical features from Feast offline store
+            logger.info("Fetching features from Feast offline store...")
+            training_df = self.feature_store.get_historical_features(
+                entity_df=entity_df_feast,
+                features=features
+            ).to_df()
 
-            # Make HTTP request to Feast server
-            response = requests.post(
-                f"{self.server_url}/get-online-features",
-                json=payload,
-                timeout=self.timeout
-            )
-            response.raise_for_status()
+            logger.info(f"Retrieved {len(training_df)} rows from Feast offline store")
+            logger.debug(f"Feature DataFrame shape: {training_df.shape}")
+            logger.debug(f"Feature DataFrame columns: {list(training_df.columns)}")
 
-            # Parse response
-            data = response.json()
+            # Check for missing features (NaN values)
+            null_counts = training_df.isnull().sum()
+            missing_features = null_counts[null_counts > 0]
 
-            # Convert to DataFrame
-            if "results" in data:
-                feature_df = pd.DataFrame(data["results"])
-            elif isinstance(data, list):
-                feature_df = pd.DataFrame(data)
+            if len(missing_features) > 0:
+                logger.warning(f"Found {len(missing_features)} features with null values")
+                logger.debug(f"Null counts:\n{missing_features}")
+
+                # Identify group_ids with missing features
+                missing_mask = training_df.isnull().any(axis=1)
+                missing_group_ids = training_df.loc[missing_mask, 'group_id'].tolist()
+
+                if len(missing_group_ids) > 0:
+                    logger.warning(
+                        f"Found {len(missing_group_ids)} group_ids with missing features, "
+                        f"will attempt Delta Lake fallback"
+                    )
+                    logger.debug(f"Missing group_ids (first 10): {missing_group_ids[:10]}")
+
+                    # Attempt Delta Lake fallback for missing group_ids
+                    try:
+                        feature_df = self._fallback_to_delta_lake(
+                            training_df,
+                            missing_group_ids,
+                            features
+                        )
+                    except Exception as e:
+                        logger.error(f"Delta Lake fallback failed: {e}")
+                        # Continue with Feast data even if fallback fails
+                        feature_df = training_df
+                else:
+                    feature_df = training_df
             else:
-                feature_df = pd.DataFrame([data])
+                logger.info("All features retrieved successfully from Feast offline store")
+                feature_df = training_df
 
-            logger.info(f"Retrieved {len(feature_df)} rows with {len(feature_df.columns)} features via HTTP")
+            # Convert feature columns to numeric types
+            # All features except group_id and event_timestamp should be numeric
+            for col in feature_df.columns:
+                if col not in ['group_id', 'event_timestamp']:
+                    feature_df[col] = pd.to_numeric(feature_df[col], errors='coerce')
+
+            logger.debug(f"DataFrame after conversion - dtypes: {feature_df.dtypes.to_dict()}")
+            logger.debug(f"DataFrame after conversion - first row: {feature_df.iloc[0].to_dict() if len(feature_df) > 0 else 'empty'}")
+
+            logger.info(f"Retrieved {len(feature_df)} rows with {len(feature_df.columns)} features from Feast offline store")
             logger.debug(f"Feature columns: {list(feature_df.columns)}")
             logger.debug(f"Feature dtypes:\n{feature_df.dtypes}")
 
             # Log feature statistics
             numeric_cols = feature_df.select_dtypes(include=['number']).columns
             if len(numeric_cols) > 0:
-                logger.info("Feature statistics from Feast HTTP server:")
+                logger.info("Feature statistics from Feast offline store:")
                 for col in numeric_cols:
-                    if col != 'group_id':
+                    if col not in ['group_id', 'event_timestamp']:
                         unique_vals = feature_df[col].nunique()
                         min_val = feature_df[col].min()
                         max_val = feature_df[col].max()
@@ -184,73 +217,122 @@ class FeastClient:
 
             return feature_df
 
-        except requests.exceptions.Timeout:
-            logger.error(f"Timeout retrieving features from Feast HTTP server")
-            raise DataPreparationError(
-                "Timeout retrieving features from Feast HTTP server",
-                stage="feature_retrieval",
-                details={"num_features": len(features), "num_entities": len(entity_df)},
-            )
-        except requests.exceptions.RequestException as e:
-            logger.error(f"HTTP error retrieving features from Feast: {e}")
-            raise DataPreparationError(
-                f"HTTP error retrieving features from Feast: {e}",
-                stage="feature_retrieval",
-                details={"num_features": len(features), "num_entities": len(entity_df)},
-            )
         except Exception as e:
-            logger.error(f"Failed to retrieve features from Feast HTTP server: {e}")
+            logger.error(f"Failed to retrieve features from Feast offline store: {e}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             raise DataPreparationError(
-                f"Failed to retrieve features from Feast HTTP server: {e}",
+                f"Failed to retrieve features from Feast offline store: {e}",
                 stage="feature_retrieval",
                 details={"num_features": len(features), "num_entities": len(entity_df)},
             )
 
+    def _fallback_to_delta_lake(
+        self,
+        feast_df: pd.DataFrame,
+        missing_group_ids: List[str],
+        features: List[str]
+    ) -> pd.DataFrame:
+        """
+        Fall back to Delta Lake for missing features.
+
+        Args:
+            feast_df: DataFrame from Feast with some missing values
+            missing_group_ids: List of group_ids with missing features
+            features: List of feature names
+
+        Returns:
+            DataFrame with missing features filled from Delta Lake
+        """
+        try:
+            from deltalake import DeltaTable
+
+            logger.info(f"Attempting Delta Lake fallback for {len(missing_group_ids)} group_ids")
+
+            # Read from Delta Lake
+            delta_path = "C:/data/features"
+            dt = DeltaTable(delta_path)
+            delta_df = dt.to_pandas()
+
+            logger.debug(f"Delta Lake has {len(delta_df)} rows")
+
+            # Filter for missing group_ids
+            delta_df_filtered = delta_df[delta_df['group_id'].isin(missing_group_ids)]
+
+            if len(delta_df_filtered) == 0:
+                logger.warning("No matching group_ids found in Delta Lake")
+                return feast_df
+
+            logger.info(f"Found {len(delta_df_filtered)} rows in Delta Lake for missing group_ids")
+
+            # Extract feature columns (remove view prefix if present)
+            feature_cols = []
+            for f in features:
+                if ':' in f:
+                    feature_cols.append(f.split(':')[1])
+                else:
+                    feature_cols.append(f)
+
+            # Select relevant columns from Delta Lake
+            delta_cols = ['group_id'] + [col for col in feature_cols if col in delta_df_filtered.columns]
+            delta_df_selected = delta_df_filtered[delta_cols]
+
+            # Merge with Feast data, filling missing values from Delta Lake
+            # For rows with missing features, replace with Delta Lake values
+            result_df = feast_df.copy()
+
+            for group_id in missing_group_ids:
+                delta_row = delta_df_selected[delta_df_selected['group_id'] == group_id]
+                if len(delta_row) > 0:
+                    feast_row_idx = result_df[result_df['group_id'] == group_id].index
+                    if len(feast_row_idx) > 0:
+                        idx = feast_row_idx[0]
+                        for col in feature_cols:
+                            if col in delta_row.columns and pd.isna(result_df.loc[idx, col]):
+                                result_df.loc[idx, col] = delta_row[col].iloc[0]
+
+            # Count how many features were filled
+            filled_count = feast_df.isnull().sum().sum() - result_df.isnull().sum().sum()
+            logger.info(f"Filled {filled_count} missing feature values from Delta Lake")
+
+            return result_df
+
+        except Exception as e:
+            logger.error(f"Delta Lake fallback failed: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            # Return original Feast data if fallback fails
+            return feast_df
+
     def get_feature_view(self, name: str) -> Optional[Dict[str, Any]]:
         """
-        Get feature view metadata from remote server.
+        Get feature view metadata from Feast.
 
         Args:
             name: Feature view name
 
         Returns:
             Feature view metadata or None if not found
-
-        Raises:
-            ExternalServiceError: If retrieval fails
         """
         if not self._connected:
             raise ExternalServiceError(
-                "Feast HTTP client not connected",
+                "Feast SDK client not connected",
                 service_name="Feast",
             )
 
         try:
-            response = requests.get(
-                f"{self.server_url}/feature-views/{name}",
-                timeout=self.timeout
-            )
+            feature_views = self.feature_store.list_feature_views()
+            for fv in feature_views:
+                if fv.name == name:
+                    logger.debug(f"Retrieved feature view: {name}")
+                    return {
+                        "name": fv.name,
+                        "features": [f.name for f in fv.features],
+                        "entities": [e for e in fv.entities]
+                    }
+            logger.warning(f"Feature view not found: {name}")
+            return None
 
-            if response.status_code == 404:
-                logger.warning(f"Feature view not found: {name}")
-                return None
-
-            response.raise_for_status()
-            data = response.json()
-            logger.debug(f"Retrieved feature view: {name}")
-            return data
-
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                return None
-            logger.error(f"Failed to get feature view {name}: {e}")
-            raise ExternalServiceError(
-                f"Failed to get feature view {name}: {e}",
-                service_name="Feast",
-                details={"feature_view": name},
-            )
         except Exception as e:
             logger.error(f"Failed to get feature view {name}: {e}")
             raise ExternalServiceError(
@@ -261,29 +343,20 @@ class FeastClient:
 
     def list_feature_views(self) -> List[str]:
         """
-        List all feature views from remote server.
+        List all feature views from Feast.
 
         Returns:
             List of feature view names
-
-        Raises:
-            ExternalServiceError: If listing fails
         """
         if not self._connected:
             raise ExternalServiceError(
-                "Feast HTTP client not connected",
+                "Feast SDK client not connected",
                 service_name="Feast",
             )
 
         try:
-            response = requests.get(
-                f"{self.server_url}/feature-views",
-                timeout=self.timeout
-            )
-            response.raise_for_status()
-
-            data = response.json()
-            names = data.get("feature_views", [])
+            feature_views = self.feature_store.list_feature_views()
+            names = [fv.name for fv in feature_views]
             logger.debug(f"Listed {len(names)} feature views")
             return names
 
@@ -301,7 +374,7 @@ class FeastClient:
             features: List of feature names
 
         Returns:
-            True if all features exist (always returns True for HTTP client)
+            True if all features exist
         """
         # For HTTP client, we assume features are valid
         # The server will return an error if features don't exist

@@ -108,12 +108,19 @@ class XGBoostModel(BaseModel):
 
                 # Train model
                 logger.info("Starting XGBoost model fitting...")
-                self.model.fit(
-                    X_train,
-                    y_train,
-                    eval_set=eval_set,
-                    verbose=False,
-                )
+
+                # Suppress XGBoost warnings about empty datasets or single-class samples
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", message=".*Dataset is empty.*")
+                    warnings.filterwarnings("ignore", message=".*only positive or negative samples.*")
+
+                    self.model.fit(
+                        X_train,
+                        y_train,
+                        eval_set=eval_set,
+                        verbose=False,
+                    )
 
                 self.is_trained = True
 

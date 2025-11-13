@@ -256,10 +256,12 @@ class FeatureRetriever:
 
     def _get_default_features(self) -> List[str]:
         """
-        Get default feature list.
+        Get default feature list (24 base features only, no BTC features).
+
+        This is used for conflict prediction model which uses only base features.
 
         Returns:
-            List of 28 feature names from feature-engineering-service (24 base + 4 BTC)
+            List of 24 base feature names from feature-engineering-service
         """
         # These features are computed by feature-engineering-service
         # and stored in Feast offline store
@@ -294,12 +296,29 @@ class FeatureRetriever:
             "intra_cluster_similarity_mean",
             "intra_cluster_similarity_std",
             "embedding_drift_score",
-            # BTC price features (4)
+        ]
+
+    def _get_btc_features(self) -> List[str]:
+        """
+        Get BTC model feature list (24 base + 4 BTC = 28 total features).
+
+        This is used for BTC prediction model which uses all features including BTC.
+
+        Returns:
+            List of 28 feature names from feature-engineering-service (24 base + 4 BTC)
+        """
+        # Start with 24 base features
+        base_features = self._get_default_features()
+
+        # Add 4 BTC price features
+        btc_features = [
             "btc_change_pct_10h",
             "btc_volatility_score",
             "btc_volume",
             "btc_label_spike",
         ]
+
+        return base_features + btc_features
 
     def validate_features(self, feature_df: pd.DataFrame) -> bool:
         """

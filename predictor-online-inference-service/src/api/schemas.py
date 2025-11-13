@@ -88,6 +88,19 @@ class PredictionResponse(BaseModel):
     predicted_at: str = Field(..., description="Prediction timestamp (ISO format)")
     trace_id: str | None = Field(None, description="Trace ID for distributed tracing")
 
+    # Optional BTC-specific fields
+    prediction_direction: str | None = Field(None, description="BTC: Direction of price movement (up/down)")
+    prediction_magnitude: float | None = Field(None, description="BTC: Magnitude of price change")
+    prediction_strength: str | None = Field(None, description="BTC: Strength of prediction (weak/moderate/strong)")
+
+    # Optional conflict-specific fields
+    prediction_label: str | None = Field(None, description="Conflict: Prediction label (conflict/no_conflict)")
+    prediction_certainty: str | None = Field(None, description="Conflict: Certainty level (uncertain/moderate/high)")
+    countries: list[str] | None = Field(None, description="Conflict: List of countries involved")
+
+    # Common optional field
+    prediction_description: str | None = Field(None, description="Human-readable prediction description")
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -98,6 +111,10 @@ class PredictionResponse(BaseModel):
                 "model_version": "v1.0.0",
                 "predicted_at": "2025-11-07T12:00:00Z",
                 "trace_id": "01JCABCDEFGHIJKLMNOPQRSTUV",
+                "prediction_direction": "up",
+                "prediction_magnitude": 0.85,
+                "prediction_strength": "moderate",
+                "prediction_description": "Moderate upward movement: +0.85%",
             }
         }
     )

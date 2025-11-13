@@ -13,7 +13,6 @@ from prometheus_client import make_asgi_app
 
 from .api import router, set_dependencies
 from .clients import (
-    FeastClient,
     KafkaConsumerClient,
     KafkaProducerClient,
     MLflowModelClient,
@@ -21,7 +20,7 @@ from .clients import (
     RedisClient,
     S3Client,
 )
-from .clients.feast_http_client import FeastHTTPClient
+from .data.parquet_loader import ParquetFeatureLoader
 from .config import get_config
 from .features import FeatureFetcher, FeatureReconciliationChecker, FeatureValidator
 from .inference import BatchPredictor
@@ -53,12 +52,7 @@ async def lifespan(app: FastAPI):
     config = get_config()
 
     # Initialize clients
-    feast_client = FeastClient(config.feast)
-    feast_http_client = FeastHTTPClient(
-        server_url="http://154.53.166.231:6566",  # Remote Feast server
-        timeout=30,
-        max_retries=3,
-    )
+    parquet_loader = ParquetFeatureLoader(root_path="..")
     s3_client = S3Client(config.s3)
     mlflow_client = MLflowModelClient(config.mlflow, s3_client=s3_client)
     redis_client = RedisClient(config.redis)
@@ -66,8 +60,7 @@ async def lifespan(app: FastAPI):
     kafka_consumer = KafkaConsumerClient(config.kafka)
     kafka_producer = KafkaProducerClient(config.kafka)
 
-    # Connect clients
-    await feast_client.connect()
+    # Connect clients (parquet loader doesn't need connection)
     await s3_client.connect()
     await mlflow_client.connect()
     await redis_client.connect()
@@ -86,7 +79,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize components
     feature_fetcher = FeatureFetcher(
-        feast_client=feast_client,
+        parquet_loader=parquet_loader,
         feature_view_name="semantic_group_features",
     )
     feature_validator = FeatureValidator(
@@ -158,8 +151,7 @@ async def lifespan(app: FastAPI):
         await _streaming_predictor.stop()
         logger.info("Streaming predictor stopped")
 
-    # Disconnect clients
-    await feast_client.disconnect()
+    # Disconnect clients (parquet loader doesn't need disconnection)
     await redis_client.disconnect()
     await postgres_client.disconnect()
     await kafka_producer.disconnect()

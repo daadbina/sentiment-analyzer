@@ -11,7 +11,6 @@ from datetime import datetime
 from typing import Any
 
 from .clients import (
-    FeastClient,
     KafkaConsumerClient,
     KafkaProducerClient,
     MLflowModelClient,
@@ -19,7 +18,6 @@ from .clients import (
     RedisClient,
 )
 from .clients.s3_client import S3Client
-from .clients.feast_http_client import FeastHTTPClient
 from .config import Config, get_config
 from .exceptions import ServiceError
 from .features import (
@@ -66,8 +64,7 @@ class PredictorService:
         self._running = False
 
         # Clients
-        self.feast_client: FeastClient | None = None
-        self.feast_http_client: FeastHTTPClient | None = None
+        self.parquet_loader = None  # Parquet feature loader
         self.s3_client: S3Client | None = None
         self.mlflow_client: MLflowModelClient | None = None
         self.redis_client: RedisClient | None = None
@@ -158,13 +155,10 @@ class PredictorService:
         """Initialize all clients."""
         logger.info("Initializing clients")
 
-        # Create clients
-        self.feast_client = FeastClient(self.config.feast)
-        self.feast_http_client = FeastHTTPClient(
-            server_url="http://154.53.166.231:6566",  # Remote Feast server
-            timeout=30,
-            max_retries=3,
-        )
+        # Create parquet loader instead of Feast clients
+        from .data.parquet_loader import ParquetFeatureLoader
+        self.parquet_loader = ParquetFeatureLoader(root_path="..")
+        logger.info("Initialized parquet feature loader")
         self.s3_client = S3Client(self.config.s3)
         self.mlflow_client = MLflowModelClient(self.config.mlflow, s3_client=self.s3_client)
         self.redis_client = RedisClient(self.config.redis)
@@ -172,8 +166,7 @@ class PredictorService:
         self.kafka_consumer = KafkaConsumerClient(self.config.kafka)
         self.kafka_producer = KafkaProducerClient(self.config.kafka)
 
-        # Connect clients
-        await self.feast_client.connect()
+        # Connect clients (parquet loader doesn't need connection)
         await self.s3_client.connect()
         await self.mlflow_client.connect()
         await self.redis_client.connect()
@@ -217,7 +210,7 @@ class PredictorService:
 
         # Initialize existing components
         self.feature_fetcher = FeatureFetcher(
-            feast_client=self.feast_client,
+            parquet_loader=self.parquet_loader,
             feature_view_name="semantic_group_features",
         )
 
@@ -348,9 +341,7 @@ class PredictorService:
                 await self.label_reconciliation_service.stop()
                 logger.info("Label reconciliation service stopped")
 
-            # Disconnect clients
-            if self.feast_client:
-                await self.feast_client.disconnect()
+            # Disconnect clients (parquet loader doesn't need disconnection)
             if self.redis_client:
                 await self.redis_client.disconnect()
             if self.postgres_client:

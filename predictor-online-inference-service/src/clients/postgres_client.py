@@ -84,12 +84,65 @@ class PostgresClient:
                 f"Connected to PostgreSQL: host={self.config.host}, "
                 f"database={self.config.database}, pool_size={self.config.min_pool_size}-{self.config.max_pool_size}"
             )
+
+            # Initialize database schema
+            await self._initialize_schema()
+
         except Exception as e:
             logger.error(f"Failed to connect to PostgreSQL: {e}", exc_info=True)
             raise PostgresError(
                 f"Failed to connect to PostgreSQL: {e}",
                 operation="connect",
             )
+
+    async def _initialize_schema(self) -> None:
+        """
+        Initialize database schema by creating tables if they don't exist.
+        """
+        try:
+            logger.info("Initializing database schema...")
+
+            async with self._pool.acquire() as conn:
+                # Create predictions table
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS predictions (
+                        id SERIAL PRIMARY KEY,
+                        group_id VARCHAR(255) NOT NULL,
+                        domain VARCHAR(50) NOT NULL,
+                        prediction_probability DOUBLE PRECISION NOT NULL,
+                        prediction_confidence DOUBLE PRECISION NOT NULL,
+                        model_version VARCHAR(50) NOT NULL,
+                        features JSONB,
+                        predicted_at TIMESTAMP NOT NULL,
+                        created_at TIMESTAMP DEFAULT NOW(),
+                        trace_id VARCHAR(255),
+                        UNIQUE(group_id, domain, predicted_at)
+                    )
+                """)
+
+                # Create index on group_id and domain for faster lookups
+                await conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_predictions_group_domain
+                    ON predictions(group_id, domain)
+                """)
+
+                # Create index on predicted_at for time-based queries
+                await conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_predictions_predicted_at
+                    ON predictions(predicted_at DESC)
+                """)
+
+                # Create GIN index on features JSONB column for faster queries
+                await conn.execute("""
+                    CREATE INDEX IF NOT EXISTS idx_predictions_features
+                    ON predictions USING GIN (features)
+                """)
+
+                logger.info("Database schema initialized successfully")
+
+        except Exception as e:
+            logger.warning(f"Failed to initialize database schema: {e}", exc_info=True)
+            # Don't raise - schema initialization is not critical for service startup
 
     async def disconnect(self) -> None:
         """Disconnect from PostgreSQL and close connection pool."""

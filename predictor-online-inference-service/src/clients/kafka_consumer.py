@@ -1,5 +1,5 @@
 """
-Kafka consumer client for consuming semantic groups and ground-truth messages.
+Kafka consumer client for consuming computed features and ground-truth messages.
 
 Provides abstraction over confluent-kafka for consuming messages with Avro deserialization.
 Implements exactly-once semantics and proper offset management.
@@ -91,41 +91,33 @@ class KafkaConsumerClient:
                 {"url": self.config.schema_registry_url}
             )
 
-            # Define the semantic groups schema (must match clustering service output)
-            semantic_groups_schema = {
+            # Define the features_computed schema (must match feature-engineering-service output)
+            features_computed_schema = {
                 "type": "record",
-                "name": "SemanticGroupMessage",
-                "namespace": "com.sentiment_analyzer.clustering",
+                "name": "FeaturesComputedMessage",
+                "namespace": "com.sentiment_analyzer.feature_engineering",
                 "fields": [
                     {"name": "group_id", "type": "string"},
-                    {"name": "article_ids", "type": {"type": "array", "items": "string"}},
-                    {"name": "article_count", "type": "int"},
-                    {"name": "centroid_vector", "type": {"type": "array", "items": "double"}},
-                    {"name": "centroid_article_id", "type": ["null", "string"], "default": None},
-                    {"name": "similarity_avg", "type": "double"},
-                    {"name": "similarity_min", "type": "double"},
-                    {"name": "similarity_std", "type": "double"},
-                    {"name": "topic_label", "type": "string"},
-                    {"name": "topic_label_method", "type": "string"},
-                    {"name": "languages", "type": {"type": "array", "items": "string"}},
-                    {"name": "domains", "type": {"type": "array", "items": "string"}},
-                    {"name": "sources", "type": {"type": "array", "items": "string"}},
-                    {"name": "countries", "type": {"type": "array", "items": "string"}},
-                    {"name": "publisher_credibility_avg", "type": "double"},
-                    {"name": "earliest_published_at", "type": "string"},
-                    {"name": "latest_published_at", "type": "string"},
-                    {"name": "time_span_hours", "type": "double"},
-                    {"name": "created_at", "type": "string"},
-                    {"name": "updated_at", "type": "string"},
-                    {"name": "clustering_algorithm", "type": "string"},
-                    {"name": "clustering_parameters", "type": {"type": "map", "values": "string"}},
-                    {"name": "embedding_model", "type": "string"},
-                    {"name": "embedding_version", "type": "string"},
-                    {"name": "parent_group_id", "type": ["null", "string"], "default": None},
-                    {"name": "child_group_ids", "type": {"type": "array", "items": "string"}},
-                    {"name": "evolution_type", "type": ["null", "string"], "default": None},
-                    {"name": "cluster_stability_score", "type": "double"},
-                    {"name": "job_id", "type": "string"},
+                    {
+                        "name": "features",
+                        "type": {
+                            "type": "map",
+                            "values": ["null", "double", "int", "string", "boolean"]
+                        }
+                    },
+                    {"name": "timestamp", "type": "long"},
+                    {"name": "feature_version", "type": "string"},
+                    {"name": "feature_count", "type": "int"},
+                    {
+                        "name": "validation_status",
+                        "type": {
+                            "type": "enum",
+                            "name": "ValidationStatus",
+                            "symbols": ["VALID", "INVALID", "PARTIAL"]
+                        }
+                    },
+                    {"name": "validation_failures", "type": {"type": "array", "items": "string"}},
+                    {"name": "computation_duration_ms", "type": "long"},
                     {"name": "trace_id", "type": "string"},
                     {"name": "schema_version", "type": "string"}
                 ]
@@ -134,7 +126,7 @@ class KafkaConsumerClient:
             # Create Avro deserializer
             self._deserializer = AvroDeserializer(
                 schema_registry_client,
-                json.dumps(semantic_groups_schema)
+                json.dumps(features_computed_schema)
             )
 
             logger.info(

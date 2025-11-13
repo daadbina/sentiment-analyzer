@@ -79,8 +79,17 @@ class ClusterValidator:
             report["issues"].append(f"Mega-cluster: {cluster_size} articles")
 
         # Check purity (R7 + cluster purity)
-        purity, avg_similarity = self._validate_purity(cluster_embeddings)
+        purity, avg_similarity, std_similarity, min_similarity = self._validate_purity(cluster_embeddings)
         report["metrics"]["similarity_avg"] = avg_similarity
+        report["metrics"]["similarity_std"] = std_similarity
+        report["metrics"]["similarity_min"] = min_similarity
+
+        # Debug log to verify values
+        logger.info(
+            f"Similarity metrics computed: avg={avg_similarity:.4f}, "
+            f"std={std_similarity:.4f}, min={min_similarity:.4f}"
+        )
+
         if not purity:
             report["valid"] = False
             report["issues"].append(f"Low purity: {avg_similarity:.3f} < {self.min_cluster_purity}")
@@ -137,17 +146,23 @@ class ClusterValidator:
 
         return report["valid"], report
 
-    def _validate_purity(self, embeddings: np.ndarray) -> Tuple[bool, float]:
-        """Validate cluster purity using cosine similarity."""
+    def _validate_purity(self, embeddings: np.ndarray) -> Tuple[bool, float, float, float]:
+        """Validate cluster purity using cosine similarity.
+
+        Returns:
+            Tuple of (passed, avg_similarity, std_similarity, min_similarity)
+        """
         if len(embeddings) < 2:
-            return True, 1.0
+            return True, 1.0, 0.0, 1.0
 
         similarities = cosine_similarity(embeddings)
         np.fill_diagonal(similarities, np.nan)
         avg_similarity = np.nanmean(similarities)
+        std_similarity = np.nanstd(similarities)
+        min_similarity = np.nanmin(similarities)
 
         passed = avg_similarity >= self.min_cluster_purity
-        return passed, avg_similarity
+        return passed, avg_similarity, std_similarity, min_similarity
 
     def _validate_temporal_coherence(
         self, articles: List[dict], cluster_created_at: datetime

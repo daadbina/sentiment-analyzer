@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class DeltaLakeWriter:
     """Writes cluster data to Delta Lake with ACID guarantees."""
 
-    def __init__(self, table_path: str = "/data/delta/semantic_groups"):
+    def __init__(self, table_path: str = "C:/data/semantic_groups"):
         """
         Initialize Delta Lake writer.
 

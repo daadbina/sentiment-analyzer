@@ -143,6 +143,28 @@ class FeastConfig:
 
 
 @dataclass
+class FeastHTTPConfig:
+    """Feast HTTP client configuration for remote Feast server."""
+
+    server_url: str
+    timeout: int
+    max_retries: int
+    push_source_name: str
+    feature_view_name: str
+
+    @classmethod
+    def from_env(cls) -> "FeastHTTPConfig":
+        """Load Feast HTTP configuration from environment variables."""
+        return cls(
+            server_url=os.environ.get("FEAST_SERVER_URL", "http://154.53.166.231:6566"),
+            timeout=int(os.environ.get("FEAST_HTTP_TIMEOUT", "30")),
+            max_retries=int(os.environ.get("FEAST_HTTP_MAX_RETRIES", "3")),
+            push_source_name=os.environ.get("FEAST_PUSH_SOURCE_NAME", "semantic_group_push_source"),
+            feature_view_name=os.environ.get("FEAST_FEATURE_VIEW_NAME", "semantic_group_features"),
+        )
+
+
+@dataclass
 class RedisConfig:
     """Redis cache configuration parameters."""
 
@@ -320,6 +342,7 @@ class Config:
     mlflow: MLflowConfig
     s3: S3Config
     feast: FeastConfig
+    feast_http: FeastHTTPConfig
     redis: RedisConfig
     postgres: PostgresConfig
     inference: InferenceConfig
@@ -335,6 +358,7 @@ class Config:
             mlflow=MLflowConfig.from_env(),
             s3=S3Config.from_env(),
             feast=FeastConfig.from_env(),
+            feast_http=FeastHTTPConfig.from_env(),
             redis=RedisConfig.from_env(),
             postgres=PostgresConfig.from_env(),
             inference=InferenceConfig.from_env(),

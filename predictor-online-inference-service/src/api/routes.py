@@ -159,6 +159,14 @@ async def predict(request: PredictionRequest) -> PredictionResponse:
                 model_version=prediction["model_version"],
                 predicted_at=prediction["predicted_at"],
                 trace_id=trace_id,
+                # Optional domain-specific fields
+                prediction_direction=prediction.get("prediction_direction"),
+                prediction_magnitude=prediction.get("prediction_magnitude"),
+                prediction_strength=prediction.get("prediction_strength"),
+                prediction_label=prediction.get("prediction_label"),
+                prediction_certainty=prediction.get("prediction_certainty"),
+                countries=prediction.get("countries"),
+                prediction_description=prediction.get("prediction_description"),
             )
 
         except (FeatureFetchError, FeatureValidationError, InferenceError) as e:
@@ -288,6 +296,14 @@ async def predict_batch(request: BatchPredictionRequest) -> BatchPredictionRespo
                     model_version=p["model_version"],
                     predicted_at=p["predicted_at"],
                     trace_id=trace_id,
+                    # Optional domain-specific fields
+                    prediction_direction=p.get("prediction_direction"),
+                    prediction_magnitude=p.get("prediction_magnitude"),
+                    prediction_strength=p.get("prediction_strength"),
+                    prediction_label=p.get("prediction_label"),
+                    prediction_certainty=p.get("prediction_certainty"),
+                    countries=p.get("countries"),
+                    prediction_description=p.get("prediction_description"),
                 )
                 for p in predictions
             ]

@@ -18,6 +18,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.12.0] - 2025-11-12
+
+### Added - Reconciliation Countries Storage
+- **PostgreSQL Schema Enhancement** (src/storage/postgres_writer.py)
+  - Added `countries TEXT[]` column to `reconciliation_log` table
+  - Added migration to add column if it doesn't exist (backward compatible)
+  - Updated `write_reconciliation_log()` to save countries from reconciled labels
+  - Countries are now persisted in PostgreSQL for all reconciled matches
+  - Enables querying reconciliation results by country
+
+### Fixed - Duplicate Labels Being Written to Storage
+- **Deduplication Logic Bug** (src/service.py)
+  - Fixed critical bug where all 128,457 labels were written even when all were duplicates
+  - Changed logic to always assign `enriched_event_labels = unique_event_labels_for_storage`
+  - Previously, the assignment only happened in the `else` block, leaving original labels intact
+  - Now correctly skips writing when all labels are duplicates
+  - Prevents unnecessary writes to Delta Lake and PostgreSQL
+  - Reduces storage costs and processing time
+
+### Impact
+- **Data Completeness**: Reconciliation results now include country information in PostgreSQL
+- **Storage Efficiency**: Eliminates duplicate writes, saving storage space and processing time
+- **Query Capability**: Can now query reconciliation_log by countries for analytics
+- **No Breaking Changes**: Existing reconciliation_log records remain valid (countries will be NULL)
+
+### Technical Details
+- **Schema Migration**
+  - Uses `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for safe migration
+  - Handles existing tables gracefully (no errors if column exists)
+  - Countries stored as PostgreSQL TEXT[] array type
+  - Empty countries list stored as empty array `{}`
+
+- **Deduplication Fix**
+  - Moved assignment outside conditional block
+  - Now always uses deduplicated list (even if empty)
+  - Prevents writing 128,457 duplicates on every crawl
+  - Log message "No new event labels to write" now actually prevents writes
+
+---
+
+## [0.11.0] - 2025-11-12
+
+### Added - NER Country Extraction for Reconciled Matches
+- **Country Extraction Enhancement** (src/reconciliation/reconciler.py)
+  - Added `_enrich_with_ner_countries()` method to LabelReconciler class
+  - Automatically extracts countries from reconciled matches when no countries are identified
+  - Extracts from two sources:
+    1. Label description/title (GDELT data)
+    2. Semantic group topic_label
+  - Deduplicates extracted countries using case-insensitive comparison
+  - Only processes matches that have no existing countries
+  - Lazy initialization of NER client to avoid circular dependencies
+  - Comprehensive error handling with graceful degradation
+
+### Changed
+- **Reconciliation Pipeline** (src/reconciliation/reconciler.py)
+  - Modified `reconcile_batch()` to call `_enrich_with_ner_countries()` after successful reconciliation
+  - Updates label with extracted countries before returning results
+  - Preserves existing countries if already present in label
+  - NER client initialized on-demand when first needed
+
+### Technical Details
+- **NER Integration**
+  - Uses existing NER client from src/clients/ner_client.py
+  - Supports multilingual country extraction (uses label language)
+  - Extracts LOCATION and GPE entity types
+  - Handles both label text and group topic text
+  - Returns empty list on extraction failure (no blocking errors)
+
+- **Deduplication Logic**
+  - Case-insensitive comparison (e.g., "Syria" and "syria" treated as same)
+  - Preserves original case of first occurrence
+  - Combines countries from both label and group sources
+  - Maintains order of extraction (label first, then group)
+
+### Impact
+- **Improved Label Quality**: Reconciled matches now have country information even when not provided by source
+- **Better Reconciliation**: Country data enables better downstream analysis and filtering
+- **No Breaking Changes**: Existing labels with countries are unchanged
+- **Graceful Degradation**: Service continues if NER client unavailable
+
+### Logging
+- Info-level: Successful country extraction with counts and sources
+- Debug-level: Skipped extractions (countries already present, NER unavailable)
+- Warning-level: Extraction failures with error details
+- Error-level: Unexpected failures in enrichment process
+
+---
+
+## [0.10.0] - 2025-11-12
+
+### Changed - Timeout Logic for Clustering Intervals
+- **4-Hour Wait Period** - Updated src/service.py:
+  - Removed 3-batch exit logic that caused premature service termination
+  - Changed to 4-hour wait period (14400 seconds) to match clustering interval
+  - Service now waits for full clustering cycle before processing labels
+  - Added elapsed time and remaining time logging for better observability
+  - Prevents service from exiting after just a few seconds of empty batches
+
+### Impact
+- **Continuous Operation**: Labeler runs continuously without premature exits
+- **Clustering Alignment**: Waits for complete 4-hour clustering cycle
+- **Better Observability**: Enhanced logging shows wait progress
+- **Architecture Compliance**: Aligns with clustering service schedule
+
+### Technical Details
+- Max wait time: 4 hours (14400 seconds)
+- Batch timeout: 1 second per Kafka poll
+- Max messages per batch: 1000
+- Logging: elapsed_seconds, remaining_seconds
+
+### Before vs After
+- **Before**: Stopped after 3 consecutive empty batches (~3 seconds)
+- **After**: Waits up to 4 hours for semantic groups from clustering
+
+---
+
 ## [0.9.0] - 2025-11-09
 
 ### Added

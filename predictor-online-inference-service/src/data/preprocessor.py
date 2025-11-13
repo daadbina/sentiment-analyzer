@@ -13,7 +13,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.feature_selection import SelectKBest, f_classif
 
 from ..exceptions import InferenceError
-from .feature_engineer import FeatureEngineer
+# from .feature_engineer import FeatureEngineer  # Not used in predictor service
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +37,13 @@ class DataPreprocessor:
         self.enable_feature_engineering = enable_feature_engineering
         self.constant_features_ = None  # Store constant features identified during fit
 
-        if enable_feature_engineering:
-            self.feature_engineer = FeatureEngineer(
-                enable_interaction_features=config.feature_engineering.enable_interaction_features,
-                enable_polynomial_features=config.feature_engineering.enable_polynomial_features,
-                polynomial_degree=config.feature_engineering.polynomial_degree,
-            )
+        # Feature engineering disabled in predictor service
+        # if enable_feature_engineering:
+        #     self.feature_engineer = FeatureEngineer(
+        #         enable_interaction_features=config.feature_engineering.enable_interaction_features,
+        #         enable_polynomial_features=config.feature_engineering.enable_polynomial_features,
+        #         polynomial_degree=config.feature_engineering.polynomial_degree,
+        #     )
 
         logger.info(
             f"Data preprocessor initialized with {scaling_method} scaling, "

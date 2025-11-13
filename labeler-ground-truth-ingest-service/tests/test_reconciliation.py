@@ -2,6 +2,7 @@
 
 import pytest
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.reconciliation.reconciler import TemporalMatcher, SemanticMatcher, LabelReconciler
 
@@ -179,6 +180,149 @@ class TestLabelReconciler:
         """Test reconciler has reconcile_batch method."""
         reconciler = LabelReconciler()
         assert callable(getattr(reconciler, 'reconcile_batch', None))
+
+    @pytest.mark.asyncio
+    async def test_enrich_with_ner_countries_no_existing_countries(self):
+        """Test NER country extraction when label has no countries."""
+        reconciler = LabelReconciler()
+
+        # Mock NER client
+        mock_ner_client = MagicMock()
+        mock_ner_client.extract_countries = AsyncMock(return_value=["Syria", "Iraq"])
+        reconciler.ner_client = mock_ner_client
+
+        result = {
+            "group_id": "group_1",
+            "confidence": 0.8,
+            "label": {
+                "event_id": "event_123",
+                "description": "Conflict in Syria and Iraq",
+                "countries": [],  # No countries
+                "language": "en"
+            }
+        }
+
+        semantic_groups = [
+            {
+                "group_id": "group_1",
+                "topic_label": "Middle East conflict"
+            }
+        ]
+
+        enriched = await reconciler._enrich_with_ner_countries(result, semantic_groups)
+
+        # Verify countries were extracted
+        assert "countries" in enriched["label"]
+        assert len(enriched["label"]["countries"]) > 0
+        # NER client should have been called
+        assert mock_ner_client.extract_countries.called
+
+    @pytest.mark.asyncio
+    async def test_enrich_with_ner_countries_existing_countries(self):
+        """Test NER country extraction skips when label already has countries."""
+        reconciler = LabelReconciler()
+
+        # Mock NER client
+        mock_ner_client = MagicMock()
+        mock_ner_client.extract_countries = AsyncMock(return_value=["Syria"])
+        reconciler.ner_client = mock_ner_client
+
+        result = {
+            "group_id": "group_1",
+            "confidence": 0.8,
+            "label": {
+                "event_id": "event_123",
+                "description": "Conflict in Syria",
+                "countries": ["Syria"],  # Already has countries
+                "language": "en"
+            }
+        }
+
+        semantic_groups = [
+            {
+                "group_id": "group_1",
+                "topic_label": "Middle East conflict"
+            }
+        ]
+
+        enriched = await reconciler._enrich_with_ner_countries(result, semantic_groups)
+
+        # Verify countries were not changed
+        assert enriched["label"]["countries"] == ["Syria"]
+        # NER client should NOT have been called
+        assert not mock_ner_client.extract_countries.called
+
+    @pytest.mark.asyncio
+    async def test_enrich_with_ner_countries_deduplication(self):
+        """Test NER country extraction deduplicates countries."""
+        reconciler = LabelReconciler()
+
+        # Mock NER client to return duplicates with different cases
+        mock_ner_client = MagicMock()
+        mock_ner_client.extract_countries = AsyncMock(
+            side_effect=[
+                ["Syria", "Iraq"],  # From label
+                ["syria", "Turkey"]  # From group (syria is duplicate)
+            ]
+        )
+        reconciler.ner_client = mock_ner_client
+
+        result = {
+            "group_id": "group_1",
+            "confidence": 0.8,
+            "label": {
+                "event_id": "event_123",
+                "description": "Conflict in Syria and Iraq",
+                "countries": [],
+                "language": "en"
+            }
+        }
+
+        semantic_groups = [
+            {
+                "group_id": "group_1",
+                "topic_label": "Syria and Turkey conflict"
+            }
+        ]
+
+        enriched = await reconciler._enrich_with_ner_countries(result, semantic_groups)
+
+        # Verify deduplication (syria/Syria should appear only once)
+        countries = enriched["label"]["countries"]
+        assert len(countries) == 3  # Syria, Iraq, Turkey (syria deduplicated)
+        # Check case-insensitive uniqueness
+        countries_lower = [c.lower() for c in countries]
+        assert len(countries_lower) == len(set(countries_lower))
+
+    @pytest.mark.asyncio
+    async def test_enrich_with_ner_countries_no_ner_client(self):
+        """Test NER country extraction gracefully handles missing NER client."""
+        with patch('src.reconciliation.reconciler._get_ner_client', return_value=None):
+            reconciler = LabelReconciler()
+            reconciler.ner_client = None
+
+            result = {
+                "group_id": "group_1",
+                "confidence": 0.8,
+                "label": {
+                    "event_id": "event_123",
+                    "description": "Conflict in Syria",
+                    "countries": [],
+                    "language": "en"
+                }
+            }
+
+            semantic_groups = [
+                {
+                    "group_id": "group_1",
+                    "topic_label": "Middle East conflict"
+                }
+            ]
+
+            enriched = await reconciler._enrich_with_ner_countries(result, semantic_groups)
+
+            # Verify result is unchanged
+            assert enriched["label"]["countries"] == []
 
 
 if __name__ == "__main__":

@@ -199,12 +199,22 @@ class CanonicalizeNormalizerService:
 
             # Step 7: Sentiment Analysis
             sentiment_text = f"{content_result.normalized_title} {content_result.normalized_body}"
+
+            # Log sentiment text details for debugging
+            logger.info(
+                f"[{trace_id}] Preparing sentiment analysis: article_id={article_id}, "
+                f"title_length={len(content_result.normalized_title)}, "
+                f"body_length={len(content_result.normalized_body)}, "
+                f"total_length={len(sentiment_text)}"
+            )
+
             sentiment_score = self.sentiment_analyzer.analyze(
                 sentiment_text,
                 language=validated_msg.language
             )
-            logger.debug(
-                f"[{trace_id}] Sentiment analysis: article_id={article_id}, "
+
+            logger.info(
+                f"[{trace_id}] Sentiment analysis complete: article_id={article_id}, "
                 f"language={validated_msg.language}, sentiment_score={sentiment_score:.3f}"
             )
 

@@ -35,7 +35,7 @@ def setup_logging(log_level: str = "INFO", service_name: str = "trainer-model-re
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
-    # Set log levels for third-party libraries
+    # Set log levels for third-party libraries to suppress DEBUG/INFO noise
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("fastapi").setLevel(logging.WARNING)
     logging.getLogger("confluent_kafka").setLevel(logging.WARNING)
@@ -47,6 +47,22 @@ def setup_logging(log_level: str = "INFO", service_name: str = "trainer-model-re
     logging.getLogger("botocore").setLevel(logging.WARNING)
     logging.getLogger("xgboost").setLevel(logging.WARNING)
     logging.getLogger("sklearn").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("s3transfer").setLevel(logging.WARNING)
+    logging.getLogger("websockets").setLevel(logging.ERROR)
+
+    # Suppress deprecation warnings from libraries
+    import warnings
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="websockets")
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="uvicorn")
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="feast")
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="mlflow")
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="opentelemetry")
+    warnings.filterwarnings("ignore", message=".*artifact_path.*deprecated.*")
+    warnings.filterwarnings("ignore", message=".*Call to deprecated method.*")
+
+    # Suppress MLflow's internal warnings about artifact_path
+    logging.getLogger("mlflow.models.model").setLevel(logging.ERROR)
 
     root_logger.info(f"Logging configured: level={log_level}, service={service_name}")
 

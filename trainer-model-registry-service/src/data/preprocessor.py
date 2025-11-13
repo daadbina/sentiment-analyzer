@@ -15,7 +15,6 @@ from sklearn.feature_selection import SelectKBest, f_classif
 from src.config import config
 from src.exceptions import DataPreparationError
 from src.utils.trace import get_tracer
-from src.data.feature_engineer import FeatureEngineer
 
 logger = logging.getLogger(__name__)
 tracer = get_tracer(__name__)
@@ -24,32 +23,22 @@ tracer = get_tracer(__name__)
 class DataPreprocessor:
     """Preprocesses data for model training."""
 
-    def __init__(self, scaling_method: str = "standard", enable_feature_engineering: bool = True):
+    def __init__(self, scaling_method: str = "standard"):
         """
         Initialize data preprocessor.
 
         Args:
             scaling_method: Scaling method (standard or minmax)
-            enable_feature_engineering: Whether to enable feature engineering
         """
         self.scaling_method = scaling_method
         self.scaler = None
         self.imputer = None
         self.feature_selector = None
-        self.feature_engineer = None
-        self.enable_feature_engineering = enable_feature_engineering
         self.constant_features_ = None  # Store constant features identified during fit
-
-        if enable_feature_engineering:
-            self.feature_engineer = FeatureEngineer(
-                enable_interaction_features=config.feature_engineering.enable_interaction_features,
-                enable_polynomial_features=config.feature_engineering.enable_polynomial_features,
-                polynomial_degree=config.feature_engineering.polynomial_degree,
-            )
+        self.feature_names_ = None  # Store feature names after preprocessing
 
         logger.info(
-            f"Data preprocessor initialized with {scaling_method} scaling, "
-            f"feature_engineering={enable_feature_engineering}"
+            f"Data preprocessor initialized with {scaling_method} scaling"
         )
 
     def preprocess(
@@ -111,20 +100,18 @@ class DataPreprocessor:
                 X = self._handle_missing_values(X, fit=fit)
                 logger.debug(f"Shape after handling missing values: {X.shape}")
 
-                # Feature engineering (before scaling)
-                if self.enable_feature_engineering and self.feature_engineer is not None:
-                    X_before_fe = X.shape[1]
-                    X = self.feature_engineer.engineer_features(X, fit=fit)
-                    logger.info(f"Feature engineering: {X_before_fe} -> {X.shape[1]} features")
-                    logger.debug(f"Shape after feature engineering: {X.shape}")
+                # Remove constant features (BEFORE scaling to avoid issues)
+                X = self._remove_constant_features(X, fit=fit)
+                logger.debug(f"Shape after removing constant features: {X.shape}")
 
                 # Scale features
                 X = self._scale_features(X, fit=fit)
                 logger.debug(f"Shape after scaling: {X.shape}")
 
-                # Remove constant features
-                X = self._remove_constant_features(X, fit=fit)
-                logger.debug(f"Shape after removing constant features: {X.shape}")
+                # Store feature names after all preprocessing
+                if fit:
+                    self.feature_names_ = list(X.columns)
+                    logger.info(f"Stored {len(self.feature_names_)} feature names for inference")
 
                 # Log final statistics
                 logger.info(f"Preprocessing complete: {X.shape}")
@@ -371,3 +358,73 @@ class DataPreprocessor:
                     stage="feature_selection",
                     details={"k": k},
                 )
+
+    def detect_constant_features(self, X: pd.DataFrame, threshold: float = 0.0) -> List[str]:
+        """
+        Detect constant or near-constant features.
+
+        This method identifies features with zero or near-zero variance that provide
+        no predictive power. According to COMPREHENSIVE_REFACTORING_ANALYSIS.md,
+        4 sentiment features have zero variance and should be removed.
+
+        Args:
+            X: Feature dataframe
+            threshold: Variance threshold (default: 0.0 for exact constants)
+
+        Returns:
+            List of constant feature names
+
+        Example:
+            >>> preprocessor = DataPreprocessor()
+            >>> constant_features = preprocessor.detect_constant_features(X_train)
+            >>> logger.warning(f"Found {len(constant_features)} constant features: {constant_features}")
+        """
+        with tracer.start_as_current_span("detect_constant_features"):
+            try:
+                # Calculate variance for all numeric columns
+                variances = X.var()
+
+                # Identify features with variance <= threshold
+                constant_features = variances[variances <= threshold].index.tolist()
+
+                if constant_features:
+                    logger.warning(
+                        f"Detected {len(constant_features)} constant features "
+                        f"(variance <= {threshold}): {constant_features}"
+                    )
+                    # Log the constant values
+                    if len(X) > 0:
+                        constant_values = X[constant_features].iloc[0].to_dict()
+                        logger.warning(f"Constant feature values: {constant_values}")
+
+                    # Log variance statistics
+                    logger.info(f"Variance statistics:\n{variances.describe()}")
+                else:
+                    logger.info(f"No constant features detected (threshold={threshold})")
+
+                return constant_features
+
+            except Exception as e:
+                logger.error(f"Constant feature detection failed: {e}")
+                raise DataPreparationError(
+                    f"Constant feature detection failed: {e}",
+                    stage="constant_feature_detection",
+                )
+
+    def get_feature_names(self) -> Optional[List[str]]:
+        """
+        Get feature names after preprocessing.
+
+        Returns:
+            List of feature names or None if not fitted
+        """
+        return self.feature_names_
+
+    def get_constant_features(self) -> Optional[List[str]]:
+        """
+        Get constant features identified during fit.
+
+        Returns:
+            List of constant feature names or None if not fitted
+        """
+        return self.constant_features_

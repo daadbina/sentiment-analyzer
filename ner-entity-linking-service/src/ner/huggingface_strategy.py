@@ -3,6 +3,7 @@
 import logging
 from typing import List, Tuple, Optional
 
+import torch
 from transformers import pipeline
 from src.ner.base_strategy import NERStrategy
 from src.exceptions import NERExtractionError

@@ -32,6 +32,8 @@ class QdrantClient:
                 host=self.config.host,
                 port=self.config.port,
                 api_key=self.config.api_key,
+                prefer_grpc=False,
+                https=False,
             )
 
             # Test connection

@@ -1,18 +1,20 @@
 """
-Kafka consumer client for consuming semantic groups and ground-truth messages.
+Kafka consumer client for consuming computed features and ground-truth messages.
 
 Provides abstraction over confluent-kafka for consuming messages with Avro deserialization.
 Implements exactly-once semantics and proper offset management.
 """
 
 import asyncio
+import json
 import logging
 from collections.abc import Callable
 from typing import Any
 
-from confluent_kafka import KafkaError, KafkaException
-from confluent_kafka.avro import AvroConsumer
-from confluent_kafka.avro.serializer import SerializerError
+from confluent_kafka import Consumer, KafkaError, KafkaException
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroDeserializer
+from confluent_kafka.serialization import SerializationContext, MessageField
 
 from ..config import KafkaConfig
 from ..exceptions import KafkaError as KafkaErrorException
@@ -38,7 +40,8 @@ class KafkaConsumerClient:
             config: Kafka configuration
         """
         self.config = config
-        self._consumer: AvroConsumer | None = None
+        self._consumer: Consumer | None = None
+        self._deserializer: AvroDeserializer | None = None
         self._running = False
         self._skipped_messages_count = 0
         self._last_skipped_log_count = 0
@@ -62,7 +65,6 @@ class KafkaConsumerClient:
             consumer_config = {
                 "bootstrap.servers": self.config.bootstrap_servers,
                 "group.id": self.config.consumer_group_id,
-                "schema.registry.url": self.config.schema_registry_url,
                 "auto.offset.reset": "earliest",
                 "enable.auto.commit": False,  # Manual commit for exactly-once
                 "max.poll.interval.ms": 300000,  # 5 minutes
@@ -81,8 +83,51 @@ class KafkaConsumerClient:
                     }
                 )
 
-            # Create Avro consumer
-            self._consumer = AvroConsumer(consumer_config)
+            # Create regular consumer (not AvroConsumer)
+            self._consumer = Consumer(consumer_config)
+
+            # Create schema registry client and deserializer
+            schema_registry_client = SchemaRegistryClient(
+                {"url": self.config.schema_registry_url}
+            )
+
+            # Define the features_computed schema (must match feature-engineering-service output)
+            features_computed_schema = {
+                "type": "record",
+                "name": "FeaturesComputedMessage",
+                "namespace": "com.sentiment_analyzer.feature_engineering",
+                "fields": [
+                    {"name": "group_id", "type": "string"},
+                    {
+                        "name": "features",
+                        "type": {
+                            "type": "map",
+                            "values": ["null", "double", "int", "string", "boolean"]
+                        }
+                    },
+                    {"name": "timestamp", "type": "long"},
+                    {"name": "feature_version", "type": "string"},
+                    {"name": "feature_count", "type": "int"},
+                    {
+                        "name": "validation_status",
+                        "type": {
+                            "type": "enum",
+                            "name": "ValidationStatus",
+                            "symbols": ["VALID", "INVALID", "PARTIAL"]
+                        }
+                    },
+                    {"name": "validation_failures", "type": {"type": "array", "items": "string"}},
+                    {"name": "computation_duration_ms", "type": "long"},
+                    {"name": "trace_id", "type": "string"},
+                    {"name": "schema_version", "type": "string"}
+                ]
+            }
+
+            # Create Avro deserializer
+            self._deserializer = AvroDeserializer(
+                schema_registry_client,
+                json.dumps(features_computed_schema)
+            )
 
             logger.info(
                 f"Connected to Kafka: brokers={self.config.bootstrap_servers}, "
@@ -103,12 +148,12 @@ class KafkaConsumerClient:
             self._consumer.close()
             self._consumer = None
 
-    def _ensure_connected(self) -> AvroConsumer:
+    def _ensure_connected(self) -> Consumer:
         """
         Ensure consumer is connected.
 
         Returns:
-            AvroConsumer instance
+            Consumer instance
 
         Raises:
             KafkaErrorException: If not connected
@@ -208,36 +253,7 @@ class KafkaConsumerClient:
                         f"partition={msg.partition()}, offset={msg.offset()}"
                     )
 
-                except SerializerError as e:
-                    # Handle deserialization errors gracefully - skip invalid messages
-                    self._skipped_messages_count += 1
 
-                    # Log first error with details to understand the issue
-                    if self._skipped_messages_count == 1:
-                        logger.error(
-                            f"First deserialization error - topic={self.config.input_topic}, "
-                            f"partition=0, offset=?, error={e}. "
-                            f"This may indicate schema mismatch or non-Avro messages in topic.",
-                            extra={"trace_id": trace_id},
-                        )
-
-                    # Only log every 100 skipped messages to reduce log noise
-                    if self._skipped_messages_count - self._last_skipped_log_count >= 100:
-                        logger.warning(
-                            f"Skipped {self._skipped_messages_count} messages with deserialization errors "
-                            f"(last error: {e})",
-                            extra={"trace_id": trace_id},
-                        )
-                        self._last_skipped_log_count = self._skipped_messages_count
-
-                    kafka_errors_total.labels(
-                        topic=self.config.input_topic,
-                        operation="deserialize",
-                        error_type="SerializerError",
-                    ).inc()
-                    # Commit offset to skip this message and continue
-                    consumer.commit(asynchronous=False)
-                    continue
 
                 except KafkaErrorException as e:
                     # Handle processing errors gracefully - log and continue
@@ -289,8 +305,19 @@ class KafkaConsumerClient:
             },
         ):
             try:
-                # Deserialize message value (Avro)
-                message_value = msg.value()
+                # Deserialize message value using new Avro API
+                if self._deserializer is None:
+                    raise KafkaErrorException(
+                        "Avro deserializer not initialized",
+                        operation="deserialize",
+                        trace_id=trace_id,
+                    )
+
+                # Deserialize the message value
+                message_value = self._deserializer(
+                    msg.value(),
+                    SerializationContext(topic, MessageField.VALUE)
+                )
 
                 logger.debug(
                     f"Received message: topic={topic}, partition={partition}, " f"offset={offset}",
@@ -306,24 +333,6 @@ class KafkaConsumerClient:
                     consumer_group=self.config.consumer_group_id,
                 ).inc()
 
-            except SerializerError as e:
-                logger.error(
-                    f"Failed to deserialize message: topic={topic}, "
-                    f"partition={partition}, offset={offset}, error={e}",
-                    exc_info=True,
-                    extra={"trace_id": trace_id},
-                )
-                kafka_errors_total.labels(
-                    topic=topic,
-                    operation="deserialize",
-                    error_type="SerializerError",
-                ).inc()
-                raise KafkaErrorException(
-                    f"Failed to deserialize message: {e}",
-                    topic=topic,
-                    operation="deserialize",
-                    trace_id=trace_id,
-                ) from e
             except Exception as e:
                 logger.error(
                     f"Failed to process message: topic={topic}, "

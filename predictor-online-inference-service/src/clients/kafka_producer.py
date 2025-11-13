@@ -317,8 +317,41 @@ PREDICTION_SCHEMA = {
             "name": "features",
             "type": {
                 "type": "map",
-                "values": ["null", "double", "string", "long"],
+                "values": ["null", "double", "string", "long", "boolean"],
             },
         },
     ],
 }
+
+
+def sanitize_features_for_kafka(features: dict[str, Any]) -> dict[str, Any]:
+    """
+    Sanitize features dict to ensure all values are compatible with Kafka Avro schema.
+
+    Converts unsupported types to supported ones:
+    - Lists/arrays -> JSON string
+    - Complex objects -> JSON string
+    - None -> null
+
+    Args:
+        features: Raw features dict
+
+    Returns:
+        Sanitized features dict
+    """
+    import json
+
+    sanitized = {}
+    for key, value in features.items():
+        if value is None:
+            sanitized[key] = None
+        elif isinstance(value, (bool, int, float, str)):
+            sanitized[key] = value
+        elif isinstance(value, (list, dict)):
+            # Convert complex types to JSON string
+            sanitized[key] = json.dumps(value)
+        else:
+            # Convert unknown types to string
+            sanitized[key] = str(value)
+
+    return sanitized

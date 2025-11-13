@@ -1,0 +1,11 @@
+src/
+tests/
+venv311/
+__pycache__/
+*.log
+data/
+feast/
+helm/
+k8s/
+schemas/
+

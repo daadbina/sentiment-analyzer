@@ -1,11 +1,13 @@
 """
 Streaming predictor for real-time predictions from Kafka.
 
-Consumes semantic groups from Kafka and produces predictions.
+Consumes computed features from Kafka (features_computed topic) and produces predictions.
+This ensures features are ready before predictions are made, avoiding race conditions.
 Implements low-latency streaming inference with <200ms p95 latency.
 """
 
 import logging
+import time
 from datetime import datetime
 from typing import Any
 
@@ -17,7 +19,7 @@ from ..metrics import MetricsCollector
 from ..models.model_manager import ModelManager
 from ..storage.prediction_cache import PredictionCache
 from ..storage.prediction_logger import PredictionLogger
-from ..utils.trace import TracingContext, trace_span
+from ..utils.trace import TracingContext, trace_span, generate_trace_id
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,8 @@ class StreamingPredictor:
     """
     Predictor for streaming inference from Kafka.
 
-    Consumes semantic groups and produces predictions with low latency.
+    Consumes computed features (features_computed topic) and produces predictions with low latency.
+    Features are already computed by feature-engineering-service, avoiding race conditions.
     """
 
     def __init__(
@@ -69,8 +72,8 @@ class StreamingPredictor:
 
         self._running = True
 
-        # Subscribe to semantic_groups topic
-        await self.kafka_consumer.subscribe(["semantic_groups"])
+        # Subscribe to features_computed topic (after feature engineering completes)
+        await self.kafka_consumer.subscribe(["features_computed"])
 
         # Start consuming messages
         await self.kafka_consumer.consume_messages(self._handle_message)
@@ -86,132 +89,233 @@ class StreamingPredictor:
         # Close Kafka consumer
         await self.kafka_consumer.disconnect()
 
-    async def _handle_message(self, message: dict[str, Any]) -> None:
+    async def _handle_message(self, message: dict[str, Any], topic: str) -> None:
         """
-        Handle incoming Kafka message.
+        Handle incoming Kafka message from features_computed topic.
 
         Args:
-            message: Kafka message containing semantic group data
+            message: Kafka message containing computed features
+            topic: Kafka topic name
         """
-        # Generate trace ID for this message
-        trace_id = TracingContext.generate_trace_id()
+        # Use trace_id from message or generate new one
+        trace_id = message.get("trace_id") or generate_trace_id()
 
         with trace_span(
             "handle_streaming_message",
             attributes={"trace_id": trace_id},
         ):
-            start_time = datetime.now()
+            start_time = time.time()  # Use time.time() for consistent float timestamps
 
             try:
-                # Extract group data
+                # Extract group data from features_computed message
                 group_id = message.get("group_id")
-                domain = message.get("domain")
+                features = message.get("features", {})
+                validation_status = message.get("validation_status", "UNKNOWN")
 
-                if not group_id or not domain:
+                if not group_id:
                     logger.warning(
-                        "Invalid message: missing group_id or domain",
+                        "Invalid message: missing group_id",
                         extra={"trace_id": trace_id},
                     )
                     return
 
-                logger.debug(
-                    f"Processing streaming message: group_id={group_id}, domain={domain}",
-                    extra={"trace_id": trace_id, "group_id": group_id},
-                )
-
-                # Check cache first
-                cached_prediction = await self.prediction_cache.get_cached_prediction(
-                    group_id,
-                    trace_id,
-                )
-
-                if cached_prediction:
-                    logger.debug(
-                        f"Using cached prediction: group_id={group_id}",
+                # Skip if features are invalid
+                if validation_status == "INVALID":
+                    logger.warning(
+                        f"Skipping prediction for group {group_id}: features validation failed",
                         extra={"trace_id": trace_id, "group_id": group_id},
-                    )
-                    MetricsCollector.record_cache_hit()
-
-                    # Still log to Kafka for downstream consumers
-                    await self.prediction_logger._publish_to_kafka(
-                        cached_prediction,
-                        trace_id,
                     )
                     return
 
-                MetricsCollector.record_cache_miss()
+                # Determine domains from features
+                # Features come from feature-engineering WITHOUT prefixes
+                # Check if this is a BTC prediction (has btc_ prefixed features)
+                # and/or conflict prediction (has semantic features)
+                has_btc_features = any(k.startswith("btc_") for k in features.keys())
+                has_semantic_features = any(k in ["sentiment_mean", "entity_count", "source_credibility_avg"] for k in features.keys())
 
-                # Fetch features
-                features = await self.feature_fetcher.fetch_online_features(
-                    group_id,
-                    trace_id,
-                )
+                # Determine which domains to predict for
+                domains_to_predict = []
+                if has_btc_features:
+                    domains_to_predict.append("btc")
+                if has_semantic_features:
+                    domains_to_predict.append("conflict")
 
-                # Validate features
-                await self.feature_validator.validate_features(
-                    features,
-                    group_id,
-                    trace_id,
-                )
-
-                # Get model for group (A/B testing)
-                model, model_version = await self.model_manager.get_model_for_group(
-                    group_id,
-                    trace_id,
-                )
-
-                # Make prediction
-                prediction_result = await self.model_manager.predict(
-                    model,
-                    features,
-                    model_version,
-                    trace_id,
-                )
-
-                # Calculate latency
-                latency_ms = (datetime.now() - start_time).total_seconds() * 1000
-
-                # Build prediction dictionary
-                prediction = {
-                    "group_id": group_id,
-                    "domain": domain,
-                    "prediction_probability": prediction_result["prediction_probability"],
-                    "prediction_confidence": prediction_result["prediction_confidence"],
-                    "model_version": model_version,
-                    "predicted_at": datetime.utcnow().isoformat(),
-                    "trace_id": trace_id,
-                    "features": features,
-                }
-
-                # Record metrics
-                MetricsCollector.record_prediction(
-                    mode="streaming",
-                    model_version=model_version,
-                    domain=domain,
-                    latency_ms=latency_ms,
-                    confidence=prediction_result["prediction_confidence"],
-                )
-
-                # Cache prediction
-                await self.prediction_cache.cache_prediction(
-                    group_id,
-                    prediction,
-                    trace_id,
-                )
-
-                # Log prediction to database and Kafka
-                await self.prediction_logger.log_prediction(
-                    prediction,
-                    trace_id,
-                )
+                if not domains_to_predict:
+                    logger.warning(
+                        f"No recognizable features found, skipping prediction",
+                        extra={"trace_id": trace_id, "group_id": group_id, "feature_keys": list(features.keys())[:10]},
+                    )
+                    return
 
                 logger.info(
+                    f"Processing features_computed message: group_id={group_id}, domains={domains_to_predict}, feature_count={len(features)}",
+                    extra={"trace_id": trace_id, "group_id": group_id},
+                )
+
+                # Make predictions for each domain
+                for domain in domains_to_predict:
+                    logger.info(
+                        f"Making {domain} prediction for group_id={group_id}",
+                        extra={"trace_id": trace_id, "group_id": group_id, "domain": domain},
+                    )
+
+                    # Check cache first
+                    cached_prediction = await self.prediction_cache.get_cached_prediction(
+                        group_id,
+                        trace_id,
+                    )
+
+                    if cached_prediction and cached_prediction.get("domain") == domain:
+                        logger.debug(
+                            f"Using cached {domain} prediction: group_id={group_id}",
+                            extra={"trace_id": trace_id, "group_id": group_id, "domain": domain},
+                        )
+                        MetricsCollector.record_cache_hit()
+
+                        # Still log to Kafka for downstream consumers
+                        await self.prediction_logger._publish_to_kafka(
+                            cached_prediction,
+                            trace_id,
+                        )
+                        continue
+
+                    MetricsCollector.record_cache_miss()
+
+                    # Prepare features for this domain
+                    # Features are already in the message and validated by feature-engineering-service
+                    # But they come WITHOUT prefixes - we need to add prefixes for the model
+                    logger.debug(
+                        f"Using pre-computed features from feature-engineering-service (validation_status={validation_status})",
+                        extra={"trace_id": trace_id, "group_id": group_id, "domain": domain},
+                    )
+
+                    # Add prefixes to features based on domain
+                    # Models expect features WITH prefixes:
+                    # - BTC model: btc_ prefix + reads from btc_features.parquet
+                    # - Conflict model: semantic_group_features: prefix (needs to be added)
+                    domain_features = features.copy()
+
+                    if domain == "btc":
+                        # For BTC predictions, read features from btc_features.parquet
+                        # The parquet file has the correct feature names that the model was trained on
+                        logger.info(
+                            f"BTC prediction detected - will read features from btc_features.parquet",
+                            extra={"trace_id": trace_id, "group_id": group_id},
+                        )
+                        # Features will be read from parquet in the model_manager.predict_btc() method
+                        # Keep the features dict as-is for now
+                    elif domain == "conflict":
+                        # Add semantic_group_features: prefix to non-btc features
+                        prefixed_features = {}
+                        for key, value in domain_features.items():
+                            if key.startswith("btc_") or key in ["group_id", "timestamp", "countries", "btc_timestamp"]:
+                                # Keep BTC features and metadata as-is
+                                prefixed_features[key] = value
+                            elif not key.startswith("semantic_group_features:"):
+                                # Add prefix to semantic features
+                                prefixed_features[f"semantic_group_features:{key}"] = value
+                            else:
+                                # Already has prefix
+                                prefixed_features[key] = value
+                        domain_features = prefixed_features
+                        logger.debug(
+                            f"Added semantic_group_features: prefix to {len(domain_features)} features",
+                            extra={"trace_id": trace_id, "group_id": group_id},
+                        )
+
+                    # Get model for group with specified domain
+                    model, model_version = await self.model_manager.get_model_for_group(
+                        group_id,
+                        trace_id,
+                        domain=domain,
+                    )
+
+                    # Make prediction
+                    prediction_result = await self.model_manager.predict(
+                        model,
+                        domain_features,
+                        model_version,
+                        trace_id,
+                        domain=domain,
+                    )
+
+                    # Calculate latency
+                    domain_end_time = time.time()
+                    domain_latency_ms = (domain_end_time - start_time) * 1000
+
+                    # Build prediction dictionary with all required fields
+                    # Note: Kafka schema requires prediction_probability and features fields
+                    prediction = {
+                        "group_id": group_id,
+                        "domain": domain,
+                        "model_version": model_version,
+                        "predicted_at": datetime.utcnow().isoformat(),
+                        "trace_id": trace_id,
+                        "prediction_confidence": prediction_result.get("prediction_confidence", 0.0),
+                        "features": {},  # Required by Kafka schema
+                    }
+
+                    # Add domain-specific fields
+                    if domain == "btc":
+                        # BTC predictions: use confidence (R² score) as prediction_probability since it's regression, not classification
+                        prediction.update({
+                            "prediction_probability": prediction_result.get("prediction_confidence", 0.5),
+                            "prediction_value": prediction_result.get("prediction_value"),
+                            "prediction_direction": prediction_result.get("prediction_direction"),
+                            "prediction_magnitude": prediction_result.get("prediction_magnitude"),
+                            "prediction_strength": prediction_result.get("prediction_strength"),
+                            "prediction_description": prediction_result.get("prediction_description"),
+                        })
+                    else:
+                        # Conflict predictions
+                        prediction.update({
+                            "prediction_probability": prediction_result.get("prediction_probability", 0.5),
+                        })
+
+                    # Record metrics
+                    MetricsCollector.record_prediction(
+                        mode="streaming",
+                        model_version=model_version,
+                        domain=domain,
+                        latency_ms=domain_latency_ms,
+                        confidence=prediction_result["prediction_confidence"],
+                    )
+
+                    # Cache prediction
+                    await self.prediction_cache.cache_prediction(
+                        group_id,
+                        prediction,
+                        trace_id,
+                    )
+
+                    # Log prediction to database and Kafka
+                    await self.prediction_logger.log_prediction(
+                        prediction,
+                        trace_id,
+                    )
+
+                    logger.info(
+                        f"{domain.upper()} prediction completed: group_id={group_id}, "
+                        f"latency_ms={domain_latency_ms:.2f}",
+                        extra={
+                            "trace_id": trace_id,
+                            "group_id": group_id,
+                            "domain": domain,
+                            "latency_ms": domain_latency_ms,
+                        },
+                    )
+
+                # Overall completion log
+                end_time = time.time()
+                total_latency_ms = (end_time - start_time) * 1000
+                logger.info(
                     f"Streaming prediction completed: group_id={group_id}, "
-                    f"latency_ms={latency_ms:.2f}",
+                    f"domains={domains_to_predict}, total_latency_ms={total_latency_ms:.2f}",
                     extra={
                         "trace_id": trace_id,
                         "group_id": group_id,
-                        "latency_ms": latency_ms,
+                        "latency_ms": total_latency_ms,
                     },
                 )
 

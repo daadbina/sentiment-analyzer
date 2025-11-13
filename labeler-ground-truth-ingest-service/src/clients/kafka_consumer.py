@@ -218,7 +218,7 @@ class SemanticGroupConsumer:
         max_consecutive_timeouts = self.config.kafka.consumer_max_consecutive_timeouts
         try:
             batch_start_time = time.time()
-            logger.info(
+            logger.debug(
                 "Starting to consume semantic groups",
                 operation="consume_batch",
                 timeout_ms=timeout_ms,
@@ -250,7 +250,8 @@ class SemanticGroupConsumer:
                 if msg is None:
                     consecutive_timeouts += 1
                     duration_ms = (time.time() - batch_start_time) * 1000
-                    logger.info(
+                    # Use DEBUG level to reduce log noise during normal polling
+                    logger.debug(
                         "Poll timeout reached",
                         operation="consume_batch",
                         messages_so_far=messages_consumed,
@@ -274,7 +275,7 @@ class SemanticGroupConsumer:
 
                     if consecutive_timeouts >= max_consecutive_timeouts:
                         duration_ms = (time.time() - batch_start_time) * 1000
-                        logger.info(
+                        logger.debug(
                             "Max consecutive timeouts reached, exiting consume loop",
                             operation="consume_batch",
                             consecutive_timeouts=consecutive_timeouts,
@@ -363,16 +364,27 @@ class SemanticGroupConsumer:
 
             total_duration = time.time() - poll_start_time
             duration_ms = (time.time() - batch_start_time) * 1000
-            logger.info(
-                f"Consume batch completed",
-                operation="consume_batch",
-                group_count=len(groups),
-                poll_count=poll_count,
-                max_polls=max_polls,
-                total_duration_seconds=total_duration,
-                messages_per_second=len(groups) / total_duration if total_duration > 0 else 0,
-                duration_ms=duration_ms
-            )
+            # Only log at INFO level if we actually consumed messages
+            if len(groups) > 0:
+                logger.info(
+                    f"Consume batch completed",
+                    operation="consume_batch",
+                    group_count=len(groups),
+                    poll_count=poll_count,
+                    max_polls=max_polls,
+                    total_duration_seconds=total_duration,
+                    messages_per_second=len(groups) / total_duration if total_duration > 0 else 0,
+                    duration_ms=duration_ms
+                )
+            else:
+                # Use DEBUG level for empty batches
+                logger.debug(
+                    f"Consume batch completed (empty)",
+                    operation="consume_batch",
+                    group_count=0,
+                    poll_count=poll_count,
+                    duration_ms=duration_ms
+                )
 
             return groups
 

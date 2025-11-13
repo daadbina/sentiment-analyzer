@@ -11,24 +11,19 @@ from pydantic_settings import BaseSettings
 
 
 class FeastConfig(BaseSettings):
-    """Feast feature store configuration."""
+    """Feast feature store configuration - uses remote HTTP API only."""
 
     model_config = ConfigDict(extra="ignore", env_file=".env", case_sensitive=True)
 
-    repo_path: str = Field(
-        default=".",
-        alias="FEAST_REPO_PATH",
-        description="Path to Feast repository (directory containing feature_store.yaml)",
+    server_url: str = Field(
+        default="http://154.53.166.231:6566",
+        alias="FEAST_SERVER_URL",
+        description="URL of remote Feast feature server",
     )
-    registry_path: str = Field(
-        default="file:///C:/feast/registry.db",
-        alias="FEAST_REGISTRY_PATH",
-        description="Path to Feast registry database",
-    )
-    feature_store_type: str = Field(
-        default="local",
-        alias="FEAST_FEATURE_STORE_TYPE",
-        description="Type of feature store (local, remote, etc.)",
+    timeout: int = Field(
+        default=30,
+        alias="FEAST_TIMEOUT",
+        description="Timeout for Feast HTTP requests in seconds",
     )
 
 

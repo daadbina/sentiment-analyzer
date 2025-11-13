@@ -148,11 +148,18 @@ class PredictionLogger:
             trace_id: Optional trace ID for distributed tracing
         """
         try:
-            # Import the schema
-            from src.clients.kafka_producer import PREDICTION_SCHEMA
+            # Import the schema and sanitize function
+            from src.clients.kafka_producer import PREDICTION_SCHEMA, sanitize_features_for_kafka
+
+            # Sanitize features to ensure compatibility with Kafka Avro schema
+            sanitized_prediction = prediction.copy()
+            if "features" in sanitized_prediction:
+                sanitized_prediction["features"] = sanitize_features_for_kafka(
+                    sanitized_prediction["features"]
+                )
 
             await self.kafka_producer.produce_prediction(
-                prediction=prediction,
+                prediction=sanitized_prediction,
                 value_schema=PREDICTION_SCHEMA,
                 trace_id=trace_id,
             )

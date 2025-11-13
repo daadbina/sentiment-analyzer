@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2025-11-12
+
+### Removed - Feature Engineering Duplication
+- **Deleted Feature Engineer** - Removed src/data/feature_engineer.py (210 lines):
+  - Eliminated duplicate feature calculation logic
+  - Feature engineering now ONLY happens in feature-engineering-service
+  - Predictor retrieves pre-calculated features from Feast
+  - Removed FeatureEngineer class and all calculation methods
+
+### Changed - Feast HTTP Client Integration
+- **Feature Fetcher Refactoring** - Updated src/features/feature_fetcher.py:
+  - Replaced direct Redis access with FeastHTTPClient
+  - Changed from RedisClient to remote Feast server at 154.53.166.231:6566
+  - Updated fetch_online_features() to use Feast HTTP API
+  - Maintained semantic_group_features: prefix for compatibility
+  - Added comprehensive error handling for HTTP communication
+- **Configuration Update** - Updated src/config.py:
+  - Added FeastHTTPConfig class for remote Feast server configuration
+  - Configured server URL, timeout, max retries, push source, and feature view
+  - Environment variable support for all Feast HTTP settings
+- **Client Creation** - Added src/clients/feast_http_client.py:
+  - HTTP client for remote Feast feature server
+  - Implements get_online_features() with retry logic
+  - Async/await pattern with aiohttp
+  - Exponential backoff for failed requests
+
+### Added - Preprocessor Loading
+- **MLflow Integration** - Enhanced src/models/model_loader.py:
+  - Added load_preprocessor() method to load preprocessors from MLflow
+  - Loads preprocessors by pipeline name (btc_prediction, conflict_prediction)
+  - Supports loading by version or from Production stage
+  - Added preprocessor caching: _btc_preprocessor, _conflict_preprocessor
+  - Added version tracking: _btc_preprocessor_version, _conflict_preprocessor_version
+  - Getter methods: get_btc_preprocessor(), get_conflict_preprocessor()
+
+### Added - Separate Prediction Methods
+- **Domain-Specific Predictions** - Enhanced src/models/model_manager.py:
+  - Created predict_btc() method for BTC price prediction
+    - Loads BTC model and preprocessor from MLflow
+    - Builds 17 BTC features using btc_feature_builder
+    - Returns prediction_value and prediction_confidence
+  - Created predict_conflict() method for conflict prediction
+    - Loads conflict model and preprocessor from MLflow
+    - Filters to 24 general features (excludes BTC features)
+    - Returns prediction_probability and prediction_confidence
+  - Updated predict() to delegate to domain-specific methods
+  - Removed hardcoded feature dropping logic from _prepare_domain_features()
+
+### Impact
+- **No Feature Duplication**: Single source of truth for feature calculation
+- **Centralized Feature Store**: All services use single remote Feast server
+- **Preprocessor Sharing**: Predictor uses exact same preprocessing as trainer
+- **Model Separation**: BTC and conflict predictions properly isolated
+- **No Hardcoded Logic**: Preprocessor handles all feature transformations
+- **Architecture Compliance**: Implements centralized feature engineering pattern
+
+### Technical Details
+- Remote Feast server: 154.53.166.231:6566
+- Redis online store: 154.53.166.231:6379
+- Feature view: semantic_group_features (24 features)
+- BTC prediction: 17 features (4 base + 13 BTC-specific)
+- Conflict prediction: 24 general features
+- Preprocessor loading: models:/{pipeline_name}_preprocessor/Production
+
 ## [0.2.1] - 2025-11-09
 
 ### Added - BTC Price Feature Integration

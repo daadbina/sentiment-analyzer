@@ -1,15 +1,15 @@
 """
-Feature fetcher for retrieving features from Redis online store.
+Feature fetcher for retrieving features from parquet files.
 
 Provides high-level interface for fetching features with caching and validation.
-Reads features directly from Redis using the same format as feature-engineering-service.
+Reads features directly from parquet files instead of Feast online store.
 """
 
 import logging
 from datetime import datetime
 from typing import Any
 
-from ..clients import FeastClient, RedisClient
+from ..data.parquet_loader import ParquetFeatureLoader
 from ..exceptions import FeatureFetchError
 from ..metrics import feature_freshness_seconds
 from ..utils.trace import trace_span
@@ -62,25 +62,31 @@ REQUIRED_FEATURES = [
 
 class FeatureFetcher:
     """
-    High-level interface for fetching features from Redis online store.
+    High-level interface for fetching features from parquet files.
 
     Provides methods for retrieving features with proper error handling
-    and metric collection. Reads features directly from Redis using the
-    key format: features:{group_id}
+    and metric collection. Reads features directly from parquet files.
     """
 
-    def __init__(self, feast_client: FeastClient, redis_client: RedisClient):
+    def __init__(
+        self,
+        parquet_loader: ParquetFeatureLoader,
+        feature_view_name: str = "semantic_group_features",
+    ):
         """
         Initialize feature fetcher.
 
         Args:
-            feast_client: Feast client instance (for historical features)
-            redis_client: Redis client instance (for online features)
+            parquet_loader: Parquet feature loader instance
+            feature_view_name: Name of the feature view (for compatibility)
         """
-        self.feast_client = feast_client
-        self.redis_client = redis_client
+        self.parquet_loader = parquet_loader
+        self.feature_view_name = feature_view_name
 
-        logger.info("Initialized feature fetcher with Redis online store")
+        logger.info(
+            f"Initialized feature fetcher with parquet loader: "
+            f"feature_view={feature_view_name}"
+        )
 
     async def fetch_online_features(
         self,
@@ -88,14 +94,14 @@ class FeatureFetcher:
         trace_id: str | None = None,
     ) -> dict[str, Any]:
         """
-        Fetch features from Redis online store for a semantic group.
+        Fetch features from parquet file for a semantic group.
 
         Args:
             group_id: Semantic group ID
             trace_id: Optional trace ID for distributed tracing
 
         Returns:
-            Dictionary of feature values
+            Dictionary of feature values with semantic_group_features: prefix
 
         Raises:
             FeatureFetchError: If feature fetch fails
@@ -103,12 +109,10 @@ class FeatureFetcher:
         Example:
             features = await fetcher.fetch_online_features("group_123")
             # Returns: {
-            #     "num_sources": 5,
-            #     "sentiment_mean": 0.75,
-            #     "source_credibility_avg": 0.85,
-            #     "entity_count": 10,
-            #     "temporal_concentration": 0.5,
-            #     "feature_timestamp": "2025-11-07T12:00:00Z",
+            #     "semantic_group_features:num_sources": 5,
+            #     "semantic_group_features:sentiment_mean": 0.75,
+            #     "semantic_group_features:source_credibility_avg": 0.85,
+            #     ...
             # }
         """
         with trace_span(
@@ -117,35 +121,20 @@ class FeatureFetcher:
         ):
             try:
                 logger.info(
-                    f"=== PREDICTOR: Fetching features from Redis ===",
+                    f"=== PREDICTOR: Fetching features from parquet file ===",
                     extra={"trace_id": trace_id, "group_id": group_id},
                 )
 
-                # Fetch features directly from Redis using the same key format
-                # as feature-engineering-service: features:{group_id}
-                redis_key = f"features:{group_id}"
-                logger.info(f"Redis key: {redis_key}")
+                # Fetch features from parquet file
+                feature_data = self.parquet_loader.get_semantic_group_features(group_id)
 
-                feature_data = await self.redis_client.get(redis_key, trace_id=trace_id)
+                logger.info(f"Raw feature data from parquet: {len(feature_data)} keys")
+                logger.debug(f"Raw feature keys: {list(feature_data.keys())[:20]}")  # First 20
 
-                if not feature_data:
-                    logger.error(f"No features found in Redis for group_id={group_id}")
-                    raise FeatureFetchError(
-                        f"No features found in Redis for group_id={group_id}",
-                        group_id=group_id,
-                        store_type="online",
-                        trace_id=trace_id,
-                    )
-
-                logger.info(f"Raw feature data from Redis: {len(feature_data)} keys")
-                logger.info(f"Raw feature keys: {list(feature_data.keys())[:20]}")  # First 20
-
-                # Extract only the required features
                 # Add the semantic_group_features: prefix to match training data format
                 features = {}
                 for feature_name in REQUIRED_FEATURES:
                     if feature_name in feature_data:
-                        # Add prefix to match the format used during training
                         prefixed_name = f"semantic_group_features:{feature_name}"
                         features[prefixed_name] = feature_data[feature_name]
                     else:
@@ -154,25 +143,18 @@ class FeatureFetcher:
                             extra={"trace_id": trace_id, "group_id": group_id},
                         )
 
-                # Check for feature freshness
-                if "timestamp" in feature_data:
-                    feature_timestamp = datetime.fromisoformat(feature_data["timestamp"])
-                    age_seconds = (datetime.utcnow() - feature_timestamp).total_seconds()
-                    feature_freshness_seconds.labels(group_id=group_id).set(age_seconds)
-
-                    logger.info(
-                        f"Feature freshness: age_seconds={age_seconds:.2f}",
-                        extra={"trace_id": trace_id, "group_id": group_id},
-                    )
+                # Also include metadata fields (countries, has_conflict) without prefix
+                for metadata_field in ["countries", "has_conflict"]:
+                    if metadata_field in feature_data:
+                        features[metadata_field] = feature_data[metadata_field]
 
                 # Log sample features for debugging
                 logger.info(
-                    f"=== PREDICTOR: Fetched {len(features)} features from Redis ===",
+                    f"=== PREDICTOR: Fetched {len(features)} features from parquet ===",
                     extra={
                         "trace_id": trace_id,
                         "group_id": group_id,
                         "feature_sample": {k: features[k] for k in list(features.keys())[:10]},
-                        "all_features": features,
                     },
                 )
 
@@ -180,16 +162,28 @@ class FeatureFetcher:
 
             except FeatureFetchError:
                 raise
+            except ValueError as e:
+                # Group ID not found in parquet
+                logger.error(
+                    f"Group ID not found in parquet: group_id={group_id}, error={e}",
+                    extra={"trace_id": trace_id},
+                )
+                raise FeatureFetchError(
+                    f"Group ID not found: {e}",
+                    group_id=group_id,
+                    store_type="parquet",
+                    trace_id=trace_id,
+                )
             except Exception as e:
                 logger.error(
-                    f"Failed to fetch online features: group_id={group_id}, error={e}",
+                    f"Failed to fetch features from parquet: group_id={group_id}, error={e}",
                     exc_info=True,
                     extra={"trace_id": trace_id},
                 )
                 raise FeatureFetchError(
-                    f"Failed to fetch online features: {e}",
+                    f"Failed to fetch features from parquet: {e}",
                     group_id=group_id,
-                    store_type="online",
+                    store_type="parquet",
                     trace_id=trace_id,
                 )
 
@@ -267,7 +261,7 @@ class FeatureFetcher:
         trace_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """
-        Fetch features from Redis online store for multiple semantic groups.
+        Fetch features from parquet file for multiple semantic groups.
 
         Args:
             group_ids: List of semantic group IDs
@@ -288,18 +282,18 @@ class FeatureFetcher:
         ):
             try:
                 logger.debug(
-                    f"Fetching batch online features from Redis: group_count={len(group_ids)}",
+                    f"Fetching batch features from parquet: group_count={len(group_ids)}",
                     extra={"trace_id": trace_id},
                 )
 
-                # Fetch features for each group from Redis
+                # Fetch features for each group from parquet
                 feature_rows = []
                 for group_id in group_ids:
                     features = await self.fetch_online_features(group_id, trace_id=trace_id)
                     feature_rows.append(features)
 
                 logger.debug(
-                    f"Fetched batch online features: group_count={len(group_ids)}, "
+                    f"Fetched batch features: group_count={len(group_ids)}, "
                     f"row_count={len(feature_rows)}",
                     extra={"trace_id": trace_id},
                 )
@@ -310,13 +304,13 @@ class FeatureFetcher:
                 raise
             except Exception as e:
                 logger.error(
-                    f"Failed to fetch batch online features: error={e}",
+                    f"Failed to fetch batch features: error={e}",
                     exc_info=True,
                     extra={"trace_id": trace_id},
                 )
                 raise FeatureFetchError(
-                    f"Failed to fetch batch online features: {e}",
-                    store_type="online",
+                    f"Failed to fetch batch features: {e}",
+                    store_type="parquet",
                     trace_id=trace_id,
                 )
 

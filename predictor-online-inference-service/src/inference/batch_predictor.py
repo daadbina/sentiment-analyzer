@@ -257,16 +257,31 @@ class BatchPredictor:
         latency_ms = (datetime.now() - start_time).total_seconds() * 1000
 
         # Build prediction dictionary
+        # Handle both regression (prediction_value) and classification (prediction_probability)
+        # For BTC (regression), use prediction_confidence as prediction_probability since it's not a classification task
+        if domain == "btc":
+            # BTC is regression: use confidence (R² score) as probability
+            prediction_probability = prediction_result.get("prediction_confidence", 0.5)
+        else:
+            # Classification: use actual probability
+            prediction_probability = prediction_result.get("prediction_probability", 0.5)
+
         prediction = {
             "group_id": group_id,
             "domain": domain,
-            "prediction_probability": prediction_result["prediction_probability"],
+            "prediction_probability": prediction_probability,
             "prediction_confidence": prediction_result["prediction_confidence"],
             "model_version": model_version,
             "predicted_at": datetime.utcnow().isoformat(),
             "trace_id": trace_id,
             "features": features,
         }
+
+        # Add domain-specific fields if present
+        for key in ["prediction_direction", "prediction_magnitude", "prediction_strength",
+                    "prediction_label", "prediction_certainty", "prediction_description", "countries"]:
+            if key in prediction_result:
+                prediction[key] = prediction_result[key]
 
         # Record metrics
         MetricsCollector.record_prediction(

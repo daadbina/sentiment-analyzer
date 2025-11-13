@@ -28,6 +28,7 @@ from src.data.feature_retriever import FeatureRetriever
 from src.data.label_retriever import LabelRetriever
 from src.data.preprocessor import DataPreprocessor
 from src.data.splitter import DataSplitter
+from src.data.parquet_loader import ParquetDataLoader
 from src.training.trainer import Trainer
 from src.training.hyperparameter_tuner import HyperparameterTuner
 from src.evaluation.evaluator import Evaluator
@@ -54,7 +55,9 @@ class TrainerService:
         self.kafka_producer = None
         self.feature_retriever = None
         self.label_retriever = None
-        self.preprocessor = None
+        self.parquet_loader = None  # NEW: Parquet data loader
+        self.btc_preprocessor = None  # Separate preprocessor for BTC prediction
+        self.conflict_preprocessor = None  # Separate preprocessor for conflict prediction
         self.splitter = None
         self.trainer = None
         self.hyperparameter_tuner = None
@@ -76,6 +79,15 @@ class TrainerService:
                 logger.info("Starting trainer service")
                 logger.info(f"Configuration: feast={config.feast}")
 
+                # Set AWS credentials as environment variables for boto3/MLflow
+                import os
+                os.environ['AWS_ACCESS_KEY_ID'] = config.s3.access_key_id
+                os.environ['AWS_SECRET_ACCESS_KEY'] = config.s3.secret_access_key
+                os.environ['AWS_DEFAULT_REGION'] = config.s3.region
+                if config.s3.endpoint_url:
+                    os.environ['MLFLOW_S3_ENDPOINT_URL'] = config.s3.endpoint_url
+                logger.info("AWS credentials set for boto3/MLflow")
+
                 # Initialize tracing
                 tracing_config = TracingConfig(
                     service_name="trainer-service",
@@ -89,7 +101,9 @@ class TrainerService:
                 self.postgres_client = PostgreSQLClient(config.postgres)
                 await self.postgres_client.connect()
 
-                self.feast_client = FeastClient(config.feast)
+                # Initialize Feast SDK client with repo_path (use feature-engineering-service directory)
+                # This ensures we use the same registry as feature-engineering-service
+                self.feast_client = FeastClient(config.feast, repo_path="../feature-engineering-service")
                 self.feast_client.connect()
 
                 self.mlflow_client = MLflowClientWrapper(config.mlflow)
@@ -104,7 +118,18 @@ class TrainerService:
                 # Initialize components
                 self.feature_retriever = FeatureRetriever(self.feast_client)
                 self.label_retriever = LabelRetriever(self.postgres_client)
-                self.preprocessor = DataPreprocessor()
+
+                # NEW: Initialize parquet data loader (root is one level up from service directory)
+                self.parquet_loader = ParquetDataLoader(root_path="..")
+                logger.info("Initialized parquet data loader")
+
+                # Separate preprocessors for BTC and conflict models
+                # BTC uses technical indicators from btc_features.parquet
+                # Conflict uses semantic features from semantic_groups.parquet
+                self.btc_preprocessor = DataPreprocessor(scaling_method="standard")
+                self.conflict_preprocessor = DataPreprocessor(scaling_method="standard")
+                logger.info("Initialized separate preprocessors for BTC and conflict models")
+
                 self.splitter = DataSplitter(
                     test_size=config.training.test_set_size,
                     validation_size=config.training.validation_set_size,
@@ -144,8 +169,24 @@ class TrainerService:
         try:
             import pickle
             from pathlib import Path
+            import mlflow
+            import mlflow.sklearn
+            from mlflow.exceptions import MlflowException
 
             logger.info("Checking for baseline models to upload...")
+
+            # First, verify MLflow is accessible
+            try:
+                # Test MLflow connectivity with a simple operation
+                mlflow.get_tracking_uri()
+                # Try to list experiments to verify server is responding
+                self.mlflow_client.client.search_experiments(max_results=1)
+                logger.info("MLflow server is accessible")
+            except Exception as mlflow_error:
+                logger.warning(
+                    f"MLflow server not accessible, skipping baseline model upload: {mlflow_error}"
+                )
+                return
 
             # Get the models directory
             service_dir = Path(__file__).parent.parent
@@ -171,55 +212,72 @@ class TrainerService:
 
                 # Upload each model
                 for model_file in model_files:
-                    model_name = model_file.stem  # e.g., "xgboost_regressor"
-                    full_model_name = f"{pipeline_name}_{model_name}_base"  # Add _base suffix
-
-                    # Check if model already exists in MLflow
                     try:
-                        versions = self.mlflow_client.client.search_model_versions(f"name='{full_model_name}'")
-                        if versions:
-                            logger.info(f"Model {full_model_name} already exists in MLflow - skipping")
-                            continue
-                    except Exception:
-                        # Model doesn't exist, proceed with upload
-                        pass
+                        model_name = model_file.stem  # e.g., "xgboost_regressor"
+                        full_model_name = f"{pipeline_name}_{model_name}_base"  # Add _base suffix
 
-                    logger.info(f"Uploading baseline model: {full_model_name}")
+                        # Check if model already exists in MLflow
+                        try:
+                            versions = self.mlflow_client.client.search_model_versions(f"name='{full_model_name}'")
+                            if versions:
+                                logger.info(f"Model {full_model_name} already exists in MLflow - skipping")
+                                continue
+                        except Exception:
+                            # Model doesn't exist, proceed with upload
+                            pass
 
-                    # Load the model
-                    with open(model_file, 'rb') as f:
-                        model = pickle.load(f)
+                        logger.info(f"Uploading baseline model: {full_model_name}")
 
-                    # Create a temporary MLflow run to log the model
-                    import mlflow
-                    import mlflow.sklearn
+                        # Load the model
+                        with open(model_file, 'rb') as f:
+                            model = pickle.load(f)
 
-                    with mlflow.start_run(run_name=f"baseline_{full_model_name}"):
-                        # Log the model
-                        mlflow.sklearn.log_model(model, "model")
+                        # Create a temporary MLflow run to log the model
+                        with mlflow.start_run(run_name=f"baseline_{full_model_name}"):
+                            # Log the model using 'name' parameter (artifact_path is deprecated in MLflow 3.5+)
+                            import warnings
+                            from mlflow.exceptions import MlflowException
 
-                        # Log metadata
-                        mlflow.log_param("source", "baseline")
-                        mlflow.log_param("pipeline", pipeline_name)
-                        mlflow.log_param("model_type", model_name)
+                            with warnings.catch_warnings():
+                                warnings.filterwarnings("ignore", message=".*artifact_path.*deprecated.*")
+                                try:
+                                    mlflow.sklearn.log_model(model, "model", registered_model_name=full_model_name)
+                                except MlflowException as e:
+                                    # Suppress 404 errors from /logged-models endpoint (version compatibility issue)
+                                    if "404" not in str(e) or "logged-models" not in str(e).lower():
+                                        raise
 
-                        # Get run ID
-                        run_id = mlflow.active_run().info.run_id
+                            # Log metadata
+                            mlflow.log_param("source", "baseline")
+                            mlflow.log_param("pipeline", pipeline_name)
+                            mlflow.log_param("model_type", model_name)
 
-                        # Register model
-                        model_uri = f"runs:/{run_id}/model"
-                        mv = mlflow.register_model(model_uri, full_model_name)
+                            # Get run ID
+                            run_id = mlflow.active_run().info.run_id
+                            logger.info(f"Baseline model logged: {full_model_name} (run: {run_id})")
 
-                        logger.info(f"Baseline model registered: {full_model_name} version {mv.version}")
+                            # Promote to Production stage
+                            try:
+                                # Get the latest version that was just registered
+                                versions = self.mlflow_client.client.search_model_versions(f"name='{full_model_name}'")
+                                if versions:
+                                    latest_version = max(versions, key=lambda v: int(v.version))
+                                    self.mlflow_client.client.transition_model_version_stage(
+                                        name=full_model_name,
+                                        version=latest_version.version,
+                                        stage="Production",
+                                    )
+                                    logger.info(f"Baseline model promoted to Production: {full_model_name} v{latest_version.version}")
+                            except Exception as stage_error:
+                                logger.info(f"Baseline model {full_model_name} registered (stage transition skipped)")
 
-                        # Promote to Production stage
-                        self.mlflow_client.client.transition_model_version_stage(
-                            name=full_model_name,
-                            version=mv.version,
-                            stage="Production",
+                    except Exception as model_error:
+                        logger.warning(
+                            f"Failed to upload baseline model {model_file.name}: {model_error}",
+                            exc_info=True
                         )
-
-                        logger.info(f"Baseline model promoted to Production: {full_model_name} v{mv.version}")
+                        # Continue with next model
+                        continue
 
             logger.info("Baseline model upload check complete")
 
@@ -329,7 +387,7 @@ class TrainerService:
         Execute BTC price prediction training pipeline (REGRESSION).
 
         Trains regression models to predict BTC price change percentage for next 10 hours.
-        Uses BTC features + relevant sentiment features.
+        Uses technical indicators from btc_features.parquet as features.
 
         Args:
             start_date: Optional start date for data retrieval
@@ -347,60 +405,17 @@ class TrainerService:
                 logger.info("STARTING BTC PRICE PREDICTION PIPELINE (REGRESSION)")
                 logger.info("=" * 80)
 
-                # Set default dates
-                if not end_date:
-                    end_date = datetime.now(timezone.utc)
-                else:
-                    end_date = datetime.fromisoformat(end_date)
-
-                if not start_date:
-                    start_date = end_date - timedelta(days=18*30)
-                else:
-                    start_date = datetime.fromisoformat(start_date)
-
-                if start_date.tzinfo is not None:
-                    start_date = start_date.replace(tzinfo=None)
-                if end_date.tzinfo is not None:
-                    end_date = end_date.replace(tzinfo=None)
-
-                logger.info(f"Training window: {start_date} to {end_date}")
-
-                # NEW APPROACH: Use BTC timestamps as anchor, not semantic group timestamps
-                # This allows us to use ALL historical BTC data (2979 records with 10h future data)
-                # instead of only recent semantic groups (which have no future data)
-
-                logger.info("Fetching BTC records with future price data available")
-                btc_records = await self._fetch_btc_records_with_future_data(
-                    hours_ahead=10,
-                    start_date=start_date,
-                    end_date=end_date
-                )
-
-                if not btc_records:
-                    logger.warning("No BTC records with future data found")
-                    raise TrainerError("No BTC records with future data")
-
-                logger.info(f"Found {len(btc_records)} BTC records with future data")
-
-                # For each BTC timestamp, get news sentiment features and calculate forward target
-                logger.info("Building training dataset from BTC timestamps")
-                X_btc_final, y_btc = await self._build_btc_training_data(btc_records)
+                # Load BTC training data from parquet
+                logger.info("Loading BTC training data from parquet file")
+                X_btc_final, y_btc = self.parquet_loader.prepare_btc_training_data()
 
                 if X_btc_final.empty or len(y_btc) == 0:
-                    logger.warning("No training data could be built from BTC records")
-                    raise TrainerError("No training data could be built")
+                    logger.warning("No BTC training data loaded")
+                    raise TrainerError("No BTC training data loaded")
 
                 logger.info(f"BTC training data: X shape={X_btc_final.shape}, y shape={y_btc.shape}")
+                logger.info(f"BTC features: {list(X_btc_final.columns)}")
                 logger.info(f"BTC target distribution: min={y_btc.min():.4f}, max={y_btc.max():.4f}, mean={y_btc.mean():.4f}, std={y_btc.std():.4f}")
-
-                # Check for null values in target
-                null_count = y_btc.isnull().sum()
-                if null_count > 0:
-                    logger.warning(f"Found {null_count} null values in BTC target, dropping them")
-                    valid_mask = ~y_btc.isnull()
-                    X_btc_final = X_btc_final[valid_mask]
-                    y_btc = y_btc[valid_mask]
-                    logger.info(f"After dropping nulls: {len(y_btc)} samples remaining")
 
                 # Validate minimum dataset size
                 min_samples_required = 50
@@ -408,10 +423,12 @@ class TrainerService:
                     logger.error(f"Insufficient BTC training data: {len(y_btc)} samples (minimum {min_samples_required} required)")
                     raise TrainerError(f"Insufficient BTC training data: {len(y_btc)} samples")
 
-                # Preprocess data
-                logger.info("Preprocessing BTC data")
-                X_btc_processed, _ = self.preprocessor.preprocess(X_btc_final, y_btc, fit=True)
+                # Preprocess data using BTC-specific preprocessor
+                logger.info("Preprocessing BTC data with BTC preprocessor")
+                X_btc_processed, _ = self.btc_preprocessor.preprocess(X_btc_final, y_btc, fit=True)
                 logger.info(f"BTC data after preprocessing: {X_btc_processed.shape}")
+                logger.info(f"BTC preprocessor feature names: {self.btc_preprocessor.get_feature_names()}")
+                logger.info(f"BTC preprocessor constant features removed: {self.btc_preprocessor.get_constant_features()}")
 
                 # Split data (no stratification for regression)
                 logger.info("Splitting BTC data")
@@ -466,11 +483,11 @@ class TrainerService:
                 best_btc_model_type, best_btc_metrics = self.evaluator.get_best_model(task_type="regression")
                 logger.info(f"Best BTC model: {best_btc_model_type} with R²={best_btc_metrics.get('r2', 'N/A')}")
 
-                # Save BTC models and preprocessor to local, S3, and MLflow
-                logger.info("Saving BTC models to local/S3/MLflow")
+                # Save BTC models and BTC preprocessor to local, S3, and MLflow
+                logger.info("Saving BTC models and BTC preprocessor to local/S3/MLflow")
                 await self._save_models_and_preprocessor(
                     models=btc_models,
-                    preprocessor=self.preprocessor,
+                    preprocessor=self.btc_preprocessor,
                     pipeline_name="btc_prediction",
                     best_model_type=best_btc_model_type,
                     evaluation_results=btc_eval_results
@@ -504,12 +521,17 @@ class TrainerService:
         """
         Execute conflict prediction training pipeline (CLASSIFICATION).
 
-        Trains classification models to predict conflict between countries.
-        Uses sentiment features + entity features (excludes BTC features).
+        Trains classification models to predict conflict probability.
+        Uses semantic features from semantic_groups.parquet.
+
+        Conflict labels are created based on:
+        - Multiple countries mentioned (>= 2)
+        - Negative sentiment (sentiment_mean < -0.1)
+        - High entity prominence
 
         Args:
-            start_date: Optional start date for data retrieval
-            end_date: Optional end date for data retrieval
+            start_date: Optional start date for data retrieval (not used with parquet)
+            end_date: Optional end date for data retrieval (not used with parquet)
 
         Returns:
             Dictionary with pipeline results
@@ -523,156 +545,18 @@ class TrainerService:
                 logger.info("STARTING CONFLICT PREDICTION PIPELINE (CLASSIFICATION)")
                 logger.info("=" * 80)
 
-                # Set default dates
-                if not end_date:
-                    end_date = datetime.now(timezone.utc)
-                else:
-                    end_date = datetime.fromisoformat(end_date)
+                # Load conflict training data from parquet
+                logger.info("Loading conflict training data from parquet file")
+                X_conflict_final, y_conflict = self.parquet_loader.prepare_conflict_training_data()
 
-                if not start_date:
-                    start_date = end_date - timedelta(days=18*30)
-                else:
-                    start_date = datetime.fromisoformat(start_date)
-
-                if start_date.tzinfo is not None:
-                    start_date = start_date.replace(tzinfo=None)
-                if end_date.tzinfo is not None:
-                    end_date = end_date.replace(tzinfo=None)
-
-                logger.info(f"Training window: {start_date} to {end_date}")
-
-                # Retrieve labels - for conflict we need binary labels
-                logger.info("Retrieving conflict labels (binary)")
-                y = await self.label_retriever.retrieve_labels(
-                    start_date=start_date,
-                    end_date=end_date,
-                )
-
-                if y.empty:
-                    logger.error("No labels retrieved for conflict training!")
-                    raise TrainerError("No conflict training data available")
-
-                # Extract group IDs
-                group_ids = y['group_id'].unique().tolist()
-                group_ids = [gid for gid in group_ids if gid is not None]
-                logger.info(f"Found {len(group_ids)} unique groups in labels")
-
-                if not group_ids:
-                    raise TrainerError("No semantic groups found in labeled data")
-
-                # Retrieve features
-                logger.info("Retrieving features for conflict prediction")
-                X = self.feature_retriever.retrieve_features(
-                    entity_ids=group_ids,
-                    start_date=start_date,
-                    end_date=end_date,
-                )
-
-                if X.empty:
-                    logger.error("No features retrieved for conflict training!")
-                    raise TrainerError("No conflict training data available")
-
-                # Filter to conflict-relevant features (EXCLUDE BTC features)
-                # Note: Features in Feast have the prefix 'semantic_group_features:'
-                conflict_feature_names = [
-                    'sentiment_mean', 'sentiment_std', 'sentiment_polarity_ratio', 'sentiment_volatility',
-                    'entity_count', 'entity_diversity', 'entity_prominence', 'entity_concentration',
-                    'num_sources', 'source_credibility_avg', 'source_credibility_std', 'source_diversity_score',
-                    'time_span_hours', 'publication_velocity', 'temporal_concentration', 'days_since_first_article',
-                    'avg_word_count', 'avg_title_length', 'language_diversity', 'domain_diversity',
-                    'centroid_magnitude', 'intra_cluster_similarity_mean', 'intra_cluster_similarity_std', 'embedding_drift_score',
-                ]
-
-                # Keep only conflict features that exist in X (with or without prefix)
-                available_conflict_features = []
-                for col in X.columns:
-                    if col == 'group_id':
-                        continue
-                    # Check if column name (with or without prefix) matches any conflict feature
-                    col_name = col.replace('semantic_group_features:', '')
-                    if col_name in conflict_feature_names:
-                        available_conflict_features.append(col)
-                logger.info(f"Conflict features available: {available_conflict_features}")
-
-                # Keep group_id for alignment
-                if 'group_id' in X.columns:
-                    X_conflict = X[['group_id'] + available_conflict_features].copy()
-                else:
-                    X_conflict = X[available_conflict_features].copy()
-
-                logger.info(f"Filtered to {X_conflict.shape[1]} conflict-relevant features (BTC features excluded)")
-
-                # For conflict prediction, we use label_realized as binary target
-                if 'label_realized' not in y.columns:
-                    logger.error("label_realized not found in labels - cannot train conflict prediction model")
-                    raise TrainerError("Conflict target variable not available")
-
-                # Handle null values in label_realized
-                null_count = y['label_realized'].isnull().sum()
-                if null_count > 0:
-                    logger.warning(f"Found {null_count} null values in label_realized, dropping them")
-                    y = y.dropna(subset=['label_realized'])
-                    logger.info(f"After dropping nulls: {len(y)} labels remaining")
-
-                # Align features with labels
-                logger.info("Aligning features with labels by group_id")
-                X_indexed = X_conflict.set_index('group_id') if 'group_id' in X_conflict.columns else X_conflict
-
-                aligned_X_list = []
-                aligned_y_list = []
-                matched_labels = 0
-
-                for idx, label_row in y.iterrows():
-                    group_id = label_row['group_id']
-                    if group_id in X_indexed.index:
-                        feature_row = X_indexed.loc[group_id]
-                        if isinstance(feature_row, pd.DataFrame):
-                            feature_row = feature_row.iloc[0]
-
-                        aligned_X_list.append(feature_row)
-                        aligned_y_list.append(label_row['label_realized'])
-                        matched_labels += 1
-
-                logger.info(f"Alignment results: {matched_labels} matched labels")
-
-                if not aligned_X_list:
-                    logger.error("No labels could be aligned with conflict features!")
-                    raise TrainerError("No labels could be aligned with conflict features")
-
-                # Create aligned dataframes
-                X_conflict_final = pd.DataFrame(aligned_X_list).reset_index(drop=True)
-                y_conflict = pd.Series(aligned_y_list, dtype=int).reset_index(drop=True)
+                if X_conflict_final.empty or len(y_conflict) == 0:
+                    logger.warning("No conflict training data loaded")
+                    raise TrainerError("No conflict training data loaded")
 
                 logger.info(f"Conflict training data: X shape={X_conflict_final.shape}, y shape={y_conflict.shape}")
-                logger.info(f"Conflict label distribution: {y_conflict.value_counts().to_dict()}")
-
-                # CRITICAL: Filter to only samples with real features (not all NULL)
-                # Training on all-NULL samples adds noise and reduces model performance
-                # We'll use a rule-based approach for samples without features
-                logger.info("Filtering samples with real features")
-
-                # Count NULL values per row
-                null_counts_per_row = X_conflict_final.isnull().sum(axis=1)
-                total_features = X_conflict_final.shape[1]
-
-                # Keep only rows with at least SOME real data (not all NULL)
-                has_features_mask = null_counts_per_row < total_features
-
-                X_conflict_filtered = X_conflict_final[has_features_mask].copy()
-                y_conflict_filtered = y_conflict[has_features_mask].copy()
-
-                logger.info(f"Filtered conflict data: {len(X_conflict_filtered)} samples with features (removed {len(X_conflict_final) - len(X_conflict_filtered)} all-NULL samples)")
-                logger.info(f"Filtered label distribution: {y_conflict_filtered.value_counts().to_dict()}")
-
-                # Calculate base rate for samples without features (for rule-based prediction)
-                no_features_mask = ~has_features_mask
-                if no_features_mask.sum() > 0:
-                    no_features_realized_rate = y_conflict[no_features_mask].mean()
-                    logger.info(f"Base rate for samples without features: {no_features_realized_rate:.3f} ({y_conflict[no_features_mask].sum()}/{no_features_mask.sum()})")
-
-                # Use filtered data for training
-                X_conflict_final = X_conflict_filtered
-                y_conflict = y_conflict_filtered
+                logger.info(f"Conflict features: {list(X_conflict_final.columns)}")
+                logger.info(f"Label distribution: {y_conflict.value_counts().to_dict()}")
+                logger.info(f"Conflict rate: {y_conflict.mean():.2%}")
 
                 # Validate minimum dataset size
                 min_samples_required = 50
@@ -682,15 +566,21 @@ class TrainerService:
 
                 # Validate minimum samples per class
                 class_counts = y_conflict.value_counts().to_dict()
+                if len(class_counts) < 2:
+                    logger.error(f"Only one class present in training data: {class_counts}")
+                    raise TrainerError("Need at least 2 classes for classification")
+
                 min_class_samples = min(class_counts.values())
                 min_class_required = 10
                 if min_class_samples < min_class_required:
                     logger.warning(f"Low sample count for minority class: {min_class_samples} samples")
 
-                # Preprocess data
-                logger.info("Preprocessing conflict data")
-                X_conflict_processed, _ = self.preprocessor.preprocess(X_conflict_final, y_conflict, fit=True)
+                # Preprocess data using conflict-specific preprocessor
+                logger.info("Preprocessing conflict data with conflict preprocessor")
+                X_conflict_processed, _ = self.conflict_preprocessor.preprocess(X_conflict_final, y_conflict, fit=True)
                 logger.info(f"Conflict data after preprocessing: {X_conflict_processed.shape}")
+                logger.info(f"Conflict preprocessor feature names: {self.conflict_preprocessor.get_feature_names()}")
+                logger.info(f"Conflict preprocessor constant features removed: {self.conflict_preprocessor.get_constant_features()}")
 
                 # Split data with stratification
                 logger.info("Splitting conflict data with stratification")
@@ -721,11 +611,11 @@ class TrainerService:
                 best_conflict_model_type, best_conflict_metrics = self.evaluator.get_best_model(task_type="classification")
                 logger.info(f"Best conflict model: {best_conflict_model_type} with AUC={best_conflict_metrics.get('auc', 'N/A')}")
 
-                # Save conflict models and preprocessor to local, S3, and MLflow
-                logger.info("Saving conflict models to local/S3/MLflow")
+                # Save conflict models and conflict preprocessor to local, S3, and MLflow
+                logger.info("Saving conflict models and conflict preprocessor to local/S3/MLflow")
                 await self._save_models_and_preprocessor(
                     models=conflict_models,
-                    preprocessor=self.preprocessor,
+                    preprocessor=self.conflict_preprocessor,
                     pipeline_name="conflict_prediction",
                     best_model_type=best_conflict_model_type,
                     evaluation_results=conflict_eval_results
@@ -869,19 +759,22 @@ class TrainerService:
         btc_records: List[dict]
     ) -> Tuple[pd.DataFrame, pd.Series]:
         """
-        Build training dataset from BTC records.
+        Build training dataset from BTC records with Feast features.
 
         For each BTC timestamp T:
-        1. Get BTC features at time T (volatility, volume, spike, etc.)
-        2. Calculate forward price change from T to T+10h (target)
+        1. Find nearest semantic group by timestamp
+        2. Retrieve ALL 28 features from Feast (24 base + 4 BTC)
+        3. Calculate forward price change from T to T+10h (target)
 
-        Uses ONLY BTC price data, no semantic/sentiment features.
+        Note: BTC features (btc_change_pct_10h, btc_volatility_score, btc_volume, btc_label_spike)
+        are computed by feature-engineering-service and stored in Feast, so we retrieve them
+        from Feast instead of querying btc_truth table directly.
 
         Args:
             btc_records: List of BTC records with timestamp and close price
 
         Returns:
-            Tuple of (features DataFrame, targets Series)
+            Tuple of (features DataFrame with 28 features, targets Series)
         """
         try:
             from datetime import timedelta
@@ -889,46 +782,74 @@ class TrainerService:
             X_list = []
             y_list = []
             skipped_no_future = 0
-            skipped_no_features = 0
+            skipped_no_group = 0
+            skipped_no_feast_features = 0
 
-            logger.info(f"Processing {len(btc_records)} BTC records...")
+            logger.info(f"Processing {len(btc_records)} BTC records with Feast features...")
 
             for i, record in enumerate(btc_records):
                 timestamp_t = record["timestamp"]
                 price_t = record["close"]
 
-                # Calculate future timestamp
+                # Calculate future timestamp for target
                 timestamp_future = timestamp_t + timedelta(hours=10)
 
-                # Get BTC features at time T from btc_truth table
-                # Filter by BTCUSDT only to avoid mixing different cryptocurrencies
-                query_features = """
-                    SELECT
-                        change_pct_10h,
-                        volatility_score,
-                        volume,
-                        label_spike,
-                        open,
-                        high,
-                        low,
-                        close
-                    FROM btc_truth
-                    WHERE timestamp = $1
-                    AND event_id LIKE 'binance_BTCUSDT_%'
+                # Step 1: Find nearest semantic group by timestamp (within ±2 hours)
+                query_group = """
+                    SELECT group_id, created_at
+                    FROM semantic_groups
+                    WHERE created_at >= $1 AND created_at <= $2
+                    ORDER BY ABS(EXTRACT(EPOCH FROM (created_at - $3)))
                     LIMIT 1
                 """
 
-                row_features = await self.postgres_client.fetch_one(
-                    query_features,
+                start_window = timestamp_t - timedelta(hours=2)
+                end_window = timestamp_t + timedelta(hours=2)
+
+                row_group = await self.postgres_client.fetch_one(
+                    query_group,
+                    start_window,
+                    end_window,
                     timestamp_t
                 )
 
-                if not row_features:
-                    skipped_no_features += 1
+                if not row_group:
+                    skipped_no_group += 1
                     continue
 
-                # Get future BTC price for target calculation
-                # Filter by BTCUSDT only to avoid mixing different cryptocurrencies
+                group_id = row_group["group_id"]
+                group_timestamp = row_group["created_at"]
+
+                # Step 2: Retrieve ALL 28 features from Feast (24 base + 4 BTC)
+                # BTC features are computed by feature-engineering-service and stored in Feast
+                try:
+                    # Get BTC feature list (28 features)
+                    btc_feature_list = self.feature_retriever._get_btc_features()
+
+                    feast_features_df = self.feature_retriever.retrieve_features(
+                        entity_ids=[group_id],
+                        start_date=group_timestamp - timedelta(hours=1),
+                        end_date=group_timestamp + timedelta(hours=1),
+                        features=btc_feature_list  # Explicitly request 28 features
+                    )
+
+                    if feast_features_df.empty:
+                        skipped_no_feast_features += 1
+                        continue
+
+                    # Extract first row (should only be one row per group_id)
+                    feast_features = feast_features_df.iloc[0].to_dict()
+
+                    # Remove group_id and timestamp columns if present
+                    feast_features = {k: v for k, v in feast_features.items()
+                                    if k not in ['group_id', 'timestamp', 'event_timestamp']}
+
+                except Exception as e:
+                    logger.warning(f"Failed to retrieve Feast features for group {group_id}: {e}")
+                    skipped_no_feast_features += 1
+                    continue
+
+                # Step 3: Get future BTC price for target calculation
                 query_future = """
                     SELECT close
                     FROM btc_truth
@@ -957,70 +878,17 @@ class TrainerService:
                 # Calculate target: forward price change from T to T+10h
                 target = ((price_future - price_t) / price_t) * 100.0
 
-                # Build feature vector from BTC data with selected features
-                open_price = float(row_features['open']) if row_features['open'] is not None else price_t
-                high_price = float(row_features['high']) if row_features['high'] is not None else price_t
-                low_price = float(row_features['low']) if row_features['low'] is not None else price_t
-                close_price = float(row_features['close']) if row_features['close'] is not None else price_t
-                volume = float(row_features['volume']) if row_features['volume'] is not None else 0.0
-
-                # Calculate key derived features (reduced set to avoid overfitting)
-                price_range_pct = ((high_price - low_price) / close_price * 100.0) if close_price > 0 and high_price > low_price else 0.0
-                body_size_pct = (abs(close_price - open_price) / close_price * 100.0) if close_price > 0 else 0.0
-                is_bullish = 1 if close_price > open_price else 0
-
-                # Price position in range (key indicator)
-                price_range = high_price - low_price if high_price > low_price else 0.0
-                close_position_in_range = ((close_price - low_price) / price_range) if price_range > 0 else 0.5
-
-                # Momentum features (using backward change as proxy)
-                backward_change = float(row_features['change_pct_10h']) if row_features['change_pct_10h'] is not None else 0.0
-                momentum_strength = abs(backward_change)
-
-                # Volume features
-                volume_normalized = volume / 1000000.0  # Normalize volume to millions
-
-                # Cyclical time encoding (to capture periodic patterns)
-                import math
-                hour_sin = math.sin(2 * math.pi * timestamp_t.hour / 24)
-                hour_cos = math.cos(2 * math.pi * timestamp_t.hour / 24)
-                day_sin = math.sin(2 * math.pi * timestamp_t.weekday() / 7)
-                day_cos = math.cos(2 * math.pi * timestamp_t.weekday() / 7)
-
-                features = {
-                    # Core price features
-                    'btc_close': close_price,
-                    'btc_high': high_price,
-                    'btc_low': low_price,
-                    'btc_open': open_price,
-                    # Key derived features
-                    'btc_price_range_pct': price_range_pct,
-                    'btc_body_size_pct': body_size_pct,
-                    'btc_close_position_in_range': close_position_in_range,
-                    'btc_is_bullish': is_bullish,
-                    # Momentum features
-                    'btc_change_pct_10h_backward': backward_change,
-                    'btc_momentum_strength': momentum_strength,
-                    # Volume and volatility
-                    'btc_volume': volume_normalized,
-                    'btc_volatility_score': float(row_features['volatility_score']) if row_features['volatility_score'] is not None else 0.0,
-                    'btc_label_spike': int(row_features['label_spike']) if row_features['label_spike'] is not None else 0,
-                    # Cyclical time features
-                    'btc_hour_sin': hour_sin,
-                    'btc_hour_cos': hour_cos,
-                    'btc_day_sin': day_sin,
-                    'btc_day_cos': day_cos,
-                }
-
-                X_list.append(features)
+                # Use all 28 features from Feast (no local BTC feature extraction)
+                X_list.append(feast_features)
                 y_list.append(target)
 
                 if (i + 1) % 500 == 0:
                     logger.info(f"Processed {i + 1}/{len(btc_records)} BTC records...")
 
             logger.info(f"Built training data: {len(X_list)} samples")
+            logger.info(f"Skipped {skipped_no_group} records without nearby semantic group")
+            logger.info(f"Skipped {skipped_no_feast_features} records without Feast features")
             logger.info(f"Skipped {skipped_no_future} records without future price")
-            logger.info(f"Skipped {skipped_no_features} records without BTC features")
 
             if not X_list:
                 return pd.DataFrame(), pd.Series(dtype=float)
@@ -1029,7 +897,7 @@ class TrainerService:
             y = pd.Series(y_list, dtype=float)
 
             logger.info(f"BTC training data shape: X={X.shape}, y={y.shape}")
-            logger.info(f"BTC features: {list(X.columns)}")
+            logger.info(f"BTC features ({len(X.columns)} total): {list(X.columns)}")
             logger.info(f"Target distribution: min={y.min():.2f}%, max={y.max():.2f}%, mean={y.mean():.2f}%, std={y.std():.2f}%")
 
             return X, y
@@ -1037,6 +905,167 @@ class TrainerService:
         except Exception as e:
             logger.error(f"Failed to build BTC training data: {e}", exc_info=True)
             return pd.DataFrame(), pd.Series(dtype=float)
+
+    async def _build_country_pair_training_data(
+        self,
+        start_date: datetime,
+        end_date: datetime
+    ) -> Tuple[pd.DataFrame, pd.Series]:
+        """
+        Build training dataset for country-pair conflict prediction.
+
+        For each semantic group with countries and labels:
+        1. Retrieve 24 base features from Feast
+        2. Get countries from reconciliation_log
+        3. Generate all country pairs from the countries list
+        4. Create training samples: (group_id, country1, country2, 24 features) -> conflict_label
+        5. Label = 1 if label_realized=1 (conflict occurred), 0 otherwise
+
+        Args:
+            start_date: Start date for data retrieval
+            end_date: End date for data retrieval
+
+        Returns:
+            Tuple of (features DataFrame with 24 features + country pair, targets Series)
+        """
+        try:
+            from itertools import combinations
+
+            X_list = []
+            y_list = []
+            skipped_no_countries = 0
+            skipped_single_country = 0
+            skipped_no_features = 0
+            skipped_no_label = 0
+
+            logger.info(f"Building country-pair conflict training data from {start_date} to {end_date}...")
+
+            # Step 1: Query ground_truth for labels with group_id
+            query_labels = """
+                SELECT
+                    group_id,
+                    label_realized,
+                    label_confidence,
+                    created_at
+                FROM ground_truth
+                WHERE created_at >= $1 AND created_at <= $2
+                AND group_id IS NOT NULL
+                ORDER BY created_at DESC
+            """
+
+            label_rows = await self.postgres_client.fetch_all(
+                query_labels,
+                start_date,
+                end_date
+            )
+
+            if not label_rows:
+                logger.warning("No labels found for country-pair conflict training")
+                return pd.DataFrame(), pd.Series(dtype=int)
+
+            logger.info(f"Found {len(label_rows)} labels with group_id")
+
+            # Step 2: For each label, get countries from reconciliation_log
+            for label_row in label_rows:
+                group_id = label_row["group_id"]
+                label_realized = label_row["label_realized"]
+                label_created_at = label_row["created_at"]
+
+                if label_realized is None:
+                    skipped_no_label += 1
+                    continue
+
+                # Query reconciliation_log for countries
+                query_countries = """
+                    SELECT countries
+                    FROM reconciliation_log
+                    WHERE group_id = $1
+                    AND countries IS NOT NULL
+                    AND array_length(countries, 1) >= 2
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """
+
+                country_row = await self.postgres_client.fetch_one(
+                    query_countries,
+                    group_id
+                )
+
+                if not country_row or not country_row["countries"]:
+                    skipped_no_countries += 1
+                    continue
+
+                countries = country_row["countries"]
+
+                if len(countries) < 2:
+                    skipped_single_country += 1
+                    continue
+
+                # Step 3: Retrieve 24 base features from Feast for this group
+                # Explicitly request only base features (no BTC features for conflict model)
+                try:
+                    # Get base feature list (24 features, no BTC)
+                    base_feature_list = self.feature_retriever._get_default_features()
+
+                    feast_features_df = self.feature_retriever.retrieve_features(
+                        entity_ids=[group_id],
+                        start_date=label_created_at - timedelta(hours=1),
+                        end_date=label_created_at + timedelta(hours=1),
+                        features=base_feature_list  # Explicitly request only 24 base features
+                    )
+
+                    if feast_features_df.empty:
+                        skipped_no_features += 1
+                        continue
+
+                    # Extract first row
+                    feast_features = feast_features_df.iloc[0].to_dict()
+
+                    # Remove group_id and timestamp columns
+                    feast_features = {k: v for k, v in feast_features.items()
+                                    if k not in ['group_id', 'timestamp', 'event_timestamp']}
+
+                except Exception as e:
+                    logger.warning(f"Failed to retrieve Feast features for group {group_id}: {e}")
+                    skipped_no_features += 1
+                    continue
+
+                # Step 4: Generate all country pairs
+                country_pairs = list(combinations(sorted(countries), 2))
+
+                # Step 5: Create training samples for each country pair
+                for country1, country2 in country_pairs:
+                    # Combine features with country pair
+                    sample_features = {
+                        **feast_features,
+                        'country1': country1,
+                        'country2': country2,
+                    }
+
+                    X_list.append(sample_features)
+                    y_list.append(int(label_realized))
+
+            logger.info(f"Built country-pair training data: {len(X_list)} samples")
+            logger.info(f"Skipped {skipped_no_countries} groups without countries")
+            logger.info(f"Skipped {skipped_single_country} groups with single country")
+            logger.info(f"Skipped {skipped_no_features} groups without Feast features")
+            logger.info(f"Skipped {skipped_no_label} groups without label")
+
+            if not X_list:
+                return pd.DataFrame(), pd.Series(dtype=int)
+
+            X = pd.DataFrame(X_list)
+            y = pd.Series(y_list, dtype=int)
+
+            logger.info(f"Country-pair training data shape: X={X.shape}, y={y.shape}")
+            logger.info(f"Features ({len(X.columns)} total): {list(X.columns)}")
+            logger.info(f"Label distribution: {y.value_counts().to_dict()}")
+
+            return X, y
+
+        except Exception as e:
+            logger.error(f"Failed to build country-pair training data: {e}", exc_info=True)
+            return pd.DataFrame(), pd.Series(dtype=int)
 
     async def _save_models_and_preprocessor(
         self,
@@ -1079,10 +1108,14 @@ class TrainerService:
                     pickle.dump(preprocessor, f)
                 logger.info(f"Preprocessor saved to temp: {preprocessor_local_path}")
 
-                # Upload preprocessor to S3
+                # Upload preprocessor to S3 (non-blocking - log warning if fails)
                 preprocessor_s3_key = f"models/{pipeline_name}/preprocessor.pkl"
-                self.s3_client.upload_file(str(preprocessor_local_path), preprocessor_s3_key)
-                logger.info(f"Preprocessor uploaded to S3: {preprocessor_s3_key}")
+                try:
+                    self.s3_client.upload_file(str(preprocessor_local_path), preprocessor_s3_key)
+                    logger.info(f"Preprocessor uploaded to S3: {preprocessor_s3_key}")
+                except Exception as s3_error:
+                    logger.warning(f"Failed to upload preprocessor to S3 (non-critical): {s3_error}")
+                    logger.info("Continuing with MLflow model registration...")
 
                 # Save each model
                 for model_type, (model_instance, metrics) in models.items():
@@ -1093,10 +1126,14 @@ class TrainerService:
                             pickle.dump(model_instance.model, f)
                         logger.info(f"Model saved to temp: {model_local_path}")
 
-                        # Upload model to S3
+                        # Upload model to S3 (non-blocking - log warning if fails)
                         model_s3_key = f"models/{pipeline_name}/{model_type}/model.pkl"
-                        self.s3_client.upload_file(str(model_local_path), model_s3_key)
-                        logger.info(f"Model uploaded to S3: {model_s3_key}")
+                        try:
+                            self.s3_client.upload_file(str(model_local_path), model_s3_key)
+                            logger.info(f"Model uploaded to S3: {model_s3_key}")
+                        except Exception as s3_error:
+                            logger.warning(f"Failed to upload {model_type} to S3 (non-critical): {s3_error}")
+                            logger.info("Continuing with MLflow model registration...")
 
                         # Log model to MLflow (suppress Unicode errors on Windows)
                         import sys
@@ -1107,45 +1144,165 @@ class TrainerService:
                         sys.stdout = io.StringIO()
 
                         try:
-                            with mlflow.start_run(run_name=f"{pipeline_name}_{model_type}"):
-                                # Log parameters
-                                mlflow.log_param("pipeline", pipeline_name)
-                                mlflow.log_param("model_type", model_type)
-                                mlflow.log_param("is_best_model", model_type == best_model_type)
+                            import warnings
+                            from mlflow.exceptions import MlflowException
 
-                                # Log metrics
-                                for metric_name, metric_value in metrics.items():
-                                    if isinstance(metric_value, (int, float)):
-                                        mlflow.log_metric(metric_name, metric_value)
+                            with warnings.catch_warnings():
+                                warnings.filterwarnings("ignore", message=".*artifact_path.*deprecated.*")
 
-                                # Log evaluation results for this model
-                                if model_type in evaluation_results:
-                                    for metric_name, metric_value in evaluation_results[model_type].items():
+                                with mlflow.start_run(run_name=f"{pipeline_name}_{model_type}"):
+                                    # Log parameters
+                                    mlflow.log_param("pipeline", pipeline_name)
+                                    mlflow.log_param("model_type", model_type)
+                                    mlflow.log_param("is_best_model", model_type == best_model_type)
+                                    mlflow.log_param("scaling_method", preprocessor.scaling_method)
+
+                                    # Log metrics
+                                    for metric_name, metric_value in metrics.items():
                                         if isinstance(metric_value, (int, float)):
-                                            mlflow.log_metric(f"eval_{metric_name}", metric_value)
+                                            mlflow.log_metric(metric_name, metric_value)
 
-                                # Log model using appropriate flavor
-                                if "xgboost" in model_type.lower():
-                                    mlflow.xgboost.log_model(model_instance.model, "model")
-                                else:
-                                    mlflow.sklearn.log_model(model_instance.model, "model")
+                                    # Log evaluation results for this model
+                                    if model_type in evaluation_results:
+                                        for metric_name, metric_value in evaluation_results[model_type].items():
+                                            if isinstance(metric_value, (int, float)):
+                                                mlflow.log_metric(f"eval_{metric_name}", metric_value)
 
-                                # Register model in MLflow Model Registry
-                                run_id = mlflow.active_run().info.run_id
-                                model_uri = f"runs:/{run_id}/model"
-                                model_name = f"{pipeline_name}_{model_type}"
+                                    # Log model using appropriate flavor WITHOUT registered_model_name (for old MLflow server)
+                                    model_name = f"{pipeline_name}_{model_type}"
 
-                                model_version = mlflow.register_model(model_uri, model_name)
-                                logger.info(f"Model registered in MLflow: {model_name} version {model_version.version}")
+                                    # Use a workaround for old MLflow servers that don't support /logged-models endpoint
+                                    # Save model to temp directory using save_model() then log as artifact
+                                    import tempfile
+                                    import shutil
 
-                                # Promote best model to Production stage
-                                if model_type == best_model_type:
-                                    self.mlflow_client.transition_model_stage(
-                                        model_name=model_name,
-                                        version=int(model_version.version),
-                                        stage="Production"
-                                    )
-                                    logger.info(f"Best model promoted to Production: {model_name} v{model_version.version}")
+                                    with tempfile.TemporaryDirectory() as temp_dir:
+                                        model_dir = Path(temp_dir) / "model"
+                                        model_dir.mkdir(parents=True, exist_ok=True)
+
+                                        # Save model using appropriate MLflow save method (not log_model)
+                                        if "xgboost" in model_type.lower():
+                                            mlflow.xgboost.save_model(model_instance.model, str(model_dir))
+                                        else:
+                                            mlflow.sklearn.save_model(model_instance.model, str(model_dir))
+
+                                        # Log the model directory as artifact
+                                        mlflow.log_artifacts(str(model_dir), "model")
+                                        logger.info(f"Model artifacts logged to MLflow")
+
+                                    # Log preprocessor as sklearn model
+                                    preprocessor_name = f"{pipeline_name}_preprocessor"
+                                    with tempfile.TemporaryDirectory() as temp_dir:
+                                        preprocessor_dir = Path(temp_dir) / "preprocessor"
+                                        preprocessor_dir.mkdir(parents=True, exist_ok=True)
+
+                                        # Save preprocessor using MLflow save method (not log_model)
+                                        mlflow.sklearn.save_model(preprocessor, str(preprocessor_dir))
+
+                                        # Log the preprocessor directory as artifact
+                                        mlflow.log_artifacts(str(preprocessor_dir), "preprocessor")
+                                        logger.info(f"Preprocessor artifacts logged to MLflow")
+
+                                    # Log preprocessing metadata
+                                    preprocessing_metadata = {
+                                        "feature_names": preprocessor.get_feature_names() or [],
+                                        "constant_features_removed": preprocessor.get_constant_features() or [],
+                                        "n_features": len(preprocessor.get_feature_names() or []),
+                                        "scaling_method": preprocessor.scaling_method,
+                                    }
+                                    mlflow.log_dict(preprocessing_metadata, "preprocessing_metadata.json")
+
+                                    # Get run ID
+                                    run_id = mlflow.active_run().info.run_id
+                                    logger.info(f"Model and preprocessor logged to MLflow (run: {run_id})")
+
+                                    # Explicitly register models (for old MLflow server compatibility)
+                                    model_uri = f"runs:/{run_id}/model"
+                                    preprocessor_uri = f"runs:/{run_id}/preprocessor"
+
+                                    try:
+                                        # Register or create new version of model
+                                        mv = self.mlflow_client.client.create_model_version(
+                                            name=model_name,
+                                            source=model_uri,
+                                            run_id=run_id
+                                        )
+                                        logger.info(f"Registered model {model_name} version {mv.version}")
+                                    except Exception as e:
+                                        if "RESOURCE_ALREADY_EXISTS" in str(e):
+                                            # Model already registered, create new version
+                                            mv = self.mlflow_client.client.create_model_version(
+                                                name=model_name,
+                                                source=model_uri,
+                                                run_id=run_id
+                                            )
+                                            logger.info(f"Created new version {mv.version} for model {model_name}")
+                                        else:
+                                            # Model doesn't exist, create it first
+                                            try:
+                                                self.mlflow_client.client.create_registered_model(model_name)
+                                                logger.info(f"Created registered model {model_name}")
+                                                mv = self.mlflow_client.client.create_model_version(
+                                                    name=model_name,
+                                                    source=model_uri,
+                                                    run_id=run_id
+                                                )
+                                                logger.info(f"Registered model {model_name} version {mv.version}")
+                                            except Exception as e2:
+                                                logger.error(f"Failed to register model {model_name}: {e2}")
+
+                                    try:
+                                        # Register or create new version of preprocessor
+                                        pv = self.mlflow_client.client.create_model_version(
+                                            name=preprocessor_name,
+                                            source=preprocessor_uri,
+                                            run_id=run_id
+                                        )
+                                        logger.info(f"Registered preprocessor {preprocessor_name} version {pv.version}")
+                                    except Exception as e:
+                                        if "RESOURCE_ALREADY_EXISTS" in str(e):
+                                            pv = self.mlflow_client.client.create_model_version(
+                                                name=preprocessor_name,
+                                                source=preprocessor_uri,
+                                                run_id=run_id
+                                            )
+                                            logger.info(f"Created new version {pv.version} for preprocessor {preprocessor_name}")
+                                        else:
+                                            try:
+                                                self.mlflow_client.client.create_registered_model(preprocessor_name)
+                                                logger.info(f"Created registered preprocessor {preprocessor_name}")
+                                                pv = self.mlflow_client.client.create_model_version(
+                                                    name=preprocessor_name,
+                                                    source=preprocessor_uri,
+                                                    run_id=run_id
+                                                )
+                                                logger.info(f"Registered preprocessor {preprocessor_name} version {pv.version}")
+                                            except Exception as e2:
+                                                logger.error(f"Failed to register preprocessor {preprocessor_name}: {e2}")
+
+                                    # Promote best model to Production stage
+                                    if model_type == best_model_type:
+                                        # Get the latest versions that were just registered
+                                        model_versions = self.mlflow_client.client.search_model_versions(f"name='{model_name}'")
+                                        preprocessor_versions = self.mlflow_client.client.search_model_versions(f"name='{preprocessor_name}'")
+
+                                        if model_versions:
+                                            latest_model_version = max(model_versions, key=lambda v: int(v.version))
+                                            self.mlflow_client.transition_model_stage(
+                                                model_name=model_name,
+                                                version=int(latest_model_version.version),
+                                                stage="Production"
+                                            )
+                                            logger.info(f"Best model promoted to Production: {model_name} v{latest_model_version.version}")
+
+                                        if preprocessor_versions:
+                                            latest_preprocessor_version = max(preprocessor_versions, key=lambda v: int(v.version))
+                                            self.mlflow_client.transition_model_stage(
+                                                model_name=preprocessor_name,
+                                                version=int(latest_preprocessor_version.version),
+                                                stage="Production"
+                                            )
+                                            logger.info(f"Preprocessor promoted to Production: {preprocessor_name} v{latest_preprocessor_version.version}")
                         finally:
                             # Restore stdout
                             sys.stdout = old_stdout

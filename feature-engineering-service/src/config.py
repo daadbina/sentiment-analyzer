@@ -20,6 +20,16 @@ class KafkaConfig(BaseSettings):
     output_topic: str = Field(default="features_computed", alias="KAFKA_OUTPUT_TOPIC")
     max_poll_records: int = Field(default=100, alias="KAFKA_MAX_POLL_RECORDS")
     session_timeout_ms: int = Field(default=30000, alias="KAFKA_SESSION_TIMEOUT_MS")
+    auto_offset_reset: str = Field(
+        default="earliest",
+        alias="KAFKA_AUTO_OFFSET_RESET",
+        description="What to do when there is no initial offset or offset is out of range: earliest, latest, none"
+    )
+    max_poll_interval_ms: int = Field(
+        default=300000,
+        alias="KAFKA_MAX_POLL_INTERVAL_MS",
+        description="Maximum time between polls before consumer is considered dead (5 minutes)"
+    )
 
     class Config:
         env_file = ".env"
@@ -89,6 +99,26 @@ class FeastConfig(BaseSettings):
     offline_store: str = Field(default="delta", alias="FEAST_OFFLINE_STORE")
     online_store: str = Field(default="redis", alias="FEAST_ONLINE_STORE")
     feature_version: str = Field(default="v1.0", alias="FEATURE_VERSION")
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = False
+        extra = "ignore"
+
+
+class FeastHTTPConfig(BaseSettings):
+    """Feast HTTP server configuration for remote feature store."""
+
+    server_url: str = Field(
+        default="http://154.53.166.231:6566",
+        alias="FEAST_SERVER_URL"
+    )
+    timeout: int = Field(default=10, alias="FEAST_TIMEOUT")
+    max_retries: int = Field(default=3, alias="FEAST_MAX_RETRIES")
+    push_source_name: str = Field(
+        default="semantic_group_push_source",
+        alias="FEAST_PUSH_SOURCE_NAME"
+    )
 
     class Config:
         env_file = ".env"

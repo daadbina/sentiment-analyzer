@@ -20,6 +20,10 @@ requests==2.31.0
 ccxt==4.0.96
 gdelt==0.1.14
 
+# NLP & NER Models (required for NER client integration)
+torch==2.1.1
+transformers==4.35.2
+
 # Configuration & validation
 pydantic==2.5.0
 pydantic-settings==2.1.0

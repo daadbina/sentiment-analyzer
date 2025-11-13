@@ -1,0 +1,90 @@
+# Docker Compose Override for Development
+# This file is automatically merged with docker-compose.yml
+# Use this for development-specific configurations
+
+services:
+  # Override for development with hot-reload
+  crawler-service:
+    volumes:
+      - ./crawler-service/src:/app/src:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+
+  ingest-validator-service:
+    volumes:
+      - ./ingest-validator-service/src:/app/src:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+
+  canonicalizer-normalizer-service:
+    volumes:
+      - ./canonicalizer-normalizer-service/src:/app/src:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+
+  ner-entity-linking-service:
+    volumes:
+      - ./ner-entity-linking-service/src:/app/src:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+
+  embedding-service:
+    volumes:
+      - ./embedding-service/src:/app/src:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+
+  clustering-semantic-grouping-service:
+    volumes:
+      - ./clustering-semantic-grouping-service/src:/app/src:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+
+  feature-engineering-service:
+    volumes:
+      - ./feature-engineering-service/src:/app/src:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+
+  labeler-ground-truth-ingest-service:
+    volumes:
+      - ./labeler-ground-truth-ingest-service/src:/app/src:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+
+  trainer-model-registry-service:
+    volumes:
+      - ./trainer-model-registry-service/src:/app/src:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+
+  neo4j-loader-graph-service:
+    volumes:
+      - ./neo4j-loader-graph-service/src:/app/src:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+
+  predictor-online-inference-service:
+    volumes:
+      - ./predictor-online-inference-service/src:/app/src:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+
+  api-analytics-service:
+    volumes:
+      - ./api-analytics-service/src:/app/src:ro
+    environment:
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+

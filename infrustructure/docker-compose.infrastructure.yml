@@ -1,0 +1,275 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # PostgreSQL Database
+  # ============================================================================
+  postgres:
+    image: postgres:16
+    container_name: postgres-server
+    environment:
+      POSTGRES_USER: adminsentiment
+      POSTGRES_PASSWORD: wp2400!!!!
+      POSTGRES_DB: sentiment
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # ---- create mlflow DB on first start ----
+      - ./init-mlflow-db.sql:/docker-entrypoint-initdb.d/01-init-mlflow-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adminsentiment -d sentiment"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - sentiment-network
+
+  # ============================================================================
+  # Qdrant Vector Database
+  # ============================================================================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-server
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    restart: unless-stopped
+    networks:
+      - sentiment-network
+
+  # ============================================================================
+  # Neo4j Graph Database
+  # ============================================================================
+  neo4j:
+    image: neo4j:5.15.0
+    container_name: neo4j-server
+    environment:
+      NEO4J_AUTH: neo4j/sentiment_password_2024
+      NEO4J_dbms_memory_heap_max__size: 2G
+      NEO4J_dbms_memory_pagecache_size: 1G
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      NEO4J_dbms_security_procedures_allowlist: apoc.*
+    ports:
+      - "7474:7474"  # HTTP
+      - "7687:7687"  # Bolt
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    restart: unless-stopped
+    networks:
+      - sentiment-network
+
+  # ============================================================================
+  # MinIO S3 Storage
+  # ============================================================================
+  minio:
+    image: minio/minio:latest
+    container_name: minio-server
+    command: server /data --console-address ":9002"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9001:9000"  # API port (changed from 9000 to 9001)
+      - "9002:9002"  # Console port
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - sentiment-network
+
+  # Create MinIO bucket on startup
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin123;
+      /usr/bin/mc mb myminio/sentiment-analyzer --ignore-existing;
+      /usr/bin/mc mb myminio/mlflow --ignore-existing;
+      exit 0;
+      "
+    networks:
+      - sentiment-network
+
+  # ============================================================================
+  # Redis Cache
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: redis-server
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --save 60 1 --replica-read-only no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - sentiment-network
+
+  # ============================================================================
+  # Zookeeper (for Kafka)
+  # ============================================================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.8.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    restart: unless-stopped
+    networks:
+      - sentiment-network
+
+  # ============================================================================
+  # Kafka Broker
+  # ============================================================================
+  kafka:
+    image: confluentinc/cp-kafka:7.8.0
+    container_name: kafka-broker
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://154.53.166.231:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - sentiment-network
+
+  # ============================================================================
+  # Schema Registry
+  # ============================================================================
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.8.0
+    container_name: schema-registry
+    depends_on:
+      - kafka
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/subjects"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - sentiment-network
+
+  # ============================================================================
+  # MLflow Tracking Server
+  # ============================================================================
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.9.2
+    container_name: mlflow-server
+    depends_on:
+      - postgres
+      - minio
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin123
+    entrypoint: >
+      /bin/sh -c "
+      pip install psycopg2-binary boto3 &&
+      mlflow server
+      --backend-store-uri postgresql://adminsentiment:wp2400!!!!@postgres:5432/mlflow
+      --default-artifact-root s3://mlflow/
+      --host 0.0.0.0
+      --port 5000
+      "
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    networks:
+      - sentiment-network
+
+  # ============================================================================
+  # Feast Feature Server
+  # ============================================================================
+  feast:
+    image: feastdev/feature-server:latest
+    container_name: feast-feature-server
+    depends_on:
+      - redis
+    user: "0:0"
+    working_dir: /feature_repo
+    ports:
+      - "6566:6566"
+    volumes:
+      - ./feast_remote:/feature_repo
+      - feast_registry:/feature_repo/data
+    command: feast serve -h 0.0.0.0 -p 6566
+    mem_limit: 2g
+    memswap_limit: 2g
+    restart: unless-stopped
+    networks:
+      - sentiment-network
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  postgres_data:
+  qdrant_data:
+  neo4j_data:
+  neo4j_logs:
+  minio_data:
+  redis_data:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:
+  feast_registry:
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  sentiment-network:
+    driver: bridge
+

@@ -136,3 +136,4 @@ feast_remote
 .benchmarks
 
 init-mlflow-db.sql
+canonicalizer-normalizer.log.1

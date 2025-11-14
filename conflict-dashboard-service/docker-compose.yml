@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  conflict-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: conflict-dashboard-service
+    ports:
+      - "8012:8012"
+    environment:
+      - SERVICE_NAME=conflict-dashboard-service
+      - SERVICE_PORT=8012
+      - LOG_LEVEL=INFO
+      - POSTGRES_HOST=154.53.166.231
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=adminsentiment
+      - POSTGRES_PASSWORD=wp2400!!!!
+      - POSTGRES_DATABASE=sentiment
+      - REDIS_HOST=154.53.166.231
+      - REDIS_PORT=6379
+      - CACHE_TTL=30
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8012/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+

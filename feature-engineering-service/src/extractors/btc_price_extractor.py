@@ -11,19 +11,21 @@ logger = logging.getLogger(__name__)
 
 class BtcPriceExtractor(FeatureExtractor):
     """Extract BTC price features from btc_truth table.
-    
+
     Features extracted:
     - btc_change_pct_10h: Percentage change in BTC price over 10 hours
     - btc_volatility_score: Volatility score from btc_truth
     - btc_volume: Trading volume
     - btc_label_spike: Boolean indicating price spike
-    
-    Temporal alignment: Matches BTC data within ±1 hour of group creation time.
+
+    Temporal alignment: Uses lookback-only matching to find the most recent BTC data
+    before the semantic group timestamp. This eliminates race conditions where semantic
+    groups are processed before their corresponding hourly BTC data is loaded.
     """
 
     def __init__(self, postgres_client):
         """Initialize BTC price extractor.
-        
+
         Args:
             postgres_client: PostgreSQL client for querying btc_truth table
         """
@@ -44,12 +46,12 @@ class BtcPriceExtractor(FeatureExtractor):
             "btc_macd_histogram",
             "btc_bb_width",
         ]
-        self.temporal_window_hours = 1  # ±1 hour alignment window
+        self.max_lookback_hours = 24  # Maximum lookback window (fallback safety limit)
         self.lookback_periods = 50  # Number of historical periods for indicators (need 35+ for MACD)
-        
+
         logger.info(
             f"BtcPriceExtractor initialized: extractor={self.name}, "
-            f"features={self.features_extracted}, temporal_window_hours={self.temporal_window_hours}"
+            f"features={self.features_extracted}, max_lookback_hours={self.max_lookback_hours}"
         )
 
     async def extract(
@@ -169,7 +171,11 @@ class BtcPriceExtractor(FeatureExtractor):
             return None
 
     async def _fetch_btc_data(self, timestamp: datetime) -> Optional[Dict[str, Any]]:
-        """Fetch BTC data from btc_truth table with temporal alignment.
+        """Fetch BTC data from btc_truth table with lookback-only matching.
+
+        Uses lookback-only approach to find the most recent BTC data before the
+        semantic group timestamp. This eliminates race conditions where semantic
+        groups are processed before their corresponding hourly BTC data is loaded.
 
         Args:
             timestamp: Group creation timestamp
@@ -178,19 +184,17 @@ class BtcPriceExtractor(FeatureExtractor):
             Dictionary of BTC data or None
         """
         try:
-            # Calculate time window (±1 hour)
-            start_time = timestamp - timedelta(hours=self.temporal_window_hours)
-            end_time = timestamp + timedelta(hours=self.temporal_window_hours)
-
             # Convert to timezone-naive for PostgreSQL compatibility
             # (btc_truth.timestamp column is TIMESTAMP without timezone)
-            start_time_naive = start_time.replace(tzinfo=None) if start_time.tzinfo else start_time
-            end_time_naive = end_time.replace(tzinfo=None) if end_time.tzinfo else end_time
             timestamp_naive = timestamp.replace(tzinfo=None) if timestamp.tzinfo else timestamp
 
-            # Query btc_truth table
+            # Calculate minimum lookback time (safety limit to avoid very old data)
+            min_lookback_time = timestamp_naive - timedelta(hours=self.max_lookback_hours)
+
+            # Query btc_truth table with lookback-only approach
             # Note: Using $1, $2, etc. placeholders for asyncpg
             # Filter for Bitcoin only (close > 10000) to exclude ETH and other coins
+            # Lookback only: timestamp <= $1 (find most recent data BEFORE semantic group)
             query = """
                 SELECT
                     change_pct_10h,
@@ -200,18 +204,18 @@ class BtcPriceExtractor(FeatureExtractor):
                     timestamp,
                     close
                 FROM btc_truth
-                WHERE timestamp >= $1 AND timestamp <= $2
+                WHERE timestamp <= $1
+                AND timestamp >= $2
                 AND close > 10000
-                ORDER BY ABS(EXTRACT(EPOCH FROM (timestamp - $3)))
+                ORDER BY timestamp DESC
                 LIMIT 1
             """
 
             # Execute query asynchronously
             result = await self.postgres_client.execute_query(
                 query,
-                start_time_naive,
-                end_time_naive,
-                timestamp_naive
+                timestamp_naive,
+                min_lookback_time
             )
 
             if result and len(result) > 0:
@@ -225,13 +229,22 @@ class BtcPriceExtractor(FeatureExtractor):
                     "close": row["close"]
                 }
 
+                # Calculate time difference for logging
+                time_diff = timestamp_naive - row["timestamp"]
+                time_diff_minutes = time_diff.total_seconds() / 60
+
                 logger.debug(
-                    f"BTC data fetched from database: query_timestamp={timestamp.isoformat()}, "
-                    f"btc_timestamp={row['timestamp'].isoformat() if row['timestamp'] else None}, btc_close={row['close']}"
+                    f"BTC data fetched from database (lookback): query_timestamp={timestamp.isoformat()}, "
+                    f"btc_timestamp={row['timestamp'].isoformat() if row['timestamp'] else None}, "
+                    f"btc_close={row['close']}, time_diff={time_diff_minutes:.1f} minutes"
                 )
 
                 return btc_data
 
+            logger.warning(
+                f"No BTC data found within {self.max_lookback_hours}h lookback window: "
+                f"timestamp={timestamp.isoformat()}, min_lookback={min_lookback_time.isoformat()}"
+            )
             return None
 
         except Exception as e:

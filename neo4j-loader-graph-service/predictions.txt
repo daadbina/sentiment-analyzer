@@ -1,0 +1,1968 @@
+PREDICTION NODES EXPORT
+Generated: 2025-11-15T14:17:39.393183
+Total Predictions: 85
+
+================================================================================
+PREDICTION #1
+================================================================================
+ID:              01KA305HEAXBYJ6RBEX91MQ130
+Group ID:        772787c8-eadf-43d5-c47e-2e087f9b22eb
+Linked Group:    772787c8-eadf-43d5-c47e-2e087f9b22eb
+Domain:          conflict
+Probability:     0.6951068886278376
+Confidence:      0.3902137772556753
+Model Version:   18
+Predicted At:    2025-11-15T05:35:19.759656
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T05:35:20.751000000+00:00
+================================================================================
+PREDICTION #2
+================================================================================
+ID:              01KA305GHJ1QYRKRZTEM2H2BE6
+Group ID:        772787c8-eadf-43d5-c47e-2e087f9b22eb
+Linked Group:    772787c8-eadf-43d5-c47e-2e087f9b22eb
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   14
+Predicted At:    2025-11-15T05:35:18.822734
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T05:35:20.751000000+00:00
+================================================================================
+PREDICTION #3
+================================================================================
+ID:              01KA304D6ZMTR5GDAW4GJJ13BZ
+Group ID:        e31779fc-d137-e295-b535-28d5264d4e33
+Linked Group:    e31779fc-d137-e295-b535-28d5264d4e33
+Domain:          conflict
+Probability:     0.7603841800842094
+Confidence:      0.5207683601684188
+Model Version:   18
+Predicted At:    2025-11-15T05:34:42.656052
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T05:34:50.558000000+00:00
+================================================================================
+PREDICTION #4
+================================================================================
+ID:              01KA304C9Z57GY19QGQPMKYT9C
+Group ID:        e31779fc-d137-e295-b535-28d5264d4e33
+Linked Group:    e31779fc-d137-e295-b535-28d5264d4e33
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   14
+Predicted At:    2025-11-15T05:34:41.715143
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T05:34:50.558000000+00:00
+================================================================================
+PREDICTION #5
+================================================================================
+ID:              01KA30496WWQKJ0N2H9MTE4GEH
+Group ID:        bb5526cc-4c2e-aa3d-7c2d-eac239611784
+Linked Group:    bb5526cc-4c2e-aa3d-7c2d-eac239611784
+Domain:          conflict
+Probability:     0.7533353050537817
+Confidence:      0.5066706101075633
+Model Version:   18
+Predicted At:    2025-11-15T05:34:38.550779
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T05:34:40.231000000+00:00
+================================================================================
+PREDICTION #6
+================================================================================
+ID:              01KA3048CGHGKXWRH7CACGRKD0
+Group ID:        bb5526cc-4c2e-aa3d-7c2d-eac239611784
+Linked Group:    bb5526cc-4c2e-aa3d-7c2d-eac239611784
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   14
+Predicted At:    2025-11-15T05:34:37.716660
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T05:34:40.231000000+00:00
+================================================================================
+PREDICTION #7
+================================================================================
+ID:              01KA3046W97GHZT28MGCZZ0EY7
+Group ID:        6385956c-2d58-0fd6-bfe5-cfc0a97053a9
+Linked Group:    6385956c-2d58-0fd6-bfe5-cfc0a97053a9
+Domain:          conflict
+Probability:     0.6793315227099391
+Confidence:      0.35866304541987826
+Model Version:   18
+Predicted At:    2025-11-15T05:34:36.169189
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T05:34:40.231000000+00:00
+================================================================================
+PREDICTION #8
+================================================================================
+ID:              01KA30438N3TMSN4F3C7FJH5P1
+Group ID:        6385956c-2d58-0fd6-bfe5-cfc0a97053a9
+Linked Group:    6385956c-2d58-0fd6-bfe5-cfc0a97053a9
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   14
+Predicted At:    2025-11-15T05:34:32.048793
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T05:34:34.815000000+00:00
+================================================================================
+PREDICTION #9
+================================================================================
+ID:              01KA2TGEEDGDJP94T09Z0SWSWX
+Group ID:        e26e1df8-70e5-19ce-0a17-ea9db8537715
+Linked Group:    e26e1df8-70e5-19ce-0a17-ea9db8537715
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   14
+Predicted At:    2025-11-15T03:56:25.678700
+
+Features:
+  - semantic_group_features:num_sources: 2.0
+  - semantic_group_features:source_credibility_avg: 0.8142857142857143
+  - semantic_group_features:source_credibility_std: 0.09897433186107873
+  - semantic_group_features:source_diversity_score: 0.9852281360342516
+  - semantic_group_features:time_span_hours: 80.92694444444444
+  - semantic_group_features:publication_velocity: 0.08649776719057312
+  - semantic_group_features:temporal_concentration: 0.14285714285714285
+  - semantic_group_features:days_since_first_article: 3.4529437903125
+  - semantic_group_features:sentiment_mean: 0.009964285714285703
+  - semantic_group_features:sentiment_std: 0.01631272196658742
+  - semantic_group_features:sentiment_polarity_ratio: 0.0
+  - semantic_group_features:sentiment_volatility: 0.028166666666666673
+  - semantic_group_features:entity_count: 9.0
+  - semantic_group_features:entity_diversity: 2.0
+  - semantic_group_features:entity_prominence: 0.23809523809523808
+  - semantic_group_features:entity_concentration: 0.8994375017061169
+  - semantic_group_features:avg_word_count: 189.42857142857142
+  - semantic_group_features:avg_title_length: 10.0
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 2.0
+  - semantic_group_features:centroid_magnitude: 1.000000002226096
+  - semantic_group_features:intra_cluster_similarity_mean: 0.662956714630127
+  - semantic_group_features:intra_cluster_similarity_std: 0.12686409056186676
+  - semantic_group_features:embedding_drift_score: 0.036084044608971404
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: IN,PK
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:56:27.822000000+00:00
+================================================================================
+PREDICTION #10
+================================================================================
+ID:              01KA2TGBJXN9011BES900R15CY
+Group ID:        5732dc93-e1a7-e01f-baa1-0f1cf948d64d
+Linked Group:    5732dc93-e1a7-e01f-baa1-0f1cf948d64d
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   14
+Predicted At:    2025-11-15T03:56:22.753346
+
+Features:
+  - semantic_group_features:num_sources: 1.0
+  - semantic_group_features:source_credibility_avg: 0.6999999999999998
+  - semantic_group_features:source_credibility_std: 1.1102230246251565e-16
+  - semantic_group_features:source_diversity_score: 0.0
+  - semantic_group_features:time_span_hours: 27.82472222222222
+  - semantic_group_features:publication_velocity: 0.10781778793838413
+  - semantic_group_features:temporal_concentration: 0.3333333333333333
+  - semantic_group_features:days_since_first_article: 1.6510937504861112
+  - semantic_group_features:sentiment_mean: 0.30376666666666663
+  - semantic_group_features:sentiment_std: 0.7915425460594157
+  - semantic_group_features:sentiment_polarity_ratio: 0.040546510810816436
+  - semantic_group_features:sentiment_volatility: 0.8523499999999999
+  - semantic_group_features:entity_count: 64.0
+  - semantic_group_features:entity_diversity: 3.0
+  - semantic_group_features:entity_prominence: 0.11363636363636363
+  - semantic_group_features:entity_concentration: 0.8887606292738591
+  - semantic_group_features:avg_word_count: 352.6666666666667
+  - semantic_group_features:avg_title_length: 8.0
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 2.0
+  - semantic_group_features:centroid_magnitude: 1.0000000215315779
+  - semantic_group_features:intra_cluster_similarity_mean: 0.5683901906013489
+  - semantic_group_features:intra_cluster_similarity_std: 0.16973653435707092
+  - semantic_group_features:embedding_drift_score: 0.036084121288409404
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: CN,GH,RU,US,ZA
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:56:27.822000000+00:00
+================================================================================
+PREDICTION #11
+================================================================================
+ID:              01KA2TG8PFKENY3B54SWR6G0Z5
+Group ID:        583a804e-88bd-05b2-436c-00cc4be24974
+Linked Group:    583a804e-88bd-05b2-436c-00cc4be24974
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   14
+Predicted At:    2025-11-15T03:56:19.516930
+
+Features:
+  - semantic_group_features:num_sources: 4.0
+  - semantic_group_features:source_credibility_avg: 0.8300000000000001
+  - semantic_group_features:source_credibility_std: 0.1077032961426901
+  - semantic_group_features:source_diversity_score: 0.9609640474436811
+  - semantic_group_features:time_span_hours: 49.71
+  - semantic_group_features:publication_velocity: 0.10058338362502514
+  - semantic_group_features:temporal_concentration: 0.2
+  - semantic_group_features:days_since_first_article: 2.0887335813310184
+  - semantic_group_features:sentiment_mean: 0.42533
+  - semantic_group_features:sentiment_std: 0.658452302296833
+  - semantic_group_features:sentiment_polarity_ratio: 0.05108256237659907
+  - semantic_group_features:sentiment_volatility: 0.9892999999999998
+  - semantic_group_features:entity_count: 39.0
+  - semantic_group_features:entity_diversity: 3.0
+  - semantic_group_features:entity_prominence: 0.12857142857142856
+  - semantic_group_features:entity_concentration: 0.9152008958990617
+  - semantic_group_features:avg_word_count: 174.0
+  - semantic_group_features:avg_title_length: 12.2
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 1.0
+  - semantic_group_features:centroid_magnitude: 1.0000000117626349
+  - semantic_group_features:intra_cluster_similarity_mean: 0.5808733701705933
+  - semantic_group_features:intra_cluster_similarity_std: 0.1476076990365982
+  - semantic_group_features:embedding_drift_score: 0.03608429385736584
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: CH,US
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:56:22.660000000+00:00
+================================================================================
+PREDICTION #12
+================================================================================
+ID:              01KA2TCGDD6SK4WS0GGR1FQ07J
+Group ID:        07326ccd-2076-66e6-67eb-85c03379a4a7
+Linked Group:    07326ccd-2076-66e6-67eb-85c03379a4a7
+Domain:          conflict
+Probability:     0.7561516506935563
+Confidence:      0.5123033013871126
+Model Version:   18
+Predicted At:    2025-11-15T03:54:16.619667
+
+Features:
+  - semantic_group_features:num_sources: 2.0
+  - semantic_group_features:source_credibility_avg: 0.7333333333333334
+  - semantic_group_features:source_credibility_std: 0.07453559924999302
+  - semantic_group_features:source_diversity_score: 0.6500224216483541
+  - semantic_group_features:time_span_hours: 41.13
+  - semantic_group_features:publication_velocity: 0.14587892049598833
+  - semantic_group_features:temporal_concentration: 0.16666666666666666
+  - semantic_group_features:days_since_first_article: 2.2590078258217594
+  - semantic_group_features:sentiment_mean: 0.026675000000000004
+  - semantic_group_features:sentiment_std: 0.05270018184661855
+  - semantic_group_features:sentiment_polarity_ratio: 0.0
+  - semantic_group_features:sentiment_volatility: 0.07325999999999992
+  - semantic_group_features:entity_count: 14.0
+  - semantic_group_features:entity_diversity: 3.0
+  - semantic_group_features:entity_prominence: 0.15789473684210525
+  - semantic_group_features:entity_concentration: 0.9566089729477021
+  - semantic_group_features:avg_word_count: 296.8333333333333
+  - semantic_group_features:avg_title_length: 9.0
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 2.0
+  - semantic_group_features:centroid_magnitude: 0.9999999851404641
+  - semantic_group_features:intra_cluster_similarity_mean: 0.7063223719596863
+  - semantic_group_features:intra_cluster_similarity_std: 0.0710124522447586
+  - semantic_group_features:embedding_drift_score: 0.036084318730529696
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: AF,US,VE
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:54:17.320000000+00:00
+================================================================================
+PREDICTION #13
+================================================================================
+ID:              01KA2TBD8JAB2XKBNVY6HM65JG
+Group ID:        583a804e-88bd-05b2-436c-00cc4be24974
+Linked Group:    583a804e-88bd-05b2-436c-00cc4be24974
+Domain:          conflict
+Probability:     0.7756881834888878
+Confidence:      0.5513763669777756
+Model Version:   18
+Predicted At:    2025-11-15T03:53:40.340479
+
+Features:
+  - semantic_group_features:num_sources: 4.0
+  - semantic_group_features:source_credibility_avg: 0.8300000000000001
+  - semantic_group_features:source_credibility_std: 0.1077032961426901
+  - semantic_group_features:source_diversity_score: 0.9609640474436811
+  - semantic_group_features:time_span_hours: 49.71
+  - semantic_group_features:publication_velocity: 0.10058338362502514
+  - semantic_group_features:temporal_concentration: 0.2
+  - semantic_group_features:days_since_first_article: 2.0887335813310184
+  - semantic_group_features:sentiment_mean: 0.42533
+  - semantic_group_features:sentiment_std: 0.658452302296833
+  - semantic_group_features:sentiment_polarity_ratio: 0.05108256237659907
+  - semantic_group_features:sentiment_volatility: 0.9892999999999998
+  - semantic_group_features:entity_count: 39.0
+  - semantic_group_features:entity_diversity: 3.0
+  - semantic_group_features:entity_prominence: 0.12857142857142856
+  - semantic_group_features:entity_concentration: 0.9152008958990617
+  - semantic_group_features:avg_word_count: 174.0
+  - semantic_group_features:avg_title_length: 12.2
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 1.0
+  - semantic_group_features:centroid_magnitude: 1.0000000117626349
+  - semantic_group_features:intra_cluster_similarity_mean: 0.5808733701705933
+  - semantic_group_features:intra_cluster_similarity_std: 0.1476076990365982
+  - semantic_group_features:embedding_drift_score: 0.03608429385736584
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: CH,US
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:53:46.999000000+00:00
+================================================================================
+PREDICTION #14
+================================================================================
+ID:              01KA2T8ZCKSSRKTMV186NT01W2
+Group ID:        583a804e-88bd-05b2-436c-00cc4be24974
+Linked Group:    583a804e-88bd-05b2-436c-00cc4be24974
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   18
+Predicted At:    2025-11-15T03:52:20.594985
+
+Features:
+  - semantic_group_features:num_sources: 4.0
+  - semantic_group_features:source_credibility_avg: 0.8300000000000001
+  - semantic_group_features:source_credibility_std: 0.1077032961426901
+  - semantic_group_features:source_diversity_score: 0.9609640474436811
+  - semantic_group_features:time_span_hours: 49.71
+  - semantic_group_features:publication_velocity: 0.10058338362502514
+  - semantic_group_features:temporal_concentration: 0.2
+  - semantic_group_features:days_since_first_article: 2.0887335813310184
+  - semantic_group_features:sentiment_mean: 0.42533
+  - semantic_group_features:sentiment_std: 0.658452302296833
+  - semantic_group_features:sentiment_polarity_ratio: 0.05108256237659907
+  - semantic_group_features:sentiment_volatility: 0.9892999999999998
+  - semantic_group_features:entity_count: 39.0
+  - semantic_group_features:entity_diversity: 3.0
+  - semantic_group_features:entity_prominence: 0.12857142857142856
+  - semantic_group_features:entity_concentration: 0.9152008958990617
+  - semantic_group_features:avg_word_count: 174.0
+  - semantic_group_features:avg_title_length: 12.2
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 1.0
+  - semantic_group_features:centroid_magnitude: 1.0000000117626349
+  - semantic_group_features:intra_cluster_similarity_mean: 0.5808733701705933
+  - semantic_group_features:intra_cluster_similarity_std: 0.1476076990365982
+  - semantic_group_features:embedding_drift_score: 0.03608429385736584
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: CH,US
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:52:21.677000000+00:00
+================================================================================
+PREDICTION #15
+================================================================================
+ID:              01KA2SVG99RHSP1JG750W7YYPP
+Group ID:        e26e1df8-70e5-19ce-0a17-ea9db8537715
+Linked Group:    e26e1df8-70e5-19ce-0a17-ea9db8537715
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   14
+Predicted At:    2025-11-15T03:44:59.407739
+
+Features:
+  - semantic_group_features:num_sources: 2.0
+  - semantic_group_features:source_credibility_avg: 0.8142857142857143
+  - semantic_group_features:source_credibility_std: 0.09897433186107873
+  - semantic_group_features:source_diversity_score: 0.9852281360342516
+  - semantic_group_features:time_span_hours: 80.92694444444444
+  - semantic_group_features:publication_velocity: 0.08649776719057312
+  - semantic_group_features:temporal_concentration: 0.14285714285714285
+  - semantic_group_features:days_since_first_article: 3.4529437903125
+  - semantic_group_features:sentiment_mean: 0.009964285714285703
+  - semantic_group_features:sentiment_std: 0.01631272196658742
+  - semantic_group_features:sentiment_polarity_ratio: 0.0
+  - semantic_group_features:sentiment_volatility: 0.028166666666666673
+  - semantic_group_features:entity_count: 9.0
+  - semantic_group_features:entity_diversity: 2.0
+  - semantic_group_features:entity_prominence: 0.23809523809523808
+  - semantic_group_features:entity_concentration: 0.8994375017061169
+  - semantic_group_features:avg_word_count: 189.42857142857142
+  - semantic_group_features:avg_title_length: 10.0
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 2.0
+  - semantic_group_features:centroid_magnitude: 1.000000002226096
+  - semantic_group_features:intra_cluster_similarity_mean: 0.662956714630127
+  - semantic_group_features:intra_cluster_similarity_std: 0.12686409056186676
+  - semantic_group_features:embedding_drift_score: 0.036084044608971404
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: IN,PK
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:45:00.366000000+00:00
+================================================================================
+PREDICTION #16
+================================================================================
+ID:              01KA2SVDFMDV2BMQY4WZK3D3CG
+Group ID:        d8b78350-d4a5-0d8f-c7d0-c80de03e525f
+Linked Group:    d8b78350-d4a5-0d8f-c7d0-c80de03e525f
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   18
+Predicted At:    2025-11-15T03:44:56.557717
+
+Features:
+  - semantic_group_features:num_sources: 1.0
+  - semantic_group_features:source_credibility_avg: 0.6999999999999997
+  - semantic_group_features:source_credibility_std: 2.220446049250313e-16
+  - semantic_group_features:source_diversity_score: 0.0
+  - semantic_group_features:time_span_hours: 52.448055555555555
+  - semantic_group_features:publication_velocity: 0.34319670785380246
+  - semantic_group_features:temporal_concentration: 0.1111111111111111
+  - semantic_group_features:days_since_first_article: 2.468674957673611
+  - semantic_group_features:sentiment_mean: 0.17993333333333333
+  - semantic_group_features:sentiment_std: 0.5392134085869899
+  - semantic_group_features:sentiment_polarity_ratio: 0.018232155679395463
+  - semantic_group_features:sentiment_volatility: 0.47405294117647057
+  - semantic_group_features:entity_count: 112.0
+  - semantic_group_features:entity_diversity: 3.0
+  - semantic_group_features:entity_prominence: 0.12954545454545455
+  - semantic_group_features:entity_concentration: 0.8246954125549548
+  - semantic_group_features:avg_word_count: 541.8333333333334
+  - semantic_group_features:avg_title_length: 9.5
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 3.0
+  - semantic_group_features:centroid_magnitude: 0.999999995475762
+  - semantic_group_features:intra_cluster_similarity_mean: 0.7104178071022034
+  - semantic_group_features:intra_cluster_similarity_std: 0.11533159017562866
+  - semantic_group_features:embedding_drift_score: 0.036083517471830445
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: BE,CA,DE,IL,NO,RU,TR,UA,US
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:45:00.366000000+00:00
+================================================================================
+PREDICTION #17
+================================================================================
+ID:              01KA2STGB53K6NCT1ZF9G9XQ51
+Group ID:        9751aa9d-9fae-fa52-bf66-56f1a73cf854
+Linked Group:    9751aa9d-9fae-fa52-bf66-56f1a73cf854
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   14
+Predicted At:    2025-11-15T03:44:26.626902
+
+Features:
+  - semantic_group_features:num_sources: 1.0
+  - semantic_group_features:source_credibility_avg: 0.7
+  - semantic_group_features:source_credibility_std: 0.0
+  - semantic_group_features:source_diversity_score: 0.0
+  - semantic_group_features:time_span_hours: 55.68527777777778
+  - semantic_group_features:publication_velocity: 0.08979033955713409
+  - semantic_group_features:temporal_concentration: 0.4
+  - semantic_group_features:days_since_first_article: 2.5824823168055557
+  - semantic_group_features:sentiment_mean: 0.00986999999999999
+  - semantic_group_features:sentiment_std: 0.01971401531905663
+  - semantic_group_features:sentiment_polarity_ratio: 0.0
+  - semantic_group_features:sentiment_volatility: 0.02632499999999996
+  - semantic_group_features:entity_count: 35.0
+  - semantic_group_features:entity_diversity: 3.0
+  - semantic_group_features:entity_prominence: 0.1188118811881188
+  - semantic_group_features:entity_concentration: 0.8991492123737359
+  - semantic_group_features:avg_word_count: 352.0
+  - semantic_group_features:avg_title_length: 11.0
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 2.0
+  - semantic_group_features:centroid_magnitude: 1.0000000060599274
+  - semantic_group_features:intra_cluster_similarity_mean: 0.7597600817680359
+  - semantic_group_features:intra_cluster_similarity_std: 0.07725516706705093
+  - semantic_group_features:embedding_drift_score: 0.03608227799779578
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: DE,RO,RU,UA,US
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:44:30.214000000+00:00
+================================================================================
+PREDICTION #18
+================================================================================
+ID:              01KA2SSRQP8BK3301TKVFH975F
+Group ID:        e26e1df8-70e5-19ce-0a17-ea9db8537715
+Linked Group:    e26e1df8-70e5-19ce-0a17-ea9db8537715
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   18
+Predicted At:    2025-11-15T03:44:02.267817
+
+Features:
+  - semantic_group_features:num_sources: 2.0
+  - semantic_group_features:source_credibility_avg: 0.8142857142857143
+  - semantic_group_features:source_credibility_std: 0.09897433186107873
+  - semantic_group_features:source_diversity_score: 0.9852281360342516
+  - semantic_group_features:time_span_hours: 80.92694444444444
+  - semantic_group_features:publication_velocity: 0.08649776719057312
+  - semantic_group_features:temporal_concentration: 0.14285714285714285
+  - semantic_group_features:days_since_first_article: 3.4529437903125
+  - semantic_group_features:sentiment_mean: 0.009964285714285703
+  - semantic_group_features:sentiment_std: 0.01631272196658742
+  - semantic_group_features:sentiment_polarity_ratio: 0.0
+  - semantic_group_features:sentiment_volatility: 0.028166666666666673
+  - semantic_group_features:entity_count: 9.0
+  - semantic_group_features:entity_diversity: 2.0
+  - semantic_group_features:entity_prominence: 0.23809523809523808
+  - semantic_group_features:entity_concentration: 0.8994375017061169
+  - semantic_group_features:avg_word_count: 189.42857142857142
+  - semantic_group_features:avg_title_length: 10.0
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 2.0
+  - semantic_group_features:centroid_magnitude: 1.000000002226096
+  - semantic_group_features:intra_cluster_similarity_mean: 0.662956714630127
+  - semantic_group_features:intra_cluster_similarity_std: 0.12686409056186676
+  - semantic_group_features:embedding_drift_score: 0.036084044608971404
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: IN,PK
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:44:10.046000000+00:00
+================================================================================
+PREDICTION #19
+================================================================================
+ID:              01KA2SPZNADEF1RAMBWJWG3XYK
+Group ID:        5732dc93-e1a7-e01f-baa1-0f1cf948d64d
+Linked Group:    5732dc93-e1a7-e01f-baa1-0f1cf948d64d
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T03:42:31.080922
+
+Features:
+  - semantic_group_features:num_sources: 1.0
+  - semantic_group_features:source_credibility_avg: 0.6999999999999998
+  - semantic_group_features:source_credibility_std: 1.1102230246251565e-16
+  - semantic_group_features:source_diversity_score: 0.0
+  - semantic_group_features:time_span_hours: 27.82472222222222
+  - semantic_group_features:publication_velocity: 0.10781778793838413
+  - semantic_group_features:temporal_concentration: 0.3333333333333333
+  - semantic_group_features:days_since_first_article: 1.6510937504861112
+  - semantic_group_features:sentiment_mean: 0.30376666666666663
+  - semantic_group_features:sentiment_std: 0.7915425460594157
+  - semantic_group_features:sentiment_polarity_ratio: 0.040546510810816436
+  - semantic_group_features:sentiment_volatility: 0.8523499999999999
+  - semantic_group_features:entity_count: 64.0
+  - semantic_group_features:entity_diversity: 3.0
+  - semantic_group_features:entity_prominence: 0.11363636363636363
+  - semantic_group_features:entity_concentration: 0.8887606292738591
+  - semantic_group_features:avg_word_count: 352.6666666666667
+  - semantic_group_features:avg_title_length: 8.0
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 2.0
+  - semantic_group_features:centroid_magnitude: 1.0000000215315779
+  - semantic_group_features:intra_cluster_similarity_mean: 0.5683901906013489
+  - semantic_group_features:intra_cluster_similarity_std: 0.16973653435707092
+  - semantic_group_features:embedding_drift_score: 0.036084121288409404
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: CN,GH,RU,US,ZA
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:42:34.788000000+00:00
+================================================================================
+PREDICTION #20
+================================================================================
+ID:              01KA2SHR1QJ31TRF5A84R85PG3
+Group ID:        07326ccd-2076-66e6-67eb-85c03379a4a7
+Linked Group:    07326ccd-2076-66e6-67eb-85c03379a4a7
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T03:39:39.435038
+
+Features:
+  - semantic_group_features:num_sources: 2.0
+  - semantic_group_features:source_credibility_avg: 0.7333333333333334
+  - semantic_group_features:source_credibility_std: 0.07453559924999302
+  - semantic_group_features:source_diversity_score: 0.6500224216483541
+  - semantic_group_features:time_span_hours: 41.13
+  - semantic_group_features:publication_velocity: 0.14587892049598833
+  - semantic_group_features:temporal_concentration: 0.16666666666666666
+  - semantic_group_features:days_since_first_article: 2.2590078258217594
+  - semantic_group_features:sentiment_mean: 0.026675000000000004
+  - semantic_group_features:sentiment_std: 0.05270018184661855
+  - semantic_group_features:sentiment_polarity_ratio: 0.0
+  - semantic_group_features:sentiment_volatility: 0.07325999999999992
+  - semantic_group_features:entity_count: 14.0
+  - semantic_group_features:entity_diversity: 3.0
+  - semantic_group_features:entity_prominence: 0.15789473684210525
+  - semantic_group_features:entity_concentration: 0.9566089729477021
+  - semantic_group_features:avg_word_count: 296.8333333333333
+  - semantic_group_features:avg_title_length: 9.0
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 2.0
+  - semantic_group_features:centroid_magnitude: 0.9999999851404641
+  - semantic_group_features:intra_cluster_similarity_mean: 0.7063223719596863
+  - semantic_group_features:intra_cluster_similarity_std: 0.0710124522447586
+  - semantic_group_features:embedding_drift_score: 0.036084318730529696
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: AF,US,VE
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:39:44.546000000+00:00
+================================================================================
+PREDICTION #21
+================================================================================
+ID:              01KA2SEA64T5ZCRYY1MW5Q1W1M
+Group ID:        96fa5091-e9f8-f76d-bb52-e5b60618a05f
+Linked Group:    96fa5091-e9f8-f76d-bb52-e5b60618a05f
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T03:37:46.925446
+
+Features:
+  - semantic_group_features:num_sources: 2.0
+  - semantic_group_features:source_credibility_avg: 0.7499999999999999
+  - semantic_group_features:source_credibility_std: 0.08660254037844389
+  - semantic_group_features:source_diversity_score: 0.8112781244591328
+  - semantic_group_features:time_span_hours: 30.13888888888889
+  - semantic_group_features:publication_velocity: 0.13271889400921658
+  - semantic_group_features:temporal_concentration: 0.5
+  - semantic_group_features:days_since_first_article: 1.4989361959837963
+  - semantic_group_features:sentiment_mean: 0.12745
+  - semantic_group_features:sentiment_std: 0.43019121911075775
+  - semantic_group_features:sentiment_polarity_ratio: 0.0
+  - semantic_group_features:sentiment_volatility: 0.33236666666666664
+  - semantic_group_features:entity_count: 3.0
+  - semantic_group_features:entity_diversity: 1.0
+  - semantic_group_features:entity_prominence: 0.3333333333333333
+  - semantic_group_features:entity_concentration: 1.0
+  - semantic_group_features:avg_word_count: 277.0
+  - semantic_group_features:avg_title_length: 8.75
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 3.0
+  - semantic_group_features:centroid_magnitude: 1.0000000065383392
+  - semantic_group_features:intra_cluster_similarity_mean: 0.5255563259124756
+  - semantic_group_features:intra_cluster_similarity_std: 0.0971202477812767
+  - semantic_group_features:embedding_drift_score: 0.036081731416412764
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: ET,SD
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:37:49.353000000+00:00
+================================================================================
+PREDICTION #22
+================================================================================
+ID:              01KA2S94PDPRAZYPQ5WW7932K0
+Group ID:        583a804e-88bd-05b2-436c-00cc4be24974
+Linked Group:    583a804e-88bd-05b2-436c-00cc4be24974
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T03:34:57.468824
+
+Features:
+  - semantic_group_features:num_sources: 4.0
+  - semantic_group_features:source_credibility_avg: 0.8300000000000001
+  - semantic_group_features:source_credibility_std: 0.1077032961426901
+  - semantic_group_features:source_diversity_score: 0.9609640474436811
+  - semantic_group_features:time_span_hours: 49.71
+  - semantic_group_features:publication_velocity: 0.10058338362502514
+  - semantic_group_features:temporal_concentration: 0.2
+  - semantic_group_features:days_since_first_article: 2.0887335813310184
+  - semantic_group_features:sentiment_mean: 0.42533
+  - semantic_group_features:sentiment_std: 0.658452302296833
+  - semantic_group_features:sentiment_polarity_ratio: 0.05108256237659907
+  - semantic_group_features:sentiment_volatility: 0.9892999999999998
+  - semantic_group_features:entity_count: 39.0
+  - semantic_group_features:entity_diversity: 3.0
+  - semantic_group_features:entity_prominence: 0.12857142857142856
+  - semantic_group_features:entity_concentration: 0.9152008958990617
+  - semantic_group_features:avg_word_count: 174.0
+  - semantic_group_features:avg_title_length: 12.2
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 1.0
+  - semantic_group_features:centroid_magnitude: 1.0000000117626349
+  - semantic_group_features:intra_cluster_similarity_mean: 0.5808733701705933
+  - semantic_group_features:intra_cluster_similarity_std: 0.1476076990365982
+  - semantic_group_features:embedding_drift_score: 0.03608429385736584
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: CH,US
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:35:03.934000000+00:00
+================================================================================
+PREDICTION #23
+================================================================================
+ID:              01KA2S50R7NDN669R0YW2VRM1E
+Group ID:        e35f1601-c177-1cfc-52fa-b2b70a61a860
+Linked Group:    e35f1601-c177-1cfc-52fa-b2b70a61a860
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T03:32:42.626009
+
+Features:
+  - semantic_group_features:num_sources: 2.0
+  - semantic_group_features:source_credibility_avg: 0.8699999999999999
+  - semantic_group_features:source_credibility_std: 0.09797958971132709
+  - semantic_group_features:source_diversity_score: 0.9709505944546686
+  - semantic_group_features:time_span_hours: 32.07611111111111
+  - semantic_group_features:publication_velocity: 0.15587924554445157
+  - semantic_group_features:temporal_concentration: 0.4
+  - semantic_group_features:days_since_first_article: 1.6471574454513889
+  - semantic_group_features:sentiment_mean: 0.62712
+  - semantic_group_features:sentiment_std: 0.47758235143271355
+  - semantic_group_features:sentiment_polarity_ratio: 0.10986122886681098
+  - semantic_group_features:sentiment_volatility: 0.3896
+  - semantic_group_features:entity_count: 7.0
+  - semantic_group_features:entity_diversity: 2.0
+  - semantic_group_features:entity_prominence: 0.2222222222222222
+  - semantic_group_features:entity_concentration: 0.9708357627258161
+  - semantic_group_features:avg_word_count: 25.8
+  - semantic_group_features:avg_title_length: 10.6
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 1.0
+  - semantic_group_features:centroid_magnitude: 1.000000005332404
+  - semantic_group_features:intra_cluster_similarity_mean: 0.3172192871570587
+  - semantic_group_features:intra_cluster_similarity_std: 0.1329243928194046
+  - semantic_group_features:embedding_drift_score: 0.03608438621177242
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: AU,GB,JP
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:32:47.961000000+00:00
+================================================================================
+PREDICTION #24
+================================================================================
+ID:              01KA2S4STERWFS57EVCC7ENRCE
+Group ID:        89cfdf17-61c6-5931-37bb-8043c6b962b0
+Linked Group:    89cfdf17-61c6-5931-37bb-8043c6b962b0
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T03:32:35.508957
+
+Features:
+  - semantic_group_features:num_sources: 1.0
+  - semantic_group_features:source_credibility_avg: 0.9
+  - semantic_group_features:source_credibility_std: 0.0
+  - semantic_group_features:source_diversity_score: 0.0
+  - semantic_group_features:time_span_hours: 15.133611111111112
+  - semantic_group_features:publication_velocity: 0.19823424680163726
+  - semantic_group_features:temporal_concentration: 0.6666666666666666
+  - semantic_group_features:days_since_first_article: 0.6702587574884259
+  - semantic_group_features:sentiment_mean: 0.39975
+  - semantic_group_features:sentiment_std: 0.494425269041406
+  - semantic_group_features:sentiment_polarity_ratio: 0.040546510810816436
+  - semantic_group_features:sentiment_volatility: 0.5563
+  - semantic_group_features:entity_count: 13.0
+  - semantic_group_features:entity_diversity: 3.0
+  - semantic_group_features:entity_prominence: 0.15
+  - semantic_group_features:entity_concentration: 0.9583832232923284
+  - semantic_group_features:avg_word_count: 92.33333333333333
+  - semantic_group_features:avg_title_length: 11.666666666666666
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 1.0
+  - semantic_group_features:centroid_magnitude: 0.9999999857696752
+  - semantic_group_features:intra_cluster_similarity_mean: 0.5633412003517151
+  - semantic_group_features:intra_cluster_similarity_std: 0.11015132814645767
+  - semantic_group_features:embedding_drift_score: 0.03608380785940112
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: AU,KW
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:32:37.490000000+00:00
+================================================================================
+PREDICTION #25
+================================================================================
+ID:              01KA2S4Q0T05XRWNQ6Y4F2ZMBX
+Group ID:        e35f1601-c177-1cfc-52fa-b2b70a61a860
+Linked Group:    e35f1601-c177-1cfc-52fa-b2b70a61a860
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T03:32:32.307686
+
+Features:
+  - semantic_group_features:num_sources: 2.0
+  - semantic_group_features:source_credibility_avg: 0.8699999999999999
+  - semantic_group_features:source_credibility_std: 0.09797958971132709
+  - semantic_group_features:source_diversity_score: 0.9709505944546686
+  - semantic_group_features:time_span_hours: 32.07611111111111
+  - semantic_group_features:publication_velocity: 0.15587924554445157
+  - semantic_group_features:temporal_concentration: 0.4
+  - semantic_group_features:days_since_first_article: 1.6471574454513889
+  - semantic_group_features:sentiment_mean: 0.62712
+  - semantic_group_features:sentiment_std: 0.47758235143271355
+  - semantic_group_features:sentiment_polarity_ratio: 0.10986122886681098
+  - semantic_group_features:sentiment_volatility: 0.3896
+  - semantic_group_features:entity_count: 7.0
+  - semantic_group_features:entity_diversity: 2.0
+  - semantic_group_features:entity_prominence: 0.2222222222222222
+  - semantic_group_features:entity_concentration: 0.9708357627258161
+  - semantic_group_features:avg_word_count: 25.8
+  - semantic_group_features:avg_title_length: 10.6
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 1.0
+  - semantic_group_features:centroid_magnitude: 1.000000005332404
+  - semantic_group_features:intra_cluster_similarity_mean: 0.3172192871570587
+  - semantic_group_features:intra_cluster_similarity_std: 0.1329243928194046
+  - semantic_group_features:embedding_drift_score: 0.03608438621177242
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: AU,GB,JP
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:32:37.490000000+00:00
+================================================================================
+PREDICTION #26
+================================================================================
+ID:              01KA2RJC6Q810W9FAF65HT6S0H
+Group ID:        9b639d8d-cf33-46dd-0fe7-4b7ac94cfcb4
+Linked Group:    9b639d8d-cf33-46dd-0fe7-4b7ac94cfcb4
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T03:22:31.740097
+
+Features:
+  - semantic_group_features:num_sources: 2.0
+  - semantic_group_features:source_credibility_avg: 0.75
+  - semantic_group_features:source_credibility_std: 0.08660254037844389
+  - semantic_group_features:source_diversity_score: 0.8112781244591328
+  - semantic_group_features:time_span_hours: 49.98277777777778
+  - semantic_group_features:publication_velocity: 0.08002756505018395
+  - semantic_group_features:temporal_concentration: 0.25
+  - semantic_group_features:days_since_first_article: 2.411187640636574
+  - semantic_group_features:sentiment_mean: 0.10725000000000001
+  - semantic_group_features:sentiment_std: 0.33675885289031376
+  - semantic_group_features:sentiment_polarity_ratio: 0.0
+  - semantic_group_features:sentiment_volatility: 0.2684
+  - semantic_group_features:entity_count: 8.0
+  - semantic_group_features:entity_diversity: 2.0
+  - semantic_group_features:entity_prominence: 0.125
+  - semantic_group_features:entity_concentration: 1.0
+  - semantic_group_features:avg_word_count: 275.25
+  - semantic_group_features:avg_title_length: 9.75
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 2.0
+  - semantic_group_features:centroid_magnitude: 0.9999999703992869
+  - semantic_group_features:intra_cluster_similarity_mean: 0.6645930409431458
+  - semantic_group_features:intra_cluster_similarity_std: 0.05456402152776718
+  - semantic_group_features:embedding_drift_score: 0.036082350890181
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: RU,UA,US
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:22:35.922000000+00:00
+================================================================================
+PREDICTION #27
+================================================================================
+ID:              01KA2RBF1HQXX1GBBFWHYDBAEB
+Group ID:        9b639d8d-cf33-46dd-0fe7-4b7ac94cfcb4
+Linked Group:    9b639d8d-cf33-46dd-0fe7-4b7ac94cfcb4
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T03:18:45.016846
+
+Features:
+  - semantic_group_features:num_sources: 2.0
+  - semantic_group_features:source_credibility_avg: 0.75
+  - semantic_group_features:source_credibility_std: 0.08660254037844389
+  - semantic_group_features:source_diversity_score: 0.8112781244591328
+  - semantic_group_features:time_span_hours: 49.98277777777778
+  - semantic_group_features:publication_velocity: 0.08002756505018395
+  - semantic_group_features:temporal_concentration: 0.25
+  - semantic_group_features:days_since_first_article: 2.411187640636574
+  - semantic_group_features:sentiment_mean: 0.10725000000000001
+  - semantic_group_features:sentiment_std: 0.33675885289031376
+  - semantic_group_features:sentiment_polarity_ratio: 0.0
+  - semantic_group_features:sentiment_volatility: 0.2684
+  - semantic_group_features:entity_count: 8.0
+  - semantic_group_features:entity_diversity: 2.0
+  - semantic_group_features:entity_prominence: 0.125
+  - semantic_group_features:entity_concentration: 1.0
+  - semantic_group_features:avg_word_count: 275.25
+  - semantic_group_features:avg_title_length: 9.75
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 2.0
+  - semantic_group_features:centroid_magnitude: 0.9999999703992869
+  - semantic_group_features:intra_cluster_similarity_mean: 0.6645930409431458
+  - semantic_group_features:intra_cluster_similarity_std: 0.05456402152776718
+  - semantic_group_features:embedding_drift_score: 0.036082350890181
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: RU,UA,US
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T03:18:49.742000000+00:00
+================================================================================
+PREDICTION #28
+================================================================================
+ID:              01KA2N6QA1CZ2B031NYFZNAZJ0
+Group ID:        9b639d8d-cf33-46dd-0fe7-4b7ac94cfcb4
+Linked Group:    9b639d8d-cf33-46dd-0fe7-4b7ac94cfcb4
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:44.190913
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:44.970000000+00:00
+================================================================================
+PREDICTION #29
+================================================================================
+ID:              01KA2N6PF2BT15YQAKEHPWEKR1
+Group ID:        9b639d8d-cf33-46dd-0fe7-4b7ac94cfcb4
+Linked Group:    9b639d8d-cf33-46dd-0fe7-4b7ac94cfcb4
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:43.328777
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:44.970000000+00:00
+================================================================================
+PREDICTION #30
+================================================================================
+ID:              01KA2N6NKANV1W6H6CRSBWCY6F
+Group ID:        e036c2d6-f154-1331-5313-d7b4668f3499
+Linked Group:    e036c2d6-f154-1331-5313-d7b4668f3499
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:42.443892
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:44.970000000+00:00
+================================================================================
+PREDICTION #31
+================================================================================
+ID:              01KA2N6MP2YJZ9V6FH2YK3AAD5
+Group ID:        e036c2d6-f154-1331-5313-d7b4668f3499
+Linked Group:    e036c2d6-f154-1331-5313-d7b4668f3499
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:41.498290
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:44.970000000+00:00
+================================================================================
+PREDICTION #32
+================================================================================
+ID:              01KA2N6JHX1R71WHRXRNRJMB44
+Group ID:        07326ccd-2076-66e6-67eb-85c03379a4a7
+Linked Group:    07326ccd-2076-66e6-67eb-85c03379a4a7
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:39.327141
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:39.826000000+00:00
+================================================================================
+PREDICTION #33
+================================================================================
+ID:              01KA2N6HNWBV8K9AEXN4G2CHQ0
+Group ID:        07326ccd-2076-66e6-67eb-85c03379a4a7
+Linked Group:    07326ccd-2076-66e6-67eb-85c03379a4a7
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:38.432586
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:39.826000000+00:00
+================================================================================
+PREDICTION #34
+================================================================================
+ID:              01KA2N6GPHMJWZS8GFVDQTFDQQ
+Group ID:        d8b78350-d4a5-0d8f-c7d0-c80de03e525f
+Linked Group:    d8b78350-d4a5-0d8f-c7d0-c80de03e525f
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:37.413528
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:39.826000000+00:00
+================================================================================
+PREDICTION #35
+================================================================================
+ID:              01KA2N6FPC2Y1PG1CCNXZDM0B3
+Group ID:        d8b78350-d4a5-0d8f-c7d0-c80de03e525f
+Linked Group:    d8b78350-d4a5-0d8f-c7d0-c80de03e525f
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:36.310212
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:39.826000000+00:00
+================================================================================
+PREDICTION #36
+================================================================================
+ID:              01KA2N6EJSGSP7Q0D9FH3K6JT2
+Group ID:        9751aa9d-9fae-fa52-bf66-56f1a73cf854
+Linked Group:    9751aa9d-9fae-fa52-bf66-56f1a73cf854
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:35.255591
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:39.826000000+00:00
+================================================================================
+PREDICTION #37
+================================================================================
+ID:              01KA2N6DR84DTRJ4T20H5MPHZB
+Group ID:        9751aa9d-9fae-fa52-bf66-56f1a73cf854
+Linked Group:    N/A
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:34.396942
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:39.826000000+00:00
+================================================================================
+PREDICTION #38
+================================================================================
+ID:              01KA2N6CVACSM579WVPQ78JZ0J
+Group ID:        03d1a977-93b7-7303-c8ac-0c1f70a04b96
+Linked Group:    03d1a977-93b7-7303-c8ac-0c1f70a04b96
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:33.494499
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:34.464000000+00:00
+================================================================================
+PREDICTION #39
+================================================================================
+ID:              01KA2N6C1Q0XGYXPH353FH9YGD
+Group ID:        03d1a977-93b7-7303-c8ac-0c1f70a04b96
+Linked Group:    03d1a977-93b7-7303-c8ac-0c1f70a04b96
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:32.666839
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:34.464000000+00:00
+================================================================================
+PREDICTION #40
+================================================================================
+ID:              01KA2N6B4ZKDFCNNMH2CD1NEQ8
+Group ID:        2c8bb7b9-6988-b5c9-babd-993a45ef0309
+Linked Group:    2c8bb7b9-6988-b5c9-babd-993a45ef0309
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:31.745287
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:34.464000000+00:00
+================================================================================
+PREDICTION #41
+================================================================================
+ID:              01KA2N6AAFE0ASKN9Y68PJESKG
+Group ID:        2c8bb7b9-6988-b5c9-babd-993a45ef0309
+Linked Group:    2c8bb7b9-6988-b5c9-babd-993a45ef0309
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:30.896895
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:34.464000000+00:00
+================================================================================
+PREDICTION #42
+================================================================================
+ID:              01KA2N69BR3CG21SHT5TCF17WS
+Group ID:        96fa5091-e9f8-f76d-bb52-e5b60618a05f
+Linked Group:    96fa5091-e9f8-f76d-bb52-e5b60618a05f
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:29.916693
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:34.464000000+00:00
+================================================================================
+PREDICTION #43
+================================================================================
+ID:              01KA2N68GEEPEFAS209NJF6KYM
+Group ID:        96fa5091-e9f8-f76d-bb52-e5b60618a05f
+Linked Group:    96fa5091-e9f8-f76d-bb52-e5b60618a05f
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:29.046764
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:34.464000000+00:00
+================================================================================
+PREDICTION #44
+================================================================================
+ID:              01KA2N67MYN1V2EMH03EC9F5YP
+Group ID:        e26e1df8-70e5-19ce-0a17-ea9db8537715
+Linked Group:    e26e1df8-70e5-19ce-0a17-ea9db8537715
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:28.164339
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:34.464000000+00:00
+================================================================================
+PREDICTION #45
+================================================================================
+ID:              01KA2N66SKKQA92A72G6DA3KXW
+Group ID:        e26e1df8-70e5-19ce-0a17-ea9db8537715
+Linked Group:    e26e1df8-70e5-19ce-0a17-ea9db8537715
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:27.260995
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:34.464000000+00:00
+================================================================================
+PREDICTION #46
+================================================================================
+ID:              01KA2N65WHFP52RDD7TZAJFATH
+Group ID:        0f5b0929-0da7-29ad-61ef-9231bffcbb72
+Linked Group:    0f5b0929-0da7-29ad-61ef-9231bffcbb72
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:26.360935
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:34.464000000+00:00
+================================================================================
+PREDICTION #47
+================================================================================
+ID:              01KA2N650V2M4V5EV29SSHZRAV
+Group ID:        0f5b0929-0da7-29ad-61ef-9231bffcbb72
+Linked Group:    0f5b0929-0da7-29ad-61ef-9231bffcbb72
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:25.470381
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:34.464000000+00:00
+================================================================================
+PREDICTION #48
+================================================================================
+ID:              01KA2N640TVGJ5QT32RQKTQC75
+Group ID:        e9921336-faec-6ac1-3d5d-a15d0de381b6
+Linked Group:    e9921336-faec-6ac1-3d5d-a15d0de381b6
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:24.447898
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:34.464000000+00:00
+================================================================================
+PREDICTION #49
+================================================================================
+ID:              01KA2N635GG0SBW124GFB5QMTQ
+Group ID:        e9921336-faec-6ac1-3d5d-a15d0de381b6
+Linked Group:    e9921336-faec-6ac1-3d5d-a15d0de381b6
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:23.577885
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:23.955000000+00:00
+================================================================================
+PREDICTION #50
+================================================================================
+ID:              01KA2N628SAD4AKMB3DNDK8NN7
+Group ID:        c8f608a9-9702-96a0-d8d2-2d633c09f1c9
+Linked Group:    c8f608a9-9702-96a0-d8d2-2d633c09f1c9
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:22.652069
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:23.955000000+00:00
+================================================================================
+PREDICTION #51
+================================================================================
+ID:              01KA2N61FKPZBGPX0E2MM11FBM
+Group ID:        c8f608a9-9702-96a0-d8d2-2d633c09f1c9
+Linked Group:    c8f608a9-9702-96a0-d8d2-2d633c09f1c9
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:21.833230
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:23.955000000+00:00
+================================================================================
+PREDICTION #52
+================================================================================
+ID:              01KA2N60FZAK49F7E2HTMGBT9V
+Group ID:        583a804e-88bd-05b2-436c-00cc4be24974
+Linked Group:    583a804e-88bd-05b2-436c-00cc4be24974
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:20.831585
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:23.955000000+00:00
+================================================================================
+PREDICTION #53
+================================================================================
+ID:              01KA2N5ZG3S0N8WCCVDYW3AF8C
+Group ID:        583a804e-88bd-05b2-436c-00cc4be24974
+Linked Group:    583a804e-88bd-05b2-436c-00cc4be24974
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:19.814533
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:23.955000000+00:00
+================================================================================
+PREDICTION #54
+================================================================================
+ID:              01KA2N5YJDG50KGSVXPV5V66CC
+Group ID:        5732dc93-e1a7-e01f-baa1-0f1cf948d64d
+Linked Group:    5732dc93-e1a7-e01f-baa1-0f1cf948d64d
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:18.875678
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:23.955000000+00:00
+================================================================================
+PREDICTION #55
+================================================================================
+ID:              01KA2N5XQXPWHSADTPWK80CE8M
+Group ID:        5732dc93-e1a7-e01f-baa1-0f1cf948d64d
+Linked Group:    5732dc93-e1a7-e01f-baa1-0f1cf948d64d
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:18.014925
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:18.795000000+00:00
+================================================================================
+PREDICTION #56
+================================================================================
+ID:              01KA2N5WV7BBQA39MXMPHRV5GA
+Group ID:        e97b33e8-fec6-b358-1f00-0ab52b8ce415
+Linked Group:    e97b33e8-fec6-b358-1f00-0ab52b8ce415
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:17.091330
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:18.795000000+00:00
+================================================================================
+PREDICTION #57
+================================================================================
+ID:              01KA2N5VZ44R9GB60H0GD8CHMA
+Group ID:        e97b33e8-fec6-b358-1f00-0ab52b8ce415
+Linked Group:    e97b33e8-fec6-b358-1f00-0ab52b8ce415
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:16.198499
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:18.795000000+00:00
+================================================================================
+PREDICTION #58
+================================================================================
+ID:              01KA2N5V2T6AJ56M4PC0GJ0SNX
+Group ID:        9d406933-b9c9-47b9-1496-0be37e278c3d
+Linked Group:    9d406933-b9c9-47b9-1496-0be37e278c3d
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:15.288879
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:18.795000000+00:00
+================================================================================
+PREDICTION #59
+================================================================================
+ID:              01KA2N5T3CAVB16666DT91MDVJ
+Group ID:        9d406933-b9c9-47b9-1496-0be37e278c3d
+Linked Group:    9d406933-b9c9-47b9-1496-0be37e278c3d
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:14.277571
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:18.795000000+00:00
+================================================================================
+PREDICTION #60
+================================================================================
+ID:              01KA2N5RD3RDGSZHESGANW51NG
+Group ID:        8a686f6e-a86f-d2ca-bc35-0e28ba238bcd
+Linked Group:    8a686f6e-a86f-d2ca-bc35-0e28ba238bcd
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:12.549620
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:13.645000000+00:00
+================================================================================
+PREDICTION #61
+================================================================================
+ID:              01KA2N5QGVSJTCFX2ME1N2VAK1
+Group ID:        89cfdf17-61c6-5931-37bb-8043c6b962b0
+Linked Group:    89cfdf17-61c6-5931-37bb-8043c6b962b0
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:11.640619
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:13.645000000+00:00
+================================================================================
+PREDICTION #62
+================================================================================
+ID:              01KA2N5PNT625S2PKQ9D8DNCQJ
+Group ID:        89cfdf17-61c6-5931-37bb-8043c6b962b0
+Linked Group:    89cfdf17-61c6-5931-37bb-8043c6b962b0
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:10.726699
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:13.645000000+00:00
+================================================================================
+PREDICTION #63
+================================================================================
+ID:              01KA2N5NPEDK2G50F78HG47J2W
+Group ID:        e35f1601-c177-1cfc-52fa-b2b70a61a860
+Linked Group:    e35f1601-c177-1cfc-52fa-b2b70a61a860
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:23:09.746980
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:13.645000000+00:00
+================================================================================
+PREDICTION #64
+================================================================================
+ID:              01KA2N5MSFK2BHCV7ZSWRVRF2J
+Group ID:        e35f1601-c177-1cfc-52fa-b2b70a61a860
+Linked Group:    e35f1601-c177-1cfc-52fa-b2b70a61a860
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:23:08.848127
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:23:13.645000000+00:00
+================================================================================
+PREDICTION #65
+================================================================================
+ID:              01KA2MYEPHZDXTCG80QY7A9SJ2
+Group ID:        e35f1601-c177-1cfc-52fa-b2b70a61a860
+Linked Group:    e35f1601-c177-1cfc-52fa-b2b70a61a860
+Domain:          conflict
+Probability:     1.0
+Confidence:      0.7
+Model Version:   1
+Predicted At:    2025-11-15T02:19:12.973197
+
+Features:
+  - semantic_group_features:num_sources: 2.0
+  - semantic_group_features:source_credibility_avg: 0.8699999999999999
+  - semantic_group_features:source_credibility_std: 0.09797958971132709
+  - semantic_group_features:source_diversity_score: 0.9709505944546686
+  - semantic_group_features:time_span_hours: 32.07611111111111
+  - semantic_group_features:publication_velocity: 0.15587924554445157
+  - semantic_group_features:temporal_concentration: 0.4
+  - semantic_group_features:days_since_first_article: 1.6471574454513889
+  - semantic_group_features:sentiment_mean: 0.62712
+  - semantic_group_features:sentiment_std: 0.47758235143271355
+  - semantic_group_features:sentiment_polarity_ratio: 0.10986122886681098
+  - semantic_group_features:sentiment_volatility: 0.3896
+  - semantic_group_features:entity_count: 7.0
+  - semantic_group_features:entity_diversity: 2.0
+  - semantic_group_features:entity_prominence: 0.2222222222222222
+  - semantic_group_features:entity_concentration: 0.9708357627258161
+  - semantic_group_features:avg_word_count: 25.8
+  - semantic_group_features:avg_title_length: 10.6
+  - semantic_group_features:language_diversity: 1.0
+  - semantic_group_features:domain_diversity: 1.0
+  - semantic_group_features:centroid_magnitude: 1.000000005332404
+  - semantic_group_features:intra_cluster_similarity_mean: 0.3172192871570587
+  - semantic_group_features:intra_cluster_similarity_std: 0.1329243928194046
+  - semantic_group_features:embedding_drift_score: 0.03608438621177242
+  - semantic_group_features:btc_change_pct_10h: 0.0
+  - semantic_group_features:btc_volatility_score: 0.0
+  - semantic_group_features:btc_volume: 0.0
+  - semantic_group_features:btc_label_spike: 0.0
+  - countries: AU,GB,JP
+  - has_conflict: None
+
+Additional Properties:
+  - created_at: 2025-11-15T02:19:17.582000000+00:00
+================================================================================
+PREDICTION #66
+================================================================================
+ID:              01KA2M70CKWYJ19ZG0WCTP027G
+Group ID:        9b639d8d-cf33-46dd-0fe7-4b7ac94cfcb4
+Linked Group:    9b639d8d-cf33-46dd-0fe7-4b7ac94cfcb4
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:06:24.901671
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:06:25.653000000+00:00
+================================================================================
+PREDICTION #67
+================================================================================
+ID:              01KA2M6WJY2T4YESP52YPR0NP7
+Group ID:        e036c2d6-f154-1331-5313-d7b4668f3499
+Linked Group:    e036c2d6-f154-1331-5313-d7b4668f3499
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:06:21.007178
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:06:25.653000000+00:00
+================================================================================
+PREDICTION #68
+================================================================================
+ID:              01KA2M6RHF1FT8K7QFD3HV3N9D
+Group ID:        07326ccd-2076-66e6-67eb-85c03379a4a7
+Linked Group:    07326ccd-2076-66e6-67eb-85c03379a4a7
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:06:16.871410
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:06:20.431000000+00:00
+================================================================================
+PREDICTION #69
+================================================================================
+ID:              01KA2M6MN96C9A794SJSQB639Z
+Group ID:        d8b78350-d4a5-0d8f-c7d0-c80de03e525f
+Linked Group:    d8b78350-d4a5-0d8f-c7d0-c80de03e525f
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:06:12.899885
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:06:15.208000000+00:00
+================================================================================
+PREDICTION #70
+================================================================================
+ID:              01KA2M6GP17JBRBZ5SRME300K3
+Group ID:        9751aa9d-9fae-fa52-bf66-56f1a73cf854
+Linked Group:    9751aa9d-9fae-fa52-bf66-56f1a73cf854
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:06:08.834401
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:06:09.955000000+00:00
+================================================================================
+PREDICTION #71
+================================================================================
+ID:              01KA2M6EP1XSHKXM1DHD2Q58MX
+Group ID:        03d1a977-93b7-7303-c8ac-0c1f70a04b96
+Linked Group:    03d1a977-93b7-7303-c8ac-0c1f70a04b96
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:06:06.780903
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:06:09.955000000+00:00
+================================================================================
+PREDICTION #72
+================================================================================
+ID:              01KA2M656YY9AYZNW6SF9PG053
+Group ID:        96fa5091-e9f8-f76d-bb52-e5b60618a05f
+Linked Group:    96fa5091-e9f8-f76d-bb52-e5b60618a05f
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:57.077809
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:59.691000000+00:00
+================================================================================
+PREDICTION #73
+================================================================================
+ID:              01KA2M619WJF07ZD17H61WMKBS
+Group ID:        e26e1df8-70e5-19ce-0a17-ea9db8537715
+Linked Group:    e26e1df8-70e5-19ce-0a17-ea9db8537715
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:53.076649
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:54.265000000+00:00
+================================================================================
+PREDICTION #74
+================================================================================
+ID:              01KA2M5VN3SDCJ5DV48R49C1RF
+Group ID:        e9921336-faec-6ac1-3d5d-a15d0de381b6
+Linked Group:    e9921336-faec-6ac1-3d5d-a15d0de381b6
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:47.291383
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:54.265000000+00:00
+================================================================================
+PREDICTION #75
+================================================================================
+ID:              01KA2M5J2R3C3P5THF1SYHK3P9
+Group ID:        583a804e-88bd-05b2-436c-00cc4be24974
+Linked Group:    583a804e-88bd-05b2-436c-00cc4be24974
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:37.493483
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:43.874000000+00:00
+================================================================================
+PREDICTION #76
+================================================================================
+ID:              01KA2M5E4ME1TDNHWFSM6A06H2
+Group ID:        5732dc93-e1a7-e01f-baa1-0f1cf948d64d
+Linked Group:    N/A
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:33.462791
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:43.874000000+00:00
+================================================================================
+PREDICTION #77
+================================================================================
+ID:              01KA2M5C5ZB1BBMNJQZGH7V10N
+Group ID:        8a686f6e-a86f-d2ca-bc35-0e28ba238bcd
+Linked Group:    8a686f6e-a86f-d2ca-bc35-0e28ba238bcd
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:31.430558
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:33.480000000+00:00
+================================================================================
+PREDICTION #78
+================================================================================
+ID:              01KA2M5ANK8J8YFY15HQVNJTND
+Group ID:        89cfdf17-61c6-5931-37bb-8043c6b962b0
+Linked Group:    89cfdf17-61c6-5931-37bb-8043c6b962b0
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:29.899229
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:33.480000000+00:00
+================================================================================
+PREDICTION #79
+================================================================================
+ID:              01KA2M5975CECEMZGJV8VDXQR4
+Group ID:        e35f1601-c177-1cfc-52fa-b2b70a61a860
+Linked Group:    e35f1601-c177-1cfc-52fa-b2b70a61a860
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:28.416453
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:33.480000000+00:00
+================================================================================
+PREDICTION #80
+================================================================================
+ID:              01KA2M57SD5J5BKHN9HH0RBXN8
+Group ID:        9b639d8d-cf33-46dd-0fe7-4b7ac94cfcb4
+Linked Group:    9b639d8d-cf33-46dd-0fe7-4b7ac94cfcb4
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:26.956935
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:28.264000000+00:00
+================================================================================
+PREDICTION #81
+================================================================================
+ID:              01KA2M569M18WQ9Q4SKB52995E
+Group ID:        e036c2d6-f154-1331-5313-d7b4668f3499
+Linked Group:    e036c2d6-f154-1331-5313-d7b4668f3499
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:25.430315
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:28.264000000+00:00
+================================================================================
+PREDICTION #82
+================================================================================
+ID:              01KA2M54NRWMF2KW22W59NKBB1
+Group ID:        07326ccd-2076-66e6-67eb-85c03379a4a7
+Linked Group:    07326ccd-2076-66e6-67eb-85c03379a4a7
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:23.771283
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:28.264000000+00:00
+================================================================================
+PREDICTION #83
+================================================================================
+ID:              01KA2M536P2NX9M866CX82M94D
+Group ID:        d8b78350-d4a5-0d8f-c7d0-c80de03e525f
+Linked Group:    d8b78350-d4a5-0d8f-c7d0-c80de03e525f
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:22.257701
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:22.836000000+00:00
+================================================================================
+PREDICTION #84
+================================================================================
+ID:              01KA2M51SY91E8K10M9DJ6FW0H
+Group ID:        9751aa9d-9fae-fa52-bf66-56f1a73cf854
+Linked Group:    9751aa9d-9fae-fa52-bf66-56f1a73cf854
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:20.805473
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:22.836000000+00:00
+================================================================================
+PREDICTION #85
+================================================================================
+ID:              01KA2M50BBDHDH5AE6P4SHYVND
+Group ID:        03d1a977-93b7-7303-c8ac-0c1f70a04b96
+Linked Group:    03d1a977-93b7-7303-c8ac-0c1f70a04b96
+Domain:          btc
+Probability:     0.947
+Confidence:      0.947
+Model Version:   1
+Predicted At:    2025-11-15T02:05:18.868857
+
+Features:
+
+Additional Properties:
+  - created_at: 2025-11-15T02:05:22.836000000+00:00
+
+================================================================================
+END OF EXPORT - Total: 85 predictions
+================================================================================

@@ -60,46 +60,60 @@ class PostgresClient:
         min_confidence: float = 0.0,
         hours: int = 24,
     ) -> List[Dict[str, Any]]:
-        """Get latest conflict predictions with country extraction."""
+        """Get latest conflict predictions with country extraction from features and semantic_groups."""
         query = """
-            SELECT 
-                id,
-                group_id,
-                domain,
-                prediction_probability,
-                prediction_confidence,
-                model_version,
-                features,
-                predicted_at,
-                created_at
-            FROM predictions
-            WHERE domain IN ('conflict', 'geopolitical')
-                AND prediction_confidence >= $1
-                AND predicted_at >= NOW() - INTERVAL '1 hour' * $2
-            ORDER BY predicted_at DESC
+            SELECT
+                p.id,
+                p.group_id,
+                p.domain,
+                p.prediction_probability,
+                p.prediction_confidence,
+                p.model_version,
+                p.features,
+                p.predicted_at,
+                p.created_at,
+                sg.countries as sg_countries
+            FROM predictions p
+            LEFT JOIN semantic_groups sg ON p.group_id::uuid = sg.group_id
+            WHERE p.domain IN ('conflict', 'geopolitical')
+                AND p.prediction_confidence >= $1
+                AND p.predicted_at >= NOW() - INTERVAL '1 hour' * $2
+            ORDER BY p.predicted_at DESC
             LIMIT $3
         """
-        
+
         try:
             async with self.pool.acquire() as conn:
                 rows = await conn.fetch(query, min_confidence, hours, limit)
-                
+
             predictions = []
             for row in rows:
-                # Extract countries from features JSONB
-                features = row['features'] or {}
+                # Parse features if it's a string (JSONB column)
+                features = row['features']
+                if isinstance(features, str):
+                    try:
+                        features = json.loads(features)
+                    except (json.JSONDecodeError, TypeError):
+                        features = {}
+                elif features is None:
+                    features = {}
+
                 countries = []
-                
+
                 # Try to extract country1 and country2 from features
                 if 'country1' in features:
                     countries.append(features['country1'])
                 if 'country2' in features:
                     countries.append(features['country2'])
-                    
-                # If no countries in features, try to extract from other fields
+
+                # If no countries in features, try countries array from features
                 if not countries and 'countries' in features:
                     countries = features['countries']
-                    
+
+                # Fallback to semantic_groups.countries if still no countries
+                if not countries and row['sg_countries']:
+                    countries = row['sg_countries']
+
                 predictions.append({
                     'id': row['id'],
                     'group_id': row['group_id'],
@@ -111,7 +125,7 @@ class PostgresClient:
                     'predicted_at': row['predicted_at'],
                     'created_at': row['created_at'],
                 })
-                
+
             logger.info(
                 "latest_predictions_fetched",
                 count=len(predictions),
@@ -226,7 +240,7 @@ class PostgresClient:
             raise
 
     async def get_country_risk_scores(self) -> List[Dict[str, Any]]:
-        """Get aggregated risk scores by country."""
+        """Get aggregated risk scores by country from features and semantic_groups."""
         query = """
             SELECT
                 country,
@@ -236,21 +250,27 @@ class PostgresClient:
                 MAX(predicted_at) as last_updated
             FROM (
                 SELECT
-                    jsonb_array_elements_text(
+                    unnest(
                         CASE
-                            WHEN features ? 'country1' AND features ? 'country2' THEN
-                                jsonb_build_array(features->'country1', features->'country2')
-                            WHEN features ? 'countries' THEN
-                                features->'countries'
-                            ELSE '[]'::jsonb
+                            -- First try features.country1 and country2
+                            WHEN p.features ? 'country1' AND p.features ? 'country2' THEN
+                                ARRAY[p.features->>'country1', p.features->>'country2']
+                            -- Then try features.countries array
+                            WHEN p.features ? 'countries' THEN
+                                ARRAY(SELECT jsonb_array_elements_text(p.features->'countries'))
+                            -- Fallback to semantic_groups.countries
+                            WHEN sg.countries IS NOT NULL THEN
+                                sg.countries
+                            ELSE ARRAY[]::text[]
                         END
                     ) as country,
-                    prediction_probability,
-                    prediction_confidence,
-                    predicted_at
-                FROM predictions
-                WHERE domain IN ('conflict', 'geopolitical')
-                    AND predicted_at >= NOW() - INTERVAL '24 hours'
+                    p.prediction_probability,
+                    p.prediction_confidence,
+                    p.predicted_at
+                FROM predictions p
+                LEFT JOIN semantic_groups sg ON p.group_id::uuid = sg.group_id
+                WHERE p.domain IN ('conflict', 'geopolitical')
+                    AND p.predicted_at >= NOW() - INTERVAL '24 hours'
             ) as country_predictions
             WHERE country IS NOT NULL AND country != ''
             GROUP BY country
@@ -264,7 +284,7 @@ class PostgresClient:
             results = []
             for row in rows:
                 results.append({
-                    'country': row['country'].strip('"'),  # Remove JSON quotes
+                    'country': row['country'],
                     'risk_score': float(row['risk_score']),
                     'prediction_count': row['prediction_count'],
                     'avg_confidence': float(row['avg_confidence']),
@@ -324,21 +344,46 @@ class PostgresClient:
             raise
 
     async def get_top_country_pairs(self, limit: int = 10) -> List[Dict[str, Any]]:
-        """Get top country pairs by conflict probability."""
+        """Get top country pairs by conflict probability from features and semantic_groups."""
         query = """
+            WITH country_pairs AS (
+                SELECT
+                    p.prediction_probability,
+                    p.prediction_confidence,
+                    p.predicted_at,
+                    -- Extract country1 and country2
+                    CASE
+                        WHEN p.features ? 'country1' THEN p.features->>'country1'
+                        WHEN p.features ? 'countries' THEN
+                            (SELECT jsonb_array_elements_text(p.features->'countries') LIMIT 1)
+                        WHEN sg.countries IS NOT NULL AND array_length(sg.countries, 1) >= 1 THEN
+                            sg.countries[1]
+                        ELSE NULL
+                    END as country1,
+                    CASE
+                        WHEN p.features ? 'country2' THEN p.features->>'country2'
+                        WHEN p.features ? 'countries' THEN
+                            (SELECT jsonb_array_elements_text(p.features->'countries') OFFSET 1 LIMIT 1)
+                        WHEN sg.countries IS NOT NULL AND array_length(sg.countries, 1) >= 2 THEN
+                            sg.countries[2]
+                        ELSE NULL
+                    END as country2
+                FROM predictions p
+                LEFT JOIN semantic_groups sg ON p.group_id::uuid = sg.group_id
+                WHERE p.domain IN ('conflict', 'geopolitical')
+                    AND p.predicted_at >= NOW() - INTERVAL '24 hours'
+            )
             SELECT
-                features->>'country1' as country1,
-                features->>'country2' as country2,
+                country1,
+                country2,
                 AVG(prediction_probability) as avg_probability,
                 AVG(prediction_confidence) as avg_confidence,
                 COUNT(*) as prediction_count,
                 MAX(predicted_at) as last_predicted
-            FROM predictions
-            WHERE domain IN ('conflict', 'geopolitical')
-                AND features ? 'country1'
-                AND features ? 'country2'
-                AND predicted_at >= NOW() - INTERVAL '24 hours'
-            GROUP BY features->>'country1', features->>'country2'
+            FROM country_pairs
+            WHERE country1 IS NOT NULL AND country2 IS NOT NULL
+                AND country1 != '' AND country2 != ''
+            GROUP BY country1, country2
             ORDER BY avg_probability DESC
             LIMIT $1
         """
@@ -367,28 +412,47 @@ class PostgresClient:
             raise
 
     async def get_dashboard_stats(self) -> Dict[str, Any]:
-        """Get overall dashboard statistics."""
+        """Get overall dashboard statistics from features and semantic_groups."""
         query = """
+            WITH all_countries AS (
+                SELECT DISTINCT
+                    unnest(
+                        CASE
+                            -- First try features.country1 and country2
+                            WHEN p.features ? 'country1' AND p.features ? 'country2' THEN
+                                ARRAY[p.features->>'country1', p.features->>'country2']
+                            -- Then try features.countries array
+                            WHEN p.features ? 'countries' THEN
+                                ARRAY(SELECT jsonb_array_elements_text(p.features->'countries'))
+                            -- Fallback to semantic_groups.countries
+                            WHEN sg.countries IS NOT NULL THEN
+                                sg.countries
+                            ELSE ARRAY[]::text[]
+                        END
+                    ) as country
+                FROM predictions p
+                LEFT JOIN semantic_groups sg ON p.group_id::uuid = sg.group_id
+                WHERE p.domain IN ('conflict', 'geopolitical')
+                    AND p.predicted_at >= NOW() - INTERVAL '24 hours'
+            )
             SELECT
-                COUNT(*) as total_predictions,
-                COUNT(DISTINCT
-                    CASE
-                        WHEN features ? 'country1' THEN features->>'country1'
-                        WHEN features ? 'countries' THEN NULL
-                    END
-                ) + COUNT(DISTINCT
-                    CASE
-                        WHEN features ? 'country2' THEN features->>'country2'
-                        WHEN features ? 'countries' THEN NULL
-                    END
-                ) as total_countries,
-                AVG(prediction_probability) as avg_probability,
-                AVG(prediction_confidence) as avg_confidence,
-                COUNT(*) FILTER (WHERE prediction_probability > 0.7) as high_risk_count,
-                MAX(predicted_at) as last_updated
-            FROM predictions
-            WHERE domain IN ('conflict', 'geopolitical')
-                AND predicted_at >= NOW() - INTERVAL '24 hours'
+                (SELECT COUNT(*) FROM predictions
+                 WHERE domain IN ('conflict', 'geopolitical')
+                   AND predicted_at >= NOW() - INTERVAL '24 hours') as total_predictions,
+                (SELECT COUNT(*) FROM all_countries WHERE country IS NOT NULL AND country != '') as total_countries,
+                (SELECT AVG(prediction_probability) FROM predictions
+                 WHERE domain IN ('conflict', 'geopolitical')
+                   AND predicted_at >= NOW() - INTERVAL '24 hours') as avg_probability,
+                (SELECT AVG(prediction_confidence) FROM predictions
+                 WHERE domain IN ('conflict', 'geopolitical')
+                   AND predicted_at >= NOW() - INTERVAL '24 hours') as avg_confidence,
+                (SELECT COUNT(*) FROM predictions
+                 WHERE domain IN ('conflict', 'geopolitical')
+                   AND predicted_at >= NOW() - INTERVAL '24 hours'
+                   AND prediction_probability > 0.7) as high_risk_count,
+                (SELECT MAX(predicted_at) FROM predictions
+                 WHERE domain IN ('conflict', 'geopolitical')
+                   AND predicted_at >= NOW() - INTERVAL '24 hours') as last_updated
         """
 
         try:

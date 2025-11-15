@@ -1,11 +1,11 @@
 """
-Populate prediction table and Neo4j with correct BTC features.
+Populate conflict predictions with correct BTC features from parquet file.
 
 This script:
-1. Reads BTC predictions from the database that have zero features
-2. Calculates correct BTC features from btc_features.parquet
-3. Updates the predictions table with correct features
-4. Updates Neo4j prediction nodes with correct features
+1. Fetches all conflict predictions from PostgreSQL
+2. Calculates correct BTC features from btc_features.parquet based on timestamp
+3. Updates PostgreSQL predictions table with BTC features in correct format
+4. Updates Neo4j prediction nodes with BTC features in correct format
 """
 
 import asyncio
@@ -47,13 +47,13 @@ class BtcFeatureCalculator:
         
     def get_btc_features(self, timestamp: datetime) -> dict:
         """
-        Get BTC features for a given timestamp.
+        Get BTC features for a given timestamp with semantic_group_features: prefix.
         
         Args:
             timestamp: Timestamp to find nearest BTC data for
             
         Returns:
-            Dictionary with 17 BTC features
+            Dictionary with 17 BTC features with semantic_group_features: prefix
         """
         if self.btc_df is None:
             self.load_parquet()
@@ -119,11 +119,11 @@ class BtcFeatureCalculator:
         }
 
 
-async def populate_btc_predictions():
-    """Populate prediction table and Neo4j with correct BTC features."""
+async def populate_conflict_btc_features():
+    """Populate conflict predictions with correct BTC features."""
     
     logger.info("=" * 80)
-    logger.info("Populating BTC Predictions with Correct Features")
+    logger.info("Populating Conflict Predictions with BTC Features")
     logger.info("=" * 80)
     
     # Initialize BTC feature calculator
@@ -144,6 +144,7 @@ async def populate_btc_predictions():
     neo4j_uri = os.getenv('NEO4J_URI', 'bolt://localhost:7687')
     neo4j_user = os.getenv('NEO4J_USER', 'neo4j')
     neo4j_password = os.getenv('NEO4J_PASSWORD', 'password')
+    neo4j_database = os.getenv('NEO4J_DATABASE', 'neo4j')
     
     logger.info(f"\n📡 Connecting to PostgreSQL: {db_config['host']}:{db_config['port']}")
     logger.info(f"📡 Connecting to Neo4j: {neo4j_uri}")
@@ -155,142 +156,153 @@ async def populate_btc_predictions():
     neo4j_driver = AsyncGraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
     
     try:
-        # Fetch all BTC predictions with zero features
+        # Fetch all conflict predictions
         logger.info("\n" + "=" * 80)
-        logger.info("Step 1: Fetch BTC predictions with zero features")
+        logger.info("Step 1: Fetch conflict predictions from PostgreSQL")
         logger.info("=" * 80)
-        
+
         query = """
-            SELECT id, group_id, domain, features, predicted_at, created_at
+            SELECT id, group_id, features, predicted_at
             FROM predictions
-            WHERE domain = 'btc'
+            WHERE domain = 'conflict'
             ORDER BY created_at DESC
         """
-        
+
         predictions = await pg_conn.fetch(query)
-        logger.info(f"\n📊 Found {len(predictions)} BTC predictions")
+        logger.info(f"\n📊 Found {len(predictions)} conflict predictions")
 
-        # Filter predictions with zero features
-        zero_feature_predictions = []
-        for pred in predictions:
-            features = pred['features']
-            if isinstance(features, str):
-                features = json.loads(features)
-
-            # Check both with and without prefix for compatibility
-            btc_close = features.get('semantic_group_features:btc_close',
-                                    features.get('btc_close', 0.0))
-            btc_volume = features.get('semantic_group_features:btc_volume',
-                                     features.get('btc_volume', 0.0))
-            btc_volatility = features.get('semantic_group_features:btc_volatility_score',
-                                         features.get('btc_volatility_score', 0.0))
-
-            if btc_close == 0.0 and btc_volume == 0.0 and btc_volatility == 0.0:
-                zero_feature_predictions.append(pred)
-
-        logger.info(f"📊 Found {len(zero_feature_predictions)} BTC predictions with ZERO features")
-
-        if len(zero_feature_predictions) == 0:
-            logger.info("\n✅ No BTC predictions need updating!")
-            return
-
-        # Step 2: Calculate correct features and update database
+        # Step 2: Update PostgreSQL with BTC features
         logger.info("\n" + "=" * 80)
-        logger.info("Step 2: Calculate correct BTC features and update database")
+        logger.info("Step 2: Update PostgreSQL with BTC features")
         logger.info("=" * 80)
 
         updated_count = 0
-        for i, pred in enumerate(zero_feature_predictions, 1):
+
+        for i, pred in enumerate(predictions, 1):
             pred_id = pred['id']
             group_id = pred['group_id']
-            timestamp = pred['predicted_at'] or pred['created_at']
+            predicted_at = pred['predicted_at']
+            current_features = pred['features']
 
-            logger.info(f"\n[{i}/{len(zero_feature_predictions)}] Processing prediction ID: {pred_id}")
+            # Parse current features
+            if isinstance(current_features, str):
+                current_features = json.loads(current_features)
+
+            logger.info(f"\n[{i}/{len(predictions)}] Processing prediction ID: {pred_id}")
             logger.info(f"   Group ID: {group_id}")
-            logger.info(f"   Timestamp: {timestamp}")
+            logger.info(f"   Predicted at: {predicted_at}")
 
-            # Calculate correct BTC features
-            try:
-                btc_features = calculator.get_btc_features(timestamp)
+            # Calculate BTC features
+            btc_features = calculator.get_btc_features(predicted_at)
 
-                logger.info(f"   ✅ Calculated BTC features:")
-                logger.info(f"      btc_close: {btc_features['semantic_group_features:btc_close']:.2f}")
-                logger.info(f"      btc_volume: {btc_features['semantic_group_features:btc_volume']:.6f}")
-                logger.info(f"      btc_volatility_score: {btc_features['semantic_group_features:btc_volatility_score']:.6f}")
+            # Remove semantic_group_features: prefix for PostgreSQL storage
+            btc_features_no_prefix = {}
+            for key, value in btc_features.items():
+                # Remove the prefix for PostgreSQL
+                clean_key = key.replace('semantic_group_features:', '')
+                btc_features_no_prefix[clean_key] = value
 
-                # Update PostgreSQL
-                update_query = """
-                    UPDATE predictions
-                    SET features = $1
-                    WHERE id = $2
+            # Get the nested features dict
+            nested_features = current_features.get('features', {})
+            if isinstance(nested_features, str):
+                nested_features = json.loads(nested_features)
+
+            # Merge BTC features into nested features
+            merged_nested_features = {**nested_features, **btc_features_no_prefix}
+
+            # Update the features dict
+            updated_features = {**current_features, 'features': merged_nested_features}
+
+            # Update PostgreSQL
+            update_query = """
+                UPDATE predictions
+                SET features = $1::jsonb
+                WHERE id = $2
+            """
+
+            await pg_conn.execute(update_query, json.dumps(updated_features), pred_id)
+            updated_count += 1
+
+            logger.info(f"   ✅ Updated PostgreSQL with {len(btc_features_no_prefix)} BTC features")
+
+        logger.info(f"\n✅ Updated {updated_count}/{len(predictions)} PostgreSQL predictions")
+
+        # Step 3: Update Neo4j with BTC features
+        logger.info("\n" + "=" * 80)
+        logger.info("Step 3: Update Neo4j with BTC features")
+        logger.info("=" * 80)
+
+        async with neo4j_driver.session(database=neo4j_database) as session:
+            neo4j_updated_count = 0
+
+            for i, pred in enumerate(predictions, 1):
+                group_id = pred['group_id']
+                predicted_at = pred['predicted_at']
+
+                logger.info(f"\n[{i}/{len(predictions)}] Processing group_id: {group_id}")
+
+                # Find Neo4j node by group_id
+                find_query = """
+                    MATCH (p:Prediction {group_id: $group_id, domain: 'conflict'})
+                    RETURN p.id as id, p.features as features
                 """
 
-                await pg_conn.execute(update_query, json.dumps(btc_features), pred_id)
-                logger.info(f"   ✅ Updated PostgreSQL prediction ID: {pred_id}")
+                result = await session.run(find_query, group_id=group_id)
+                record = await result.single()
 
-                # Update Neo4j - Merge BTC features into existing features JSON
-                async with neo4j_driver.session(database=os.getenv('NEO4J_DATABASE', 'neo4j')) as session:
-                    # First, find the Neo4j node by matching group_id and domain
-                    find_query = """
-                        MATCH (p:Prediction)
-                        WHERE p.group_id = $group_id AND p.domain = 'btc'
-                        RETURN p.id as neo4j_id, p.features as current_features
-                        LIMIT 1
-                    """
+                if not record:
+                    logger.warning(f"   ⚠️  Neo4j node not found for group_id: {group_id}")
+                    continue
 
-                    find_result = await session.run(find_query, group_id=group_id)
-                    find_record = await find_result.single()
+                neo4j_id = record['id']
+                current_features_str = record['features']
 
-                    if find_record:
-                        neo4j_id = find_record['neo4j_id']
-                        current_features_str = find_record['current_features']
-                        logger.info(f"   Found Neo4j node with ID: {neo4j_id}")
+                logger.info(f"   Found Neo4j node: {neo4j_id}")
 
-                        # Parse current features and merge with BTC features
-                        if current_features_str:
-                            try:
-                                current_features = json.loads(current_features_str)
-                            except:
-                                current_features = {}
-                        else:
-                            current_features = {}
+                # Parse current features
+                if current_features_str:
+                    try:
+                        current_features = json.loads(current_features_str)
+                    except:
+                        current_features = {}
+                else:
+                    current_features = {}
 
-                        # Merge BTC features into current features
-                        merged_features = {**current_features, **btc_features}
+                # Calculate BTC features (with semantic_group_features: prefix)
+                btc_features = calculator.get_btc_features(predicted_at)
 
-                        # Update the node with merged features as JSON string
-                        neo4j_query = """
-                            MATCH (p:Prediction {id: $neo4j_id})
-                            SET p.features = $features
-                            RETURN p
-                        """
+                # Merge BTC features into current features
+                merged_features = {**current_features, **btc_features}
 
-                        result = await session.run(
-                            neo4j_query,
-                            neo4j_id=neo4j_id,
-                            features=json.dumps(merged_features)
-                        )
+                # Update Neo4j node
+                update_query = """
+                    MATCH (p:Prediction {id: $neo4j_id})
+                    SET p.features = $features
+                    RETURN p
+                """
 
-                        record = await result.single()
-                        if record:
-                            logger.info(f"   ✅ Updated Neo4j prediction node: {neo4j_id}")
-                        else:
-                            logger.warning(f"   ⚠️  Failed to update Neo4j node: {neo4j_id}")
-                    else:
-                        logger.warning(f"   ⚠️  Neo4j prediction node not found for group_id: {group_id}")
+                result = await session.run(
+                    update_query,
+                    neo4j_id=neo4j_id,
+                    features=json.dumps(merged_features)
+                )
 
-                updated_count += 1
+                record = await result.single()
+                if record:
+                    neo4j_updated_count += 1
+                    logger.info(f"   ✅ Updated Neo4j node with {len(btc_features)} BTC features")
+                else:
+                    logger.warning(f"   ⚠️  Failed to update Neo4j node")
 
-            except Exception as e:
-                logger.error(f"   ❌ Failed to update prediction ID {pred_id}: {e}")
+            logger.info(f"\n✅ Updated {neo4j_updated_count}/{len(predictions)} Neo4j nodes")
 
         # Summary
         logger.info("\n" + "=" * 80)
         logger.info("SUMMARY")
         logger.info("=" * 80)
-        logger.info(f"\n✅ Successfully updated {updated_count}/{len(zero_feature_predictions)} BTC predictions")
-        logger.info(f"   - PostgreSQL: Updated features column")
-        logger.info(f"   - Neo4j: Updated Prediction nodes")
+        logger.info(f"\n✅ Successfully populated conflict predictions with BTC features:")
+        logger.info(f"   - PostgreSQL: {updated_count}/{len(predictions)} predictions")
+        logger.info(f"   - Neo4j: {neo4j_updated_count}/{len(predictions)} nodes")
 
     finally:
         await pg_conn.close()
@@ -299,5 +311,5 @@ async def populate_btc_predictions():
 
 
 if __name__ == "__main__":
-    asyncio.run(populate_btc_predictions())
+    asyncio.run(populate_conflict_btc_features())
 

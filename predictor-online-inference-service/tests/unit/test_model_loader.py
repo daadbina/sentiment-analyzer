@@ -20,10 +20,16 @@ def mlflow_config():
     """Create MLflow configuration for testing."""
     return MLflowConfig(
         tracking_uri="http://localhost:5000",
-        model_name="test_model",
+        btc_model_name="btc_prediction_xgboost_regressor",
+        btc_model_version="14",
+        conflict_model_name="conflict_prediction_random_forest",
+        conflict_model_version="18",
         model_version="1",
         model_stage="Production",
-        baseline_model_path="/tmp/baseline_model.pkl"
+        fallback_model_version=None,
+        model_load_timeout_seconds=30,
+        auto_select_best_model=False,
+        model_selection_metric="f1",
     )
 
 

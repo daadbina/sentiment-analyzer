@@ -2,6 +2,7 @@
 
 import asyncpg
 import structlog
+import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 
@@ -118,6 +119,107 @@ class PostgresClient:
                 min_confidence=min_confidence,
             )
             return predictions
+
+        except Exception as e:
+            logger.error("latest_predictions_fetch_failed", error=str(e))
+            raise
+
+    async def get_btc_predictions(
+        self,
+        limit: int = 10,
+        min_confidence: float = 0.0,
+        hours: int = 24,
+    ) -> List[Dict[str, Any]]:
+        """Get latest Bitcoin price predictions."""
+        query = """
+            SELECT
+                id,
+                group_id,
+                domain,
+                prediction_probability,
+                prediction_confidence,
+                model_version,
+                features,
+                predicted_at,
+                created_at
+            FROM predictions
+            WHERE domain = 'btc'
+                AND prediction_confidence >= $1
+                AND predicted_at >= NOW() - INTERVAL '1 hour' * $2
+            ORDER BY predicted_at DESC
+            LIMIT $3
+        """
+
+        try:
+            async with self.pool.acquire() as conn:
+                # Fetch more rows than needed to allow for deduplication
+                rows = await conn.fetch(query, min_confidence, hours, limit * 10)
+
+            # Deduplicate predictions by grouping into 2-hour windows
+            # Keep only the most recent prediction in each window
+            predictions_by_window = {}
+
+            for row in rows:
+                # Parse features if it's a string (JSONB column)
+                features = row['features']
+                if isinstance(features, str):
+                    try:
+                        features = json.loads(features)
+                    except (json.JSONDecodeError, TypeError):
+                        features = {}
+                elif features is None:
+                    features = {}
+
+                # Extract BTC-specific fields from root level of features
+                # The predictor service stores them at the root level
+                prediction_magnitude = features.get('prediction_magnitude', 0.0)
+                prediction_direction = features.get('prediction_direction', 'neutral')
+                prediction_strength = features.get('prediction_strength', 'unknown')
+                prediction_description = features.get('prediction_description', '')
+
+                # Group predictions into 2-hour windows (7200 seconds)
+                # This ensures we don't show predictions within ±1 hour of each other
+                predicted_at = row['predicted_at']
+                window_key = int(predicted_at.timestamp() // 7200)  # 2-hour window
+
+                # Keep only the most recent prediction in each window
+                if window_key not in predictions_by_window:
+                    predictions_by_window[window_key] = {
+                        'id': row['id'],
+                        'group_id': row['group_id'],
+                        'domain': row['domain'],
+                        'prediction_probability': float(row['prediction_probability']),
+                        'prediction_confidence': float(row['prediction_confidence']),
+                        'model_version': row['model_version'],
+                        'features': features,
+                        'predicted_at': row['predicted_at'],
+                        'created_at': row['created_at'],
+                        # BTC-specific fields
+                        'prediction_magnitude': float(prediction_magnitude),
+                        'prediction_direction': prediction_direction,
+                        'prediction_strength': prediction_strength,
+                        'prediction_description': prediction_description,
+                    }
+
+            # Convert to list and sort by predicted_at descending, then limit
+            predictions = sorted(
+                predictions_by_window.values(),
+                key=lambda x: x['predicted_at'],
+                reverse=True
+            )[:limit]
+
+            logger.info(
+                "btc_predictions_fetched",
+                count=len(predictions),
+                limit=limit,
+                min_confidence=min_confidence,
+                deduplicated_from=len(rows),
+            )
+            return predictions
+
+        except Exception as e:
+            logger.error("btc_predictions_fetch_failed", error=str(e))
+            raise
             
         except Exception as e:
             logger.error("get_latest_predictions_failed", error=str(e))
@@ -307,5 +409,137 @@ class PostgresClient:
 
         except Exception as e:
             logger.error("get_dashboard_stats_failed", error=str(e))
+            raise
+
+    async def get_network_graph_data(self, min_confidence: float = 0.5, hours: int = 168) -> Dict[str, Any]:
+        """
+        Get network graph data with nodes (countries) and edges (predictions).
+
+        Args:
+            min_confidence: Minimum confidence threshold
+            hours: Time window in hours (default 168 = 7 days)
+
+        Returns:
+            Dict with 'nodes' (countries with risk scores) and 'links' (predictions between countries)
+        """
+        try:
+            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+
+            async with self.pool.acquire() as conn:
+                # Get all predictions with country pairs
+                # JOIN with semantic_groups to get countries array since predictions.features is often empty
+                predictions_query = """
+                    SELECT
+                        p.id,
+                        p.prediction_probability,
+                        p.prediction_confidence,
+                        p.features,
+                        p.predicted_at,
+                        p.model_version,
+                        sg.countries
+                    FROM predictions p
+                    LEFT JOIN semantic_groups sg ON p.group_id::uuid = sg.group_id
+                    WHERE p.domain IN ('conflict', 'geopolitical')
+                        AND p.prediction_confidence >= $1
+                        AND p.predicted_at >= $2
+                    ORDER BY p.predicted_at DESC
+                """
+
+                rows = await conn.fetch(predictions_query, min_confidence, cutoff_time)
+
+                # Extract country pairs and build graph structure
+                nodes_dict = {}  # country_code -> {id, risk_score, prediction_count}
+                links = []  # {source, target, probability, confidence, timestamp}
+
+                for row in rows:
+                    # Parse features if it's a string (JSONB column)
+                    features = row['features']
+                    if isinstance(features, str):
+                        try:
+                            features = json.loads(features)
+                        except (json.JSONDecodeError, TypeError):
+                            features = {}
+                    elif features is None:
+                        features = {}
+
+                    # Extract countries from features
+                    country1 = features.get('country1')
+                    country2 = features.get('country2')
+
+                    # Fallback to countries in features (could be array or comma-separated string)
+                    if not country1 or not country2:
+                        countries = features.get('countries', [])
+
+                        # Handle case where countries is a comma-separated string
+                        if isinstance(countries, str):
+                            countries = [c.strip() for c in countries.split(',') if c.strip()]
+
+                        if isinstance(countries, list) and len(countries) >= 2:
+                            country1 = countries[0]
+                            country2 = countries[1]
+
+                    # Fallback to semantic_groups.countries array
+                    if not country1 or not country2:
+                        sg_countries = row.get('countries', [])
+                        if sg_countries and len(sg_countries) >= 2:
+                            country1 = sg_countries[0]
+                            country2 = sg_countries[1]
+
+                    if country1 and country2:
+                        # Add countries to nodes
+                        for country in [country1, country2]:
+                            if country not in nodes_dict:
+                                nodes_dict[country] = {
+                                    'id': country,
+                                    'name': country,
+                                    'risk_score': 0.0,
+                                    'prediction_count': 0,
+                                    'total_confidence': 0.0,
+                                }
+
+                            # Update risk score (average confidence)
+                            nodes_dict[country]['total_confidence'] += float(row['prediction_confidence'])
+                            nodes_dict[country]['prediction_count'] += 1
+
+                        # Add link
+                        links.append({
+                            'source': country1,
+                            'target': country2,
+                            'probability': float(row['prediction_probability']),
+                            'confidence': float(row['prediction_confidence']),
+                            'timestamp': row['predicted_at'].isoformat() if row['predicted_at'] else None,
+                            'model_version': row['model_version'],
+                        })
+
+                # Calculate average risk scores for nodes (based on confidence)
+                nodes = []
+                for country_code, node_data in nodes_dict.items():
+                    if node_data['prediction_count'] > 0:
+                        node_data['risk_score'] = node_data['total_confidence'] / node_data['prediction_count']
+                    del node_data['total_confidence']  # Remove temporary field
+                    nodes.append(node_data)
+
+                result = {
+                    'nodes': nodes,
+                    'links': links,
+                    'metadata': {
+                        'node_count': len(nodes),
+                        'link_count': len(links),
+                        'min_confidence': min_confidence,
+                        'time_window_hours': hours,
+                        'generated_at': datetime.utcnow().isoformat(),
+                    }
+                }
+
+                logger.info(
+                    "network_graph_data_fetched",
+                    node_count=len(nodes),
+                    link_count=len(links),
+                )
+
+                return result
+
+        except Exception as e:
+            logger.error("get_network_graph_data_failed", error=str(e))
             raise
 

@@ -11,7 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 class NERModelRegistry:
-    """Registry for NER models by language."""
+    """Registry for NER models by language.
+
+    Optimized to share the same model instance across languages when they use
+    the same underlying model (e.g., xlm-roberta-large for all languages).
+    """
 
     # Language to model mapping (all using HuggingFace - publicly available NER-specific models)
     LANGUAGE_MODELS = {
@@ -39,12 +43,17 @@ class NERModelRegistry:
             max_models: Maximum number of models to keep in memory
         """
         self.max_models = max_models
-        self.models: Dict[str, NERStrategy] = {}
+        self.models: Dict[str, NERStrategy] = {}  # language -> strategy
         self.model_usage_order: list = []
+        # Cache for actual model instances by model_name to avoid loading same model multiple times
+        self._model_instances: Dict[str, NERStrategy] = {}  # model_name -> strategy instance
 
     def get_model(self, language: str) -> NERStrategy:
         """
         Get NER model for language.
+
+        Optimized to share the same model instance across languages when they use
+        the same underlying model (e.g., xlm-roberta-large for all languages).
 
         Args:
             language: Language code
@@ -65,8 +74,18 @@ class NERModelRegistry:
             logger.debug(f"Using cached model for language: {language}")
             return self.models[language]
 
-        # Load new model
+        # Get model configuration
         model_type, model_name = self.LANGUAGE_MODELS[language]
+
+        # Check if we already have this model loaded for another language
+        if model_name in self._model_instances:
+            logger.info(f"Reusing existing model instance '{model_name}' for language: {language}")
+            strategy = self._model_instances[model_name]
+            self.models[language] = strategy
+            self.model_usage_order.append(language)
+            return strategy
+
+        # Load new model
         logger.info(f"Loading NER model for {language}: {model_name}")
 
         if model_type == "spacy":
@@ -78,14 +97,28 @@ class NERModelRegistry:
 
         strategy.load_model()
         self.models[language] = strategy
+        self._model_instances[model_name] = strategy
         self.model_usage_order.append(language)
 
         # Evict least recently used model if cache full
-        if len(self.models) > self.max_models:
-            lru_language = self.model_usage_order.pop(0)
-            logger.info(f"Evicting LRU model for language: {lru_language}")
-            self.models[lru_language].unload_model()
-            del self.models[lru_language]
+        # Note: We only evict if we have too many UNIQUE models, not language mappings
+        if len(self._model_instances) > self.max_models:
+            # Find the LRU language that uses a unique model
+            for lru_language in self.model_usage_order:
+                lru_model_type, lru_model_name = self.LANGUAGE_MODELS[lru_language]
+                # Check if this model is only used by this language
+                languages_using_model = [
+                    lang for lang in self.models.keys()
+                    if self.LANGUAGE_MODELS[lang][1] == lru_model_name
+                ]
+                if len(languages_using_model) == 1:
+                    # This is the only language using this model, safe to evict
+                    logger.info(f"Evicting LRU model for language: {lru_language} (model: {lru_model_name})")
+                    self.models[lru_language].unload_model()
+                    del self.models[lru_language]
+                    del self._model_instances[lru_model_name]
+                    self.model_usage_order.remove(lru_language)
+                    break
 
         return strategy
 

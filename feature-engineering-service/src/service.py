@@ -10,6 +10,7 @@ from .clients import (
 )
 from .clients.qdrant_client import QdrantVectorClient
 from .clients.entities_consumer import EntitiesConsumer
+from .clients.reconciliation_consumer import ReconciliationConsumer
 from .extractors import (
     SourceExtractor,
     TemporalExtractor,
@@ -39,6 +40,7 @@ class FeatureEngineeringService:
     def __init__(self):
         """Initialize service."""
         self.consumer = SemanticGroupConsumer()
+        self.reconciliation_consumer = ReconciliationConsumer()  # Consumer for reconciliation_completed events
         self.producer = FeaturesProducer()
         self.postgres_client = PostgresClient()
         self.entities_consumer = EntitiesConsumer()
@@ -46,6 +48,10 @@ class FeatureEngineeringService:
         self.qdrant_client = QdrantVectorClient(config=qdrant_config)
         feast_config = FeastConfig()
         self.feature_version = feast_config.feature_version
+
+        # Background task for reconciliation consumer
+        self.reconciliation_task = None
+        self.running = False
 
         # Initialize Feast registry
         self.feast_registry = FeastRegistry(config=feast_config)
@@ -83,7 +89,7 @@ class FeatureEngineeringService:
         self.btc_features_last_generated = None
         self.btc_features_interval_seconds = 3600  # Generate every hour
 
-    def start(self):
+    async def start(self):
         """Start the service."""
         try:
             logger.info("Starting feature engineering service")
@@ -91,8 +97,12 @@ class FeatureEngineeringService:
             # Connect to all services
             self.consumer.connect()
             self.producer.connect()
-            self.postgres_client.connect()
+            await self.postgres_client.connect()
             self.qdrant_client.connect()
+
+            # Connect to reconciliation consumer
+            await self.reconciliation_consumer.connect()
+            logger.info("Reconciliation consumer connected")
 
             # Initialize entities consumer
             try:
@@ -103,11 +113,16 @@ class FeatureEngineeringService:
 
             logger.info("All connections established")
 
+            # Start background task for reconciliation events
+            self.running = True
+            self.reconciliation_task = asyncio.create_task(self._consume_reconciliation_events())
+            logger.info("Started background task for reconciliation events")
+
             # Initialize Feast registry and register feature view
             self._initialize_feast_registry()
 
             # Start consuming messages
-            self._consume_loop()
+            await self._consume_loop()
 
         except Exception as e:
             logger.error("Error starting service", error=str(e))
@@ -154,11 +169,11 @@ class FeatureEngineeringService:
             # Don't fail startup, just warn
             logger.warning("Continuing without Feast registry initialization")
 
-    def _consume_loop(self):
+    async def _consume_loop(self):
         """Main consumption loop."""
         try:
             # Generate initial BTC features on startup
-            self._generate_btc_features()
+            await self._generate_btc_features()
 
             while True:
                 try:
@@ -167,7 +182,7 @@ class FeatureEngineeringService:
                         self.entities_consumer.consume_batch(timeout_seconds=0.1, max_messages=50)
 
                     # Check if we need to regenerate BTC features
-                    self._check_and_generate_btc_features()
+                    await self._check_and_generate_btc_features()
 
                     # Consume message
                     message = self.consumer.consume_message(timeout_ms=1000)
@@ -176,7 +191,7 @@ class FeatureEngineeringService:
                         continue
 
                     # Process message
-                    self._process_message(message)
+                    await self._process_message(message)
                 except Exception as e:
                     logger.warning("Error processing message, continuing", error=str(e), exc_info=True)
                     continue
@@ -186,9 +201,9 @@ class FeatureEngineeringService:
         except Exception as e:
             logger.error("Fatal error in consumption loop", error=str(e), exc_info=True)
         finally:
-            self.shutdown()
+            await self.shutdown()
 
-    def _process_message(self, message: Dict[str, Any]):
+    async def _process_message(self, message: Dict[str, Any]):
         """Process a semantic group message.
 
         Args:
@@ -209,7 +224,7 @@ class FeatureEngineeringService:
 
             with TraceContext(trace_id=trace_id, group_id=group_id, operation="compute_features") as ctx:
                 # Extract features
-                features = self._extract_features(message)
+                features = await self._extract_features(message)
 
                 # Skip if no features extracted (e.g., group has 0 articles)
                 if not features:
@@ -325,7 +340,7 @@ class FeatureEngineeringService:
                 continue
         return articles
 
-    def _extract_features(self, message: Dict[str, Any]) -> Dict[str, Any]:
+    async def _extract_features(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """Extract features from message.
 
         Args:
@@ -382,12 +397,23 @@ class FeatureEngineeringService:
 
             # Extract using all extractors
             for extractor in self.extractors:
-                extracted = extractor.extract(
+                extracted = await extractor.extract(
                     group=message,
                     articles=articles,
                     actors=[],
                 )
                 features.update(extracted)
+
+            # Filter: Skip groups without countries (cannot predict conflicts between countries)
+            countries = features.get("countries", "")
+            if not countries or countries.strip() == "":
+                logger.info(
+                    "Skipping semantic group without countries - cannot predict conflicts between countries",
+                    group_id=group_id,
+                    feature_count=len(features),
+                )
+                # Return empty features dict to skip this group gracefully
+                return {}
 
             logger.info(
                 "Features extracted",
@@ -395,6 +421,7 @@ class FeatureEngineeringService:
                 feature_count=len(features),
                 feature_names=list(features.keys())[:20],  # First 20 feature names
                 sample_features={k: features[k] for k in list(features.keys())[:5]},  # First 5 features with values
+                countries=countries,
             )
             return features
 
@@ -498,24 +525,28 @@ class FeatureEngineeringService:
             )
             raise FeatureError(f"Error writing features: {str(e)}")
 
-    def _check_and_generate_btc_features(self):
+    async def _check_and_generate_btc_features(self):
         """Check if BTC features need to be regenerated and generate if needed."""
         try:
             current_time = time.time()
 
             # Check if we need to regenerate
             if self.btc_features_last_generated is None:
-                return  # Already generated on startup
+                # First generation failed or not yet attempted, try now
+                logger.info("BTC features not yet generated successfully, attempting generation")
+                await self._generate_btc_features()
+                return
 
             time_since_last_gen = current_time - self.btc_features_last_generated
 
             if time_since_last_gen >= self.btc_features_interval_seconds:
-                self._generate_btc_features()
+                logger.info(f"BTC features interval reached ({time_since_last_gen:.0f}s >= {self.btc_features_interval_seconds}s), regenerating")
+                await self._generate_btc_features()
 
         except Exception as e:
             logger.error("Error checking BTC features generation", error=str(e))
 
-    def _generate_btc_features(self):
+    async def _generate_btc_features(self):
         """Generate historical BTC features and save to parquet."""
         try:
             logger.info("=== GENERATING HISTORICAL BTC FEATURES ===")
@@ -532,7 +563,7 @@ class FeatureEngineeringService:
                 return
 
             # Generate features for last 1000 BTC records
-            features_list = btc_extractor.generate_historical_btc_features(limit=1000)
+            features_list = await btc_extractor.generate_historical_btc_features(limit=1000)
 
             if not features_list:
                 logger.warning("No BTC features generated")
@@ -552,14 +583,169 @@ class FeatureEngineeringService:
         except Exception as e:
             logger.error("Error generating BTC features", error=str(e), exc_info=True)
 
-    def shutdown(self):
+    async def _consume_reconciliation_events(self):
+        """Background task to consume reconciliation_completed events and re-process groups."""
+        logger.info("Starting reconciliation events consumer")
+
+        while self.running:
+            try:
+                # Consume reconciliation event
+                event = self.reconciliation_consumer.consume_message(timeout=1.0)
+
+                if event is None:
+                    await asyncio.sleep(0.1)
+                    continue
+
+                # Re-process the group
+                await self._reprocess_group(event)
+
+            except asyncio.CancelledError:
+                logger.info("Reconciliation consumer cancelled")
+                break
+            except Exception as e:
+                logger.error(
+                    f"Error consuming reconciliation event: {str(e)}",
+                    error_type=type(e).__name__,
+                    exc_info=True
+                )
+                await asyncio.sleep(1.0)  # Wait before retry
+
+        logger.info("Reconciliation events consumer stopped")
+
+    async def _reprocess_group(self, reconciliation_event: Dict[str, Any]):
+        """Re-process a group when reconciliation completes.
+
+        Args:
+            reconciliation_event: Reconciliation completed event from Kafka
+        """
+        try:
+            group_id = reconciliation_event.get("group_id")
+            has_conflict = reconciliation_event.get("has_conflict")
+
+            logger.info(
+                f"Re-processing group after reconciliation",
+                group_id=group_id,
+                has_conflict=has_conflict
+            )
+
+            # Fetch the semantic group from Kafka or database
+            # For now, we'll query the database to get the group
+            group = await self._fetch_group_from_database(group_id)
+
+            if not group:
+                logger.warning(
+                    f"Group not found for re-processing",
+                    group_id=group_id
+                )
+                return
+
+            # Extract features (this will query reconciliation_log and get updated has_conflict)
+            features = await self._extract_features(group)
+
+            if not features:
+                logger.warning(
+                    f"No features extracted for re-processed group",
+                    group_id=group_id
+                )
+                return
+
+            # Update Delta Lake with new has_conflict value
+            self.delta_writer.write_features(group_id, features)
+
+            logger.info(
+                f"✓ Group re-processed successfully after reconciliation",
+                group_id=group_id,
+                has_conflict=features.get("has_conflict")
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Error re-processing group: {str(e)}",
+                group_id=reconciliation_event.get("group_id"),
+                error_type=type(e).__name__,
+                exc_info=True
+            )
+
+    async def _fetch_group_from_database(self, group_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch semantic group from database.
+
+        Args:
+            group_id: Group ID to fetch
+
+        Returns:
+            Group dict or None if not found
+        """
+        try:
+            query = """
+                SELECT
+                    group_id,
+                    article_ids,
+                    article_count,
+                    similarity_avg,
+                    topic_label,
+                    centroid_vector,
+                    cluster_metadata,
+                    countries,
+                    created_at
+                FROM semantic_groups
+                WHERE group_id = $1
+            """
+
+            result = await self.postgres_client.execute_query(query, str(group_id))
+
+            if not result or len(result) == 0:
+                return None
+
+            row = result[0]
+
+            # Convert to message format
+            # Handle None values explicitly
+            article_ids = row.get("article_ids")
+            if article_ids is None:
+                article_ids = []
+
+            countries = row.get("countries")
+            if countries is None:
+                countries = []
+
+            group = {
+                "group_id": str(row.get("group_id")),
+                "article_ids": article_ids,
+                "article_count": row.get("article_count") or 0,
+                "similarity_avg": float(row.get("similarity_avg") or 0.0),
+                "topic_label": row.get("topic_label") or "",
+                "countries": countries,
+                "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
+            }
+
+            return group
+
+        except Exception as e:
+            logger.error(
+                f"Error fetching group from database: {str(e)}",
+                group_id=group_id,
+                error_type=type(e).__name__
+            )
+            return None
+
+    async def shutdown(self):
         """Shutdown service."""
         try:
             logger.info("Shutting down service")
 
+            # Stop reconciliation task
+            self.running = False
+            if self.reconciliation_task and not self.reconciliation_task.done():
+                self.reconciliation_task.cancel()
+                try:
+                    await self.reconciliation_task
+                except asyncio.CancelledError:
+                    logger.info("Reconciliation task cancelled")
+
             self.consumer.close()
             self.producer.close()
-            self.postgres_client.close()
+            await self.postgres_client.close()
+            await self.reconciliation_consumer.disconnect()
             self.entities_consumer.shutdown()
             self.feast_registry.close()
             self.feast_writer.close()  # ENABLED

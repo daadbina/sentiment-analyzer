@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2025-11-14
+
+### Added
+- **Floating BTC Predictions Panel** - Draggable panel showing latest Bitcoin price predictions
+  - Draggable with framer-motion (can be moved anywhere on screen)
+  - Beautiful glassmorphism design matching network graph tooltips
+  - Shows latest BTC predictions with direction indicators (📈 UP, 📉 DOWN, ➡️ NEUTRAL)
+  - Displays prediction probability and confidence percentages
+  - Displays prediction timestamp in readable format
+  - Custom scrollbar styling for better UX
+  - Empty state with "Waiting for data..." message
+  - Loading state with spinner
+  - Error state with error message
+  - Auto-refresh every 30 seconds with polling
+  - Positioned initially in top-left corner, fully draggable
+
+#### Backend API Enhancements
+- Added `GET /api/v1/dashboard/btc-predictions` endpoint
+  - Parameters: `limit` (1-100, default 10), `min_confidence` (0.0-1.0, default 0.0), `hours` (1-720, default 24)
+  - Returns BTC predictions from predictions table where domain = 'btc'
+  - Includes caching with Redis (30s TTL)
+- Added `get_btc_predictions()` method to PostgresClient
+  - Queries predictions table for BTC domain
+  - Filters by confidence and time range
+  - Returns structured prediction data
+- Added `get_btc_predictions()` method to DashboardService
+  - Implements caching layer
+  - Follows existing service pattern
+
+#### Frontend Enhancements
+- Created `FloatingBTCPanel.jsx` component (145 lines)
+  - Fully draggable with framer-motion
+  - Responsive design
+  - Beautiful animations and transitions
+  - Hover effects on prediction cards
+- Added `getBTCPredictions()` method to API service
+- Integrated FloatingBTCPanel into App.jsx
+  - Separate state management for BTC predictions
+  - Separate polling for BTC data
+  - Renders alongside NetworkGraph
+- Added custom scrollbar CSS to index.css
+
+### Fixed
+- Fixed syntax error in postgres.py (missing except block in get_latest_predictions method)
+
+---
+
 ## [0.1.0] - 2025-11-14
 
 ### Added
@@ -120,6 +167,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2025-11-14
+
+### Changed - Complete Frontend Redesign
+- **Status**: ✅ COMPLETE - Network graph visualization fully implemented
+- Completely redesigned frontend with interactive network graph visualization
+- Replaced all old dashboard components with single NetworkGraph component
+- Implemented force-directed graph layout for country relationships
+
+#### New Network Graph Features
+- **Interactive Network Visualization**: Countries as nodes, conflict predictions as edges
+- **Force-Directed Layout**: Physics-based graph layout with react-force-graph-2d
+- **Beautiful Animations**: Floating nodes, pulsing high-risk nodes, particle effects on edges
+- **Rich Hover Interactions**:
+  - Node hover shows country name, risk score, prediction count
+  - Edge hover shows country pair, probability, confidence, timestamp
+  - Highlighted connections and smooth transitions
+- **Heatmap Coloring**: Risk-based color scheme (blue→yellow→orange→red)
+- **Responsive Design**: Full-screen graph with zoom and pan controls
+- **Real-time Updates**: 30-second polling for live data
+- **Glassmorphism Tooltips**: Modern, beautiful tooltip design
+
+#### New Backend Endpoint
+- `GET /api/v1/dashboard/network-graph` - Network graph data with nodes and edges
+  - Returns countries as nodes with risk scores
+  - Returns predictions as edges with probabilities
+  - Optimized format for graph visualization
+  - Cached with 30-second TTL
+
+#### Removed Components
+- Removed StatsCards component (replaced by network graph)
+- Removed LatestPredictions table component
+- Removed CountryHeatmap world map component
+- Removed TrendChart time-series component
+- Removed TopCountryPairs bar chart component
+- Removed Header component
+- Removed LoadingSpinner component
+- Removed ErrorMessage component
+
+#### New Dependencies
+- react-force-graph-2d - Force-directed graph visualization
+- framer-motion - Smooth animations and transitions
+- three - 3D rendering engine (dependency of react-force-graph)
+
+#### Design Improvements
+- Minimalist landing page with only network graph
+- Dark gradient background (gray-900 → blue-900 → gray-900)
+- Risk level legend in bottom-right corner
+- Beautiful empty state with globe icon
+- Smooth loading and error states
+- Canvas-based rendering for performance
+
+### Technical Details
+- **Graph Rendering**: Canvas-based for optimal performance
+- **Node Appearance**: Circular nodes with country codes, heatmap colors, glow effects
+- **Edge Appearance**: Lines with thickness and color based on probability
+- **Animations**: 60fps smooth animations with optimized force simulation
+- **Interactivity**: Hover effects, zoom, pan, particle effects
+- **Color Scheme**:
+  - Low risk (<30%): Blue (#3b82f6)
+  - Medium risk (30-50%): Yellow (#eab308)
+  - High risk (50-70%): Orange (#f97316)
+  - Critical risk (>70%): Red (#ef4444)
+
+### Testing
+- ✅ Service starts without errors
+- ✅ API endpoint returns correct data structure
+- ✅ Frontend loads and displays network graph
+- ✅ Empty state displays correctly (no data)
+- ✅ Loading state works correctly
+- ✅ Polling mechanism working (30-second interval)
+- ✅ Caching working correctly
+- ✅ No console errors (except favicon 404)
+- ✅ No backend errors or warnings
+- ✅ Old component files removed
+
+---
+
 ## [0.1.0] - 2025-11-13
 
 ### Added
@@ -129,7 +253,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-**Maintained By**: Development Team  
-**Service Owner**: Conflict Prediction Dashboard Team  
-**Last Updated**: 2025-11-13
+**Maintained By**: Development Team
+**Service Owner**: Conflict Prediction Dashboard Team
+**Last Updated**: 2025-11-14
 

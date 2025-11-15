@@ -142,3 +142,73 @@ async def get_dashboard_stats(
         logger.error("get_dashboard_stats_failed", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@router.get("/network-graph")
+async def get_network_graph(
+    min_confidence: float = Query(0.5, ge=0.0, le=1.0, description="Minimum confidence threshold"),
+    hours: int = Query(168, ge=1, le=720, description="Time range in hours (default 7 days)"),
+    service: DashboardService = Depends(get_dashboard_service),
+):
+    """
+    Get network graph data with nodes (countries) and edges (predictions).
+
+    Returns a graph structure optimized for visualization:
+    - **nodes**: Countries with risk scores
+    - **links**: Predictions between country pairs
+    - **metadata**: Graph statistics
+
+    - **min_confidence**: Minimum confidence threshold (0.0-1.0)
+    - **hours**: Time range in hours (1-720, default 168 = 7 days)
+    """
+    try:
+        logger.info(
+            "get_network_graph_request",
+            min_confidence=min_confidence,
+            hours=hours,
+        )
+        graph_data = await service.get_network_graph_data(min_confidence, hours)
+        logger.info(
+            "get_network_graph_success",
+            node_count=len(graph_data.get('nodes', [])),
+            link_count=len(graph_data.get('links', [])),
+        )
+        return graph_data
+    except Exception as e:
+        logger.error("get_network_graph_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/btc-predictions")
+async def get_btc_predictions(
+    limit: int = Query(10, ge=1, le=100),
+    min_confidence: float = Query(0.0, ge=0.0, le=1.0),
+    hours: int = Query(24, ge=1, le=720),
+    service: DashboardService = Depends(get_dashboard_service),
+):
+    """
+    Get latest Bitcoin price predictions.
+
+    Returns the most recent BTC predictions with probability and confidence scores.
+
+    **Parameters:**
+    - **limit**: Maximum number of predictions to return (1-100, default 10)
+    - **min_confidence**: Minimum confidence threshold (0.0-1.0)
+    - **hours**: Time range in hours (1-720, default 24)
+    """
+    try:
+        logger.info(
+            "get_btc_predictions_request",
+            limit=limit,
+            min_confidence=min_confidence,
+            hours=hours,
+        )
+        predictions = await service.get_btc_predictions(limit, min_confidence, hours)
+        logger.info(
+            "get_btc_predictions_success",
+            count=len(predictions),
+        )
+        return {"predictions": predictions, "count": len(predictions)}
+    except Exception as e:
+        logger.error("get_btc_predictions_failed", error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+

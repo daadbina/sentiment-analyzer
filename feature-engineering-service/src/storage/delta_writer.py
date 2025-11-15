@@ -64,6 +64,16 @@ class DeltaLakeWriter:
             # Create DataFrame
             df = pd.DataFrame([feature_data])
 
+            # Convert None values to pd.NA for proper nullable type handling
+            # Delta Lake/PyArrow doesn't support Python None directly
+            for col in df.columns:
+                if df[col].iloc[0] is None:
+                    # For boolean columns with None, use nullable boolean type
+                    if col == 'has_conflict':
+                        df[col] = df[col].astype('boolean')  # pandas nullable boolean
+                    else:
+                        df[col] = pd.NA
+
             logger.debug(
                 "Prepared feature DataFrame for Delta Lake write",
                 group_id=group_id,

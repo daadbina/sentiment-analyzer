@@ -102,6 +102,7 @@ def main():
         ("acled_label-value", "acled_label.avsc"),
         ("gdelt_label-value", "gdelt_label.avsc"),
         ("coingecko_label-value", "coingecko_label.avsc"),
+        ("reconciliation_completed-value", "reconciliation_completed.avsc"),
     ]
 
     registered_schemas = {}

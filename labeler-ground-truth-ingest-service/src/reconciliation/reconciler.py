@@ -390,17 +390,14 @@ class LabelReconciler:
                 )
 
             for group in semantic_groups:
-                # TEMPORARY: Skip temporal matching to allow historical GDELT events to match
-                # temporal_match, temporal_conf = self.temporal_matcher.match(
-                #     label_timestamp,
-                #     group.get("created_at", "")
-                # )
-                #
-                # if not temporal_match:
-                #     continue
+                # Temporal matching enabled
+                temporal_match, temporal_conf = self.temporal_matcher.match(
+                    label_timestamp,
+                    group.get("created_at", "")
+                )
 
-                # Set temporal confidence to 1.0 (always pass)
-                temporal_conf = 1.0
+                if not temporal_match:
+                    continue
 
                 # Get group description for matching
                 group_description = (

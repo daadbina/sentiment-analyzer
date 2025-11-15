@@ -20,7 +20,7 @@ class ContentExtractor(FeatureExtractor):
             "domain_diversity",
         ]
 
-    def extract(
+    async def extract(
         self,
         group: SemanticGroup,
         articles: List[Article],

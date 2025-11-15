@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.1] - 2025-11-14
+
+### Changed - Filter Prediction Data to Unreconciled Groups Only
+- **Parquet Loader Enhancement** (src/data/parquet_loader.py)
+  - Updated `_load_semantic_groups()` to filter WHERE has_conflict IS NULL
+  - Only loads unreconciled groups (groups without GDELT labels)
+  - Excludes reconciled groups (has_conflict=True/False) from prediction
+
+**Rationale:**
+- has_conflict = None → unreconciled (no GDELT labels, needs prediction)
+- has_conflict = True/False → reconciled (already has ground truth, no prediction needed)
+
+**Benefits:**
+- Prevents predicting on already-labeled data
+- Focuses prediction on groups that need conflict detection
+- Avoids wasting compute on reconciled groups
+
+**Logging:**
+- Logs total groups, unreconciled groups, and reconciled groups
+- Warns if has_conflict column not found
+- Logs final count of groups loaded for prediction
+
+---
+
 ## [0.3.0] - 2025-11-12
 
 ### Removed - Feature Engineering Duplication

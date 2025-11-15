@@ -97,20 +97,16 @@ class PredictionLogger:
         trace_id: str | None = None,
     ) -> None:
         """
-        Store prediction in PostgreSQL.
+        Store prediction in PostgreSQL with full metadata (same as Kafka).
 
         Args:
-            prediction: Prediction dictionary
+            prediction: Prediction dictionary with all metadata
             trace_id: Optional trace ID for distributed tracing
         """
         try:
+            # Store the FULL prediction dictionary (same as Kafka)
             await self.postgres_client.store_prediction(
-                group_id=prediction["group_id"],
-                domain=prediction["domain"],
-                prediction_probability=prediction["prediction_probability"],
-                prediction_confidence=prediction["prediction_confidence"],
-                model_version=prediction["model_version"],
-                features=prediction.get("features", {}),
+                prediction=prediction,
                 trace_id=trace_id,
             )
 

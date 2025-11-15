@@ -1,6 +1,6 @@
 """Embedding feature extractor."""
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import math
 import numpy as np
 from .base import FeatureExtractor, SemanticGroup, Article, Actor
@@ -16,7 +16,7 @@ class EmbeddingExtractor(FeatureExtractor):
         """Initialize embedding extractor.
 
         Args:
-            postgres_client: PostgreSQL client for querying reconciliation_log
+            postgres_client: PostgreSQL client for querying reconciliation_log (used for conflict checking)
         """
         super().__init__("embedding_extractor")
         self.postgres_client = postgres_client
@@ -28,7 +28,7 @@ class EmbeddingExtractor(FeatureExtractor):
             "countries",
         ]
 
-    def extract(
+    async def extract(
         self,
         group: SemanticGroup,
         articles: List[Article],
@@ -57,9 +57,10 @@ class EmbeddingExtractor(FeatureExtractor):
             similarity_std = group.get("similarity_std") if isinstance(group, dict) else getattr(group, "similarity_std", None)
             metadata = group.get("metadata", {}) if isinstance(group, dict) else getattr(group, "metadata", {})
 
-            # Fetch countries from reconciliation_log table
+            # Read countries directly from the semantic_groups Kafka message
+            # The clustering service already extracts countries from NER entities and includes them in the message
             group_id = self.get_group_id(group)
-            countries = self._fetch_countries_from_reconciliation(group_id)
+            countries = group.get("countries", []) if isinstance(group, dict) else getattr(group, "countries", [])
 
             logger.debug(
                 "Embedding extraction inputs",
@@ -68,6 +69,7 @@ class EmbeddingExtractor(FeatureExtractor):
                 centroid_vector_length=len(centroid_vector) if centroid_vector else 0,
                 similarity_avg=similarity_avg,
                 similarity_std=similarity_std,
+                countries_count=len(countries) if countries else 0,
             )
 
             # centroid_magnitude: L2 norm of cluster centroid
@@ -117,7 +119,7 @@ class EmbeddingExtractor(FeatureExtractor):
             # has_conflict: Boolean indicating if group has conflicting labels
             # True if group has multiple different labels in reconciliation_log
             group_id = self.get_group_id(group)
-            features["has_conflict"] = self._check_conflict_status(group_id)
+            features["has_conflict"] = await self._check_conflict_status(group_id)
 
             logger.info(
                 "Embedding features extracted",
@@ -138,83 +140,66 @@ class EmbeddingExtractor(FeatureExtractor):
             )
             return {}
 
-    def _fetch_countries_from_reconciliation(self, group_id: str) -> list:
-        """Fetch countries from reconciliation_log table for a given group_id.
+    async def _check_conflict_status(self, group_id: str) -> Optional[bool]:
+        """Check if a group is about war/conflict based on GDELT metadata.
+
+        A conflict exists when any matched GDELT event has label_conflict=1.
+        This indicates the event is about war, violence, protests, or armed conflict.
 
         Args:
             group_id: Semantic group ID
 
         Returns:
-            List of unique countries
-        """
-        if not self.postgres_client:
-            logger.warning(f"PostgreSQL client not available for fetching countries: group_id={group_id}")
-            return []
-
-        try:
-            query = """
-                SELECT DISTINCT UNNEST(countries) as country
-                FROM reconciliation_log
-                WHERE group_id = %s
-                AND countries IS NOT NULL
-                AND array_length(countries, 1) > 0
-            """
-
-            logger.debug(f"Querying reconciliation_log for countries: group_id={group_id}")
-            result = self.postgres_client.execute_query_sync(query, str(group_id))
-            logger.debug(f"Query result: group_id={group_id}, result_count={len(result) if result else 0}, result={result}")
-
-            if result:
-                countries = [row["country"] for row in result if row.get("country")]
-                logger.info(f"Fetched countries from reconciliation_log: group_id={group_id}, countries={countries}")
-                return countries
-
-            logger.debug(f"No countries found for group_id={group_id}")
-            return []
-
-        except Exception as e:
-            logger.error(
-                f"Failed to fetch countries from reconciliation_log: group_id={group_id}, error_type={type(e).__name__}, error={str(e)}"
-            )
-            return []
-
-    def _check_conflict_status(self, group_id: str) -> bool:
-        """Check if a group has conflicting labels in reconciliation_log.
-
-        A conflict exists when a group_id has multiple different label_ids.
-
-        Args:
-            group_id: Semantic group ID
-
-        Returns:
-            True if group has multiple labels (conflict), False otherwise
+            True if any matched event is about conflict/war
+            False if matched events exist but none are conflicts
+            None if no reconciliation data exists (unreconciled group)
         """
         if not self.postgres_client:
             logger.warning(f"PostgreSQL client not available for checking conflict: group_id={group_id}")
-            return False
+            return None
 
         try:
+            # asyncpg uses $1, $2, etc. for placeholders
             query = """
-                SELECT COUNT(DISTINCT label_id) as label_count
+                SELECT MAX(label_conflict) as max_label_conflict,
+                       COUNT(*) as label_count
                 FROM reconciliation_log
-                WHERE group_id = %s
+                WHERE group_id = $1
             """
 
             logger.debug(f"Checking conflict status: group_id={group_id}")
-            result = self.postgres_client.execute_query_sync(query, str(group_id))
+            result = await self.postgres_client.execute_query(query, str(group_id))
 
             if result and len(result) > 0:
                 label_count = result[0].get("label_count", 0)
-                has_conflict = label_count > 1
-                logger.info(f"Conflict check: group_id={group_id}, label_count={label_count}, has_conflict={has_conflict}")
+
+                # If no reconciliation data exists, return None (not labeled)
+                if label_count == 0:
+                    logger.debug(f"No reconciliation data found for group_id={group_id} - returning None")
+                    return None
+
+                max_label_conflict = result[0].get("max_label_conflict")
+
+                # If max_label_conflict is None, it means reconciled but no GDELT metadata (old data)
+                if max_label_conflict is None:
+                    logger.debug(f"Reconciled but no GDELT metadata for group_id={group_id} - returning None")
+                    return None
+
+                # Conflict if any matched GDELT event has label_conflict=1
+                has_conflict = max_label_conflict == 1
+
+                logger.info(
+                    f"Conflict check: group_id={group_id}, "
+                    f"label_count={label_count}, max_label_conflict={max_label_conflict}, has_conflict={has_conflict}"
+                )
                 return has_conflict
 
-            logger.debug(f"No reconciliation data found for group_id={group_id}")
-            return False
+            logger.debug(f"No reconciliation data found for group_id={group_id} - returning None")
+            return None
 
         except Exception as e:
             logger.error(
                 f"Failed to check conflict status: group_id={group_id}, error_type={type(e).__name__}, error={str(e)}"
             )
-            return False
+            return None
 

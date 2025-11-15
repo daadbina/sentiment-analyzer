@@ -28,34 +28,41 @@ logger = logging.getLogger(__name__)
 _thread_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="model_predict")
 
 # Features expected by trained models (EXACT feature names from the models)
-# BTC model expects 8 features with btc_ prefix
+# BTC model expects 13 features WITHOUT btc_ prefix (as trained)
 BTC_MODEL_FEATURES = [
-    'btc_change_pct_10h_backward', 'btc_volatility_score', 'btc_volume', 'btc_label_spike',
-    'btc_open', 'btc_high', 'btc_low', 'btc_close'
+    'close', 'open', 'high', 'low', 'volume', 'volatility_score',
+    'atr_14', 'ema_slope_12', 'rsi_14', 'macd', 'macd_signal',
+    'macd_histogram', 'bb_width'
 ]
 
-# Conflict model expects 20 features with semantic_group_features: prefix
+# Conflict model expects 25 features WITHOUT semantic_group_features: prefix (as trained)
+# IMPORTANT: Order must match exactly as the model was trained
 CONFLICT_MODEL_FEATURES = [
-    'semantic_group_features:source_credibility_avg',
-    'semantic_group_features:source_credibility_std',
-    'semantic_group_features:time_span_hours',
-    'semantic_group_features:publication_velocity',
-    'semantic_group_features:temporal_concentration',
-    'semantic_group_features:days_since_first_article',
-    'semantic_group_features:sentiment_mean',
-    'semantic_group_features:sentiment_std',
-    'semantic_group_features:sentiment_polarity_ratio',
-    'semantic_group_features:sentiment_volatility',
-    'semantic_group_features:entity_count',
-    'semantic_group_features:entity_diversity',
-    'semantic_group_features:entity_prominence',
-    'semantic_group_features:entity_concentration',
-    'semantic_group_features:avg_word_count',
-    'semantic_group_features:avg_title_length',
-    'semantic_group_features:language_diversity',
-    'semantic_group_features:domain_diversity',
-    'semantic_group_features:centroid_magnitude',
-    'semantic_group_features:intra_cluster_similarity_mean',
+    'num_sources',
+    'source_credibility_avg',
+    'source_credibility_std',
+    'source_diversity_score',
+    'time_span_hours',
+    'publication_velocity',
+    'temporal_concentration',
+    'days_since_first_article',
+    'sentiment_mean',
+    'sentiment_std',
+    'sentiment_polarity_ratio',
+    'sentiment_volatility',
+    'entity_count',
+    'entity_diversity',
+    'entity_prominence',
+    'entity_concentration',
+    'avg_word_count',
+    'avg_title_length',
+    'language_diversity',
+    'domain_diversity',
+    'centroid_magnitude',
+    'intra_cluster_similarity_mean',
+    'intra_cluster_similarity_std',
+    'embedding_drift_score',
+    'num_countries',
 ]
 
 
@@ -95,7 +102,7 @@ class ModelManager:
         model_version: str | None = None,
         trace_id: str | None = None,
         domain: str | None = None,
-    ) -> PyFuncModel:
+    ) -> tuple[PyFuncModel, str]:
         """
         Load model from MLflow registry.
 
@@ -105,7 +112,7 @@ class ModelManager:
             domain: Optional domain filter (btc/conflict/geopolitical) for auto-selection
 
         Returns:
-            Loaded model instance
+            Tuple of (loaded model instance, actual version string)
 
         Raises:
             ModelLoadError: If model loading fails
@@ -115,17 +122,16 @@ class ModelManager:
             attributes={"model_version": model_version, "trace_id": trace_id, "domain": domain},
         ):
             try:
-                # Load model from MLflow
-                model = await self.mlflow_client.load_model(
+                # Load model from MLflow - returns (model, actual_version)
+                model, actual_version = await self.mlflow_client.load_model(
                     model_version=model_version,
                     use_fallback=True,
                     trace_id=trace_id,
                     domain=domain,
                 )
 
-                # Cache model
-                version = model_version or self.mlflow_client.config.model_version
-                self._models[version] = model
+                # Cache model using the actual version that was loaded
+                self._models[actual_version] = model
 
                 # Store model name for preprocessor loading
                 # Get model name from MLflow client's selected model info or config
@@ -141,15 +147,15 @@ class ModelManager:
                         model_name = None
 
                 if model_name:
-                    self._model_names[version] = model_name
-                    logger.info(f"Stored model name for version {version}: {model_name}")
+                    self._model_names[actual_version] = model_name
+                    logger.info(f"Stored model name for version {actual_version}: {model_name}")
 
                 logger.info(
-                    f"Model loaded: version={version}",
-                    extra={"trace_id": trace_id, "model_version": version},
+                    f"Model loaded: version={actual_version}",
+                    extra={"trace_id": trace_id, "model_version": actual_version},
                 )
 
-                return model
+                return model, actual_version
 
             except ModelLoadError:
                 raise
@@ -189,7 +195,13 @@ class ModelManager:
         if self.ab_testing_strategy:
             model_version = self.ab_testing_strategy.select_variant(group_id)
         else:
-            model_version = self.mlflow_client.config.model_version
+            # Use domain-specific version if available, otherwise fall back to generic version
+            if domain == "btc":
+                model_version = self.mlflow_client.config.btc_model_version or self.mlflow_client.config.model_version
+            elif domain == "conflict":
+                model_version = self.mlflow_client.config.conflict_model_version or self.mlflow_client.config.model_version
+            else:
+                model_version = self.mlflow_client.config.model_version
 
         # Create cache key that includes domain to avoid loading wrong model
         cache_key = f"{model_version}:{domain}" if domain else model_version
@@ -198,13 +210,13 @@ class ModelManager:
         if cache_key in self._models:
             return self._models[cache_key], model_version
 
-        # Load model
-        model = await self.load_model(model_version, trace_id, domain=domain)
+        # Load model - returns (model, actual_version)
+        model, actual_version = await self.load_model(model_version, trace_id, domain=domain)
 
         # Cache with domain-aware key
         self._models[cache_key] = model
 
-        return model, model_version
+        return model, actual_version
 
     async def predict_btc(
         self,
@@ -236,13 +248,12 @@ class ModelManager:
                     extra={"trace_id": trace_id, "feature_count": len(features)},
                 )
 
-                # Load BTC model
-                btc_model = await self.load_model(
-                    model_version=None,  # Use latest
+                # Load BTC model - returns (model, actual_version)
+                btc_model, model_version = await self.load_model(
+                    model_version=None,  # Use configured version for domain
                     trace_id=trace_id,
                     domain="btc",
                 )
-                model_version = self.mlflow_client.config.model_version
 
                 # Preprocessor not needed - models are already trained with preprocessing applied
                 btc_preprocessor = None
@@ -277,17 +288,22 @@ class ModelManager:
                 )
 
                 # Map parquet features to model feature names
-                # Parquet has: change_pct_10h, volatility_score, volume, label_spike, open, high, low, close
-                # Model expects: btc_change_pct_10h_backward, btc_volatility_score, btc_volume, btc_label_spike, btc_open, btc_high, btc_low, btc_close
+                # Model expects 13 features WITHOUT btc_ prefix (as trained):
+                # close, open, high, low, volume, volatility_score, atr_14, ema_slope_12, rsi_14, macd, macd_signal, macd_histogram, bb_width
                 btc_feature_dict = {
-                    'btc_change_pct_10h_backward': float(latest_btc.get('change_pct_10h', 0.0)),
-                    'btc_volatility_score': float(latest_btc.get('volatility_score', 0.0)),
-                    'btc_volume': float(latest_btc.get('volume', 0.0)),
-                    'btc_label_spike': int(latest_btc.get('label_spike', 0)),
-                    'btc_open': float(latest_btc.get('open', 0.0)),
-                    'btc_high': float(latest_btc.get('high', 0.0)),
-                    'btc_low': float(latest_btc.get('low', 0.0)),
-                    'btc_close': float(latest_btc.get('close', 0.0)),
+                    'close': float(latest_btc.get('close', 0.0)),
+                    'open': float(latest_btc.get('open', 0.0)),
+                    'high': float(latest_btc.get('high', 0.0)),
+                    'low': float(latest_btc.get('low', 0.0)),
+                    'volume': float(latest_btc.get('volume', 0.0)),
+                    'volatility_score': float(latest_btc.get('volatility_score', 0.0)),
+                    'atr_14': float(latest_btc.get('atr_14', 0.0)),
+                    'ema_slope_12': float(latest_btc.get('ema_slope_12', 0.0)),
+                    'rsi_14': float(latest_btc.get('rsi_14', 0.0)),
+                    'macd': float(latest_btc.get('macd', 0.0)),
+                    'macd_signal': float(latest_btc.get('macd_signal', 0.0)),
+                    'macd_histogram': float(latest_btc.get('macd_histogram', 0.0)),
+                    'bb_width': float(latest_btc.get('bb_width', 0.0)),
                 }
 
                 logger.info(
@@ -304,7 +320,16 @@ class ModelManager:
                 )
 
                 # Make prediction (regression model)
-                prediction = btc_model.predict(input_data)
+                logger.info(f"BTC model type: {type(btc_model)}")
+
+                # Try to unwrap the MLflow PyFuncModel to get the underlying sklearn model
+                underlying_model = btc_model
+                if hasattr(btc_model, '_model_impl'):
+                    underlying_model = btc_model._model_impl
+                    logger.info(f"Unwrapped BTC model type: {type(underlying_model)}")
+
+                prediction = underlying_model.predict(input_data)
+                logger.info(f"BTC predict output: {prediction}")
                 predicted_value = float(prediction[0]) if isinstance(prediction, np.ndarray) else float(prediction)
 
                 # Calculate confidence based on model's R² score (0.947 from training)
@@ -381,13 +406,12 @@ class ModelManager:
                     extra={"trace_id": trace_id, "feature_count": len(features)},
                 )
 
-                # Load conflict model
-                conflict_model = await self.load_model(
-                    model_version=None,  # Use latest
+                # Load conflict model - returns (model, actual_version)
+                conflict_model, model_version = await self.load_model(
+                    model_version=None,  # Use configured version for domain
                     trace_id=trace_id,
                     domain="conflict",
                 )
-                model_version = self.mlflow_client.config.model_version
 
                 # Preprocessor not needed - models are already trained with preprocessing applied
                 conflict_preprocessor = None
@@ -397,13 +421,36 @@ class ModelManager:
                     extra={"trace_id": trace_id},
                 )
 
+                # Calculate num_countries from countries metadata field
+                # Extracts count from comma-separated country codes (e.g., "BG,CA,CN" → 3)
+                countries_str = features.get("countries", "")
+                num_countries = 0
+                if countries_str and isinstance(countries_str, str) and countries_str.strip():
+                    # Split by comma and count non-empty entries
+                    countries_list = [c.strip() for c in countries_str.split(",") if c.strip()]
+                    num_countries = len(countries_list)
+
+                logger.info(
+                    f"Calculated num_countries={num_countries} from countries='{countries_str}'",
+                    extra={"trace_id": trace_id},
+                )
+
                 # Extract conflict features from parquet data
-                # The model expects EXACT feature names with semantic_group_features: prefix
+                # The model expects EXACT feature names WITHOUT semantic_group_features: prefix (as trained)
                 conflict_feature_dict = {}
 
                 for model_feature_name in CONFLICT_MODEL_FEATURES:
-                    # Features already have the semantic_group_features: prefix in the dict
-                    if model_feature_name in features:
+                    # Try to get feature with or without prefix
+                    prefixed_name = f"semantic_group_features:{model_feature_name}"
+
+                    if model_feature_name == "num_countries":
+                        # Use calculated num_countries
+                        conflict_feature_dict[model_feature_name] = num_countries
+                    elif prefixed_name in features:
+                        # Feature has prefix in input, remove it for model
+                        conflict_feature_dict[model_feature_name] = features[prefixed_name]
+                    elif model_feature_name in features:
+                        # Feature already without prefix
                         conflict_feature_dict[model_feature_name] = features[model_feature_name]
                     else:
                         logger.warning(f"Missing conflict feature: {model_feature_name}", extra={"trace_id": trace_id})
@@ -423,16 +470,28 @@ class ModelManager:
                 )
 
                 # Make prediction (classification model)
-                if hasattr(conflict_model, 'predict_proba'):
-                    prediction_proba = conflict_model.predict_proba(input_data)
+                logger.info(f"Conflict model type: {type(conflict_model)}, has predict_proba: {hasattr(conflict_model, 'predict_proba')}")
+
+                # Try to unwrap the MLflow PyFuncModel to get the underlying sklearn model
+                underlying_model = conflict_model
+                if hasattr(conflict_model, '_model_impl'):
+                    underlying_model = conflict_model._model_impl
+                    logger.info(f"Unwrapped model type: {type(underlying_model)}, has predict_proba: {hasattr(underlying_model, 'predict_proba')}")
+
+                if hasattr(underlying_model, 'predict_proba'):
+                    prediction_proba = underlying_model.predict_proba(input_data)
+                    logger.info(f"predict_proba output: {prediction_proba}")
                     probability = float(prediction_proba[0][1])
                     # Confidence based on how far from decision boundary (0.5)
                     confidence = abs(probability - 0.5) * 2.0
+                    logger.info(f"Using predict_proba: probability={probability}, confidence={confidence}")
                 else:
                     # Fallback if not a classifier
-                    prediction = conflict_model.predict(input_data)
+                    prediction = underlying_model.predict(input_data)
+                    logger.info(f"predict output: {prediction}")
                     probability = float(prediction[0])
                     confidence = 0.7
+                    logger.info(f"Using predict fallback: probability={probability}, confidence={confidence}")
 
                 # Determine conflict prediction
                 has_conflict = probability > 0.5

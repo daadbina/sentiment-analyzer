@@ -83,3 +83,6 @@ Thumbs.db
 feast_registry.db
 feature_store.yaml
 
+#Augment
+.augment
+

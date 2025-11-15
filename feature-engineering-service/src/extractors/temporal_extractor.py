@@ -22,7 +22,7 @@ class TemporalExtractor(FeatureExtractor):
             "days_since_first_article",
         ]
 
-    def extract(
+    async def extract(
         self,
         group: SemanticGroup,
         articles: List[Article],

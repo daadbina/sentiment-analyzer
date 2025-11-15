@@ -1,12 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import Header from './components/Header';
-import StatsCards from './components/StatsCards';
-import LatestPredictions from './components/LatestPredictions';
-import CountryHeatmap from './components/CountryHeatmap';
-import TrendChart from './components/TrendChart';
-import TopCountryPairs from './components/TopCountryPairs';
-import LoadingSpinner from './components/LoadingSpinner';
-import ErrorMessage from './components/ErrorMessage';
+import NetworkGraph from './components/NetworkGraph';
+import FloatingBTCPanel from './components/FloatingBTCPanel';
 import { dashboardAPI } from './services/api';
 
 const POLLING_INTERVAL = 30000; // 30 seconds
@@ -14,128 +8,103 @@ const POLLING_INTERVAL = 30000; // 30 seconds
 function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
-  
-  // Dashboard data state
-  const [stats, setStats] = useState(null);
-  const [predictions, setPredictions] = useState([]);
-  const [countryRisks, setCountryRisks] = useState([]);
-  const [trends, setTrends] = useState(null);
-  const [topPairs, setTopPairs] = useState([]);
+  const [graphData, setGraphData] = useState(null);
 
-  // Fetch all dashboard data
-  const fetchDashboardData = async () => {
+  // BTC predictions state
+  const [btcLoading, setBtcLoading] = useState(true);
+  const [btcError, setBtcError] = useState(null);
+  const [btcPredictions, setBtcPredictions] = useState([]);
+
+  // Fetch network graph data
+  const fetchGraphData = async () => {
     try {
       setError(null);
-      
-      // Fetch all data in parallel
-      const [
-        statsData,
-        predictionsData,
-        countryRisksData,
-        trendsData,
-        topPairsData,
-      ] = await Promise.all([
-        dashboardAPI.getDashboardStats(),
-        dashboardAPI.getLatestPredictions({ limit: 50, minConfidence: 0.5 }),
-        dashboardAPI.getCountryRiskScores(),
-        dashboardAPI.getTrendData({ period: 'day', days: 7 }),
-        dashboardAPI.getTopCountryPairs({ limit: 10 }),
-      ]);
 
-      setStats(statsData);
-      setPredictions(predictionsData);
-      setCountryRisks(countryRisksData);
-      setTrends(trendsData);
-      setTopPairs(topPairsData);
-      setLastUpdated(new Date());
+      const data = await dashboardAPI.getNetworkGraph({
+        minConfidence: 0.5,
+        hours: 168, // 7 days
+      });
+
+      setGraphData(data);
       setLoading(false);
-      
-      console.log('Dashboard data loaded successfully');
+
+      console.log('Network graph data loaded successfully', data);
     } catch (err) {
-      console.error('Failed to fetch dashboard data:', err);
-      setError(err.message || 'Failed to load dashboard data');
+      console.error('Failed to fetch network graph data:', err);
+      setError(err.message || 'Failed to load network graph data');
       setLoading(false);
+    }
+  };
+
+  // Fetch BTC predictions
+  const fetchBTCPredictions = async () => {
+    try {
+      setBtcError(null);
+
+      const data = await dashboardAPI.getBTCPredictions({
+        limit: 10,
+        minConfidence: 0.0,
+        hours: 24,
+      });
+
+      const predictions = data.predictions || [];
+      setBtcPredictions(predictions);
+      setBtcLoading(false);
+
+      console.log('BTC predictions loaded successfully', data);
+      console.log('BTC predictions array:', predictions);
+      console.log('BTC predictions count:', predictions.length);
+    } catch (err) {
+      console.error('Failed to fetch BTC predictions:', err);
+      setBtcError(err.message || 'Failed to load BTC predictions');
+      setBtcLoading(false);
     }
   };
 
   // Initial load
   useEffect(() => {
-    fetchDashboardData();
+    fetchGraphData();
+    fetchBTCPredictions();
   }, []);
 
   // Polling for updates
   useEffect(() => {
     const interval = setInterval(() => {
       console.log('Polling for updates...');
-      fetchDashboardData();
+      fetchGraphData();
+      fetchBTCPredictions();
     }, POLLING_INTERVAL);
 
     return () => clearInterval(interval);
   }, []);
 
-  // Manual refresh
-  const handleRefresh = () => {
-    setLoading(true);
-    fetchDashboardData();
-  };
-
-  if (loading && !stats) {
+  if (error) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <LoadingSpinner />
-      </div>
-    );
-  }
-
-  if (error && !stats) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <ErrorMessage message={error} onRetry={handleRefresh} />
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h2 className="text-white text-2xl font-bold mb-2">Error Loading Data</h2>
+          <p className="text-gray-400 mb-4">{error}</p>
+          <button
+            onClick={fetchGraphData}
+            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <Header onRefresh={handleRefresh} lastUpdated={lastUpdated} loading={loading} />
-      
-      <main className="container mx-auto px-4 py-6">
-        {/* Stats Cards */}
-        <div className="mb-6">
-          <StatsCards stats={stats} />
-        </div>
-
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Country Heatmap */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-bold mb-4">Global Conflict Risk Map</h2>
-            <CountryHeatmap countryRisks={countryRisks} />
-          </div>
-
-          {/* Trend Chart */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-bold mb-4">Prediction Trends (7 Days)</h2>
-            <TrendChart trends={trends} />
-          </div>
-        </div>
-
-        {/* Top Country Pairs */}
-        <div className="mb-6">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-bold mb-4">Top Country Pairs by Conflict Probability</h2>
-            <TopCountryPairs pairs={topPairs} />
-          </div>
-        </div>
-
-        {/* Latest Predictions Table */}
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-bold mb-4">Latest Conflict Predictions</h2>
-          <LatestPredictions predictions={predictions} />
-        </div>
-      </main>
-    </div>
+    <>
+      <NetworkGraph graphData={graphData} loading={loading} />
+      <FloatingBTCPanel
+        predictions={btcPredictions}
+        loading={btcLoading}
+        error={btcError}
+      />
+    </>
   );
 }
 

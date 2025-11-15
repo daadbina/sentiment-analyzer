@@ -253,7 +253,7 @@ class MLflowModelClient:
         use_fallback: bool = True,
         trace_id: str | None = None,
         domain: str | None = None,
-    ) -> Any:
+    ) -> tuple[Any, str]:
         """
         Load model from S3 via MLflow registry.
 
@@ -267,7 +267,7 @@ class MLflowModelClient:
             domain: Optional domain filter (btc/conflict/geopolitical) for auto-selection
 
         Returns:
-            Loaded model instance
+            Tuple of (loaded model instance, actual version string)
 
         Raises:
             ModelLoadError: If model loading fails and no fallback available
@@ -280,23 +280,28 @@ class MLflowModelClient:
                 logger.info(f"Auto-selecting best model from MLflow registry for domain: {domain}")
                 model_name, version, run_id = await self.find_best_model(domain=domain)
             else:
-                # Select model name based on domain
+                # Select model name and version based on domain
                 if domain == "btc":
                     if not self.config.btc_model_name:
                         raise ModelLoadError("MLFLOW_BTC_MODEL_NAME must be set when auto_select is disabled")
                     model_name = self.config.btc_model_name
+                    # Use domain-specific version if available, otherwise fall back to general version
+                    logger.info(f"DEBUG mlflow_client.load_model: domain=btc, model_version={model_version}, btc_model_version={self.config.btc_model_version}, model_version_config={self.config.model_version}")
+                    version = model_version or self.config.btc_model_version or self.config.model_version
                 elif domain == "conflict":
                     if not self.config.conflict_model_name:
                         raise ModelLoadError("MLFLOW_CONFLICT_MODEL_NAME must be set when auto_select is disabled")
                     model_name = self.config.conflict_model_name
+                    # Use domain-specific version if available, otherwise fall back to general version
+                    logger.info(f"DEBUG mlflow_client.load_model: domain=conflict, model_version={model_version}, conflict_model_version={self.config.conflict_model_version}, model_version_config={self.config.model_version}")
+                    version = model_version or self.config.conflict_model_version or self.config.model_version
                 else:
                     raise ModelLoadError(f"Unknown domain: {domain}. Must be 'btc' or 'conflict'")
 
-                logger.info(f"Using configured model for domain {domain}: {model_name}")
+                logger.info(f"Using configured model for domain {domain}: {model_name} version {version}")
 
-                version = model_version or self.config.model_version
                 if not version:
-                    raise ModelLoadError("MLFLOW_MODEL_VERSION must be set when auto_select is disabled")
+                    raise ModelLoadError("Model version must be set (MLFLOW_MODEL_VERSION or domain-specific version) when auto_select is disabled")
 
                 # Get run_id for this model version
                 self._ensure_connected()
@@ -311,7 +316,7 @@ class MLflowModelClient:
             # Check if model is already loaded
             if cache_key in self._loaded_models:
                 logger.debug(f"Using cached model: {cache_key}")
-                return self._loaded_models[cache_key]
+                return self._loaded_models[cache_key], version
 
             with trace_span(
                 "mlflow_load_model",
@@ -346,7 +351,7 @@ class MLflowModelClient:
                     extra={"trace_id": trace_id, "model_version": version, "run_id": run_id},
                 )
 
-                return model
+                return model, version
 
         except TimeoutError:
             logger.error(

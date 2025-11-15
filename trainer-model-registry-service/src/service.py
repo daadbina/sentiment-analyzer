@@ -423,23 +423,32 @@ class TrainerService:
                     logger.error(f"Insufficient BTC training data: {len(y_btc)} samples (minimum {min_samples_required} required)")
                     raise TrainerError(f"Insufficient BTC training data: {len(y_btc)} samples")
 
-                # Preprocess data using BTC-specific preprocessor
-                logger.info("Preprocessing BTC data with BTC preprocessor")
-                X_btc_processed, _ = self.btc_preprocessor.preprocess(X_btc_final, y_btc, fit=True)
-                logger.info(f"BTC data after preprocessing: {X_btc_processed.shape}")
-                logger.info(f"BTC preprocessor feature names: {self.btc_preprocessor.get_feature_names()}")
-                logger.info(f"BTC preprocessor constant features removed: {self.btc_preprocessor.get_constant_features()}")
-
-                # Split data (no stratification for regression)
-                logger.info("Splitting BTC data")
+                # FIXED: Split data FIRST (before preprocessing) to prevent data leakage
+                logger.info("Splitting BTC data (BEFORE preprocessing)")
                 from sklearn.model_selection import train_test_split
                 X_train, X_temp, y_train, y_temp = train_test_split(
-                    X_btc_processed, y_btc, test_size=0.3, random_state=config.training.random_seed
+                    X_btc_final, y_btc, test_size=0.3, random_state=config.training.random_seed
                 )
                 X_val, X_test, y_val, y_test = train_test_split(
                     X_temp, y_temp, test_size=0.67, random_state=config.training.random_seed
                 )
                 logger.info(f"BTC Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
+
+                # FIXED: Preprocess training data and FIT preprocessor on training data ONLY
+                logger.info("Preprocessing BTC TRAINING data (fitting preprocessor)")
+                X_train, _ = self.btc_preprocessor.preprocess(X_train, y_train, fit=True)
+                logger.info(f"BTC training data after preprocessing: {X_train.shape}")
+                logger.info(f"BTC preprocessor feature names: {self.btc_preprocessor.get_feature_names()}")
+                logger.info(f"BTC preprocessor constant features removed: {self.btc_preprocessor.get_constant_features()}")
+
+                # FIXED: Transform validation and test sets using fitted preprocessor (fit=False)
+                logger.info("Preprocessing BTC VALIDATION data (transforming only)")
+                X_val, _ = self.btc_preprocessor.preprocess(X_val, y_val, fit=False)
+                logger.info(f"BTC validation data after preprocessing: {X_val.shape}")
+
+                logger.info("Preprocessing BTC TEST data (transforming only)")
+                X_test, _ = self.btc_preprocessor.preprocess(X_test, y_test, fit=False)
+                logger.info(f"BTC test data after preprocessing: {X_test.shape}")
 
                 # Train BTC regression models
                 logger.info("Training BTC regression models")
@@ -506,7 +515,7 @@ class TrainerService:
                     "best_rmse": best_btc_metrics.get('rmse'),
                     "evaluation_results": btc_eval_results,
                     "num_samples": len(y_btc),
-                    "num_features": X_btc_processed.shape[1],
+                    "num_features": X_train.shape[1],  # Fixed: use X_train instead of X_btc_processed
                 }
 
             except Exception as e:
@@ -575,22 +584,31 @@ class TrainerService:
                 if min_class_samples < min_class_required:
                     logger.warning(f"Low sample count for minority class: {min_class_samples} samples")
 
-                # Preprocess data using conflict-specific preprocessor
-                logger.info("Preprocessing conflict data with conflict preprocessor")
-                X_conflict_processed, _ = self.conflict_preprocessor.preprocess(X_conflict_final, y_conflict, fit=True)
-                logger.info(f"Conflict data after preprocessing: {X_conflict_processed.shape}")
-                logger.info(f"Conflict preprocessor feature names: {self.conflict_preprocessor.get_feature_names()}")
-                logger.info(f"Conflict preprocessor constant features removed: {self.conflict_preprocessor.get_constant_features()}")
-
-                # Split data with stratification
-                logger.info("Splitting conflict data with stratification")
+                # FIXED: Split data FIRST (before preprocessing) to prevent data leakage
+                logger.info("Splitting conflict data with stratification (BEFORE preprocessing)")
                 (X_train, y_train), (X_val, y_val), (X_test, y_test) = (
-                    self.splitter.split_stratified(X_conflict_processed, y_conflict)
+                    self.splitter.split_stratified(X_conflict_final, y_conflict)
                 )
                 logger.info(f"Conflict Train: {X_train.shape}, Val: {X_val.shape}, Test: {X_test.shape}")
                 logger.info(f"Train labels: {y_train.value_counts().to_dict()}")
                 logger.info(f"Val labels: {y_val.value_counts().to_dict()}")
                 logger.info(f"Test labels: {y_test.value_counts().to_dict()}")
+
+                # FIXED: Preprocess training data and FIT preprocessor on training data ONLY
+                logger.info("Preprocessing conflict TRAINING data (fitting preprocessor)")
+                X_train, _ = self.conflict_preprocessor.preprocess(X_train, y_train, fit=True)
+                logger.info(f"Conflict training data after preprocessing: {X_train.shape}")
+                logger.info(f"Conflict preprocessor feature names: {self.conflict_preprocessor.get_feature_names()}")
+                logger.info(f"Conflict preprocessor constant features removed: {self.conflict_preprocessor.get_constant_features()}")
+
+                # FIXED: Transform validation and test sets using fitted preprocessor (fit=False)
+                logger.info("Preprocessing conflict VALIDATION data (transforming only)")
+                X_val, _ = self.conflict_preprocessor.preprocess(X_val, y_val, fit=False)
+                logger.info(f"Conflict validation data after preprocessing: {X_val.shape}")
+
+                logger.info("Preprocessing conflict TEST data (transforming only)")
+                X_test, _ = self.conflict_preprocessor.preprocess(X_test, y_test, fit=False)
+                logger.info(f"Conflict test data after preprocessing: {X_test.shape}")
 
                 # Train conflict classification models
                 logger.info("Training conflict classification models")
@@ -634,7 +652,7 @@ class TrainerService:
                     "best_f1": best_conflict_metrics.get('f1'),
                     "evaluation_results": conflict_eval_results,
                     "num_samples": len(y_conflict),
-                    "num_features": X_conflict_processed.shape[1],
+                    "num_features": X_train.shape[1],  # Fixed: use X_train instead of X_conflict_processed
                 }
 
             except Exception as e:

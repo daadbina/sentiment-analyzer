@@ -2,6 +2,7 @@
 
 import logging
 from typing import List, Tuple, Optional
+import gc
 
 import torch
 from transformers import pipeline
@@ -72,10 +73,20 @@ class HuggingFaceNERStrategy(NERStrategy):
             )
 
     def unload_model(self) -> None:
-        """Unload the HuggingFace model."""
+        """Unload the HuggingFace model and free memory."""
         if self.nlp is not None:
+            # Delete the pipeline
+            del self.nlp
             self.nlp = None
-            logger.info(f"Unloaded HuggingFace model: {self.model_name}")
+
+            # Force garbage collection
+            gc.collect()
+
+            # Clear CUDA cache if using GPU
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            logger.info(f"Unloaded HuggingFace model and freed memory: {self.model_name}")
 
     def is_available(self) -> bool:
         """Check if model is loaded."""

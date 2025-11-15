@@ -198,6 +198,9 @@ class ClusterRegistry:
             import json
             metadata_json = json.dumps(cluster_meta)
 
+            # Extract countries from cluster (added by country enrichment)
+            countries = cluster_converted.get("countries", [])
+
             # Check if group_id already exists in semantic_groups
             existing = session.execute(
                 text("SELECT group_id FROM semantic_groups WHERE group_id = :group_id"),
@@ -208,44 +211,50 @@ class ClusterRegistry:
                 # Update existing record
                 session.execute(text("""
                     UPDATE semantic_groups
-                    SET article_count = :article_count,
+                    SET article_ids = :article_ids,
+                        article_count = :article_count,
                         similarity_avg = :similarity_avg,
                         topic_label = :topic_label,
                         centroid_vector = :centroid_vector,
                         cluster_metadata = :cluster_metadata,
+                        countries = :countries,
                         updated_at = :updated_at
                     WHERE group_id = :group_id
                 """), {
                     "group_id": group_id,
+                    "article_ids": article_ids,
                     "article_count": article_count,
                     "similarity_avg": similarity_avg,
                     "topic_label": topic_label[:255] if topic_label else "",
                     "centroid_vector": centroid_json,
                     "cluster_metadata": metadata_json,
+                    "countries": countries,
                     "updated_at": datetime.utcnow()
                 })
-                logger.debug(f"Updated existing semantic group: {group_id}")
+                logger.debug(f"Updated existing semantic group: {group_id} with {len(article_ids)} articles and {len(countries)} countries")
             else:
                 # Insert new record
                 session.execute(text("""
                     INSERT INTO semantic_groups (
-                        group_id, article_count, similarity_avg, topic_label,
-                        centroid_vector, cluster_metadata, created_at, updated_at
+                        group_id, article_ids, article_count, similarity_avg, topic_label,
+                        centroid_vector, cluster_metadata, countries, created_at, updated_at
                     ) VALUES (
-                        :group_id, :article_count, :similarity_avg, :topic_label,
-                        :centroid_vector, :cluster_metadata, :created_at, :updated_at
+                        :group_id, :article_ids, :article_count, :similarity_avg, :topic_label,
+                        :centroid_vector, :cluster_metadata, :countries, :created_at, :updated_at
                     )
                 """), {
                     "group_id": group_id,
+                    "article_ids": article_ids,
                     "article_count": article_count,
                     "similarity_avg": similarity_avg,
                     "topic_label": topic_label[:255] if topic_label else "",
                     "centroid_vector": centroid_json,
                     "cluster_metadata": metadata_json,
+                    "countries": countries,
                     "created_at": created_at,
                     "updated_at": created_at
                 })
-                logger.debug(f"Inserted new semantic group: {group_id}")
+                logger.debug(f"Inserted new semantic group: {group_id} with {len(article_ids)} articles and {len(countries)} countries")
 
             session.commit()
 

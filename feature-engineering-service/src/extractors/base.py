@@ -60,7 +60,7 @@ class FeatureExtractor(ABC):
         self.features_extracted: List[str] = []
 
     @abstractmethod
-    def extract(
+    async def extract(
         self,
         group: SemanticGroup,
         articles: List[Article],

@@ -2,6 +2,7 @@
 
 import sys
 import logging
+import asyncio
 from prometheus_client import start_http_server
 from .service import FeatureEngineeringService
 from .config import config
@@ -19,24 +20,28 @@ def setup_logging():
     )
 
 
+async def async_main():
+    """Async main entry point."""
+    # Setup logging
+    setup_logging()
+
+    logger.info("Feature Engineering Service starting")
+    logger.info(f"Configuration: {config}")
+
+    # Start Prometheus metrics server
+    metrics_port = config.monitoring.prometheus_port
+    start_http_server(metrics_port)
+    logger.info(f"Prometheus metrics server started on port {metrics_port}")
+
+    # Create and start service
+    service = FeatureEngineeringService()
+    await service.start()
+
+
 def main():
     """Main entry point."""
     try:
-        # Setup logging
-        setup_logging()
-
-        logger.info("Feature Engineering Service starting")
-        logger.info(f"Configuration: {config}")
-
-        # Start Prometheus metrics server
-        metrics_port = config.monitoring.prometheus_port
-        start_http_server(metrics_port)
-        logger.info(f"Prometheus metrics server started on port {metrics_port}")
-
-        # Create and start service
-        service = FeatureEngineeringService()
-        service.start()
-
+        asyncio.run(async_main())
     except KeyboardInterrupt:
         logger.info("Service interrupted by user")
         sys.exit(0)

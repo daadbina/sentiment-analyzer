@@ -22,7 +22,7 @@ class EntityExtractor(FeatureExtractor):
             "entity_concentration",
         ]
 
-    def extract(
+    async def extract(
         self,
         group: SemanticGroup,
         articles: List[Article],

@@ -218,30 +218,32 @@ class PostgresClient:
 
     async def store_prediction(
         self,
-        group_id: str,
-        domain: str,
-        prediction_probability: float,
-        prediction_confidence: float,
-        model_version: str,
-        features: dict[str, Any],
+        prediction: dict[str, Any],
         trace_id: str | None = None,
     ) -> None:
         """
-        Store prediction in database.
+        Store prediction in database with full metadata (same as Kafka).
 
         Args:
-            group_id: Semantic group ID
-            domain: Domain of prediction (btc/conflict/geopolitical)
-            prediction_probability: Predicted probability
-            prediction_confidence: Confidence score
-            model_version: Model version used
-            features: Feature values used for prediction
+            prediction: Full prediction dictionary containing:
+                - group_id: str
+                - domain: str
+                - prediction_probability: float
+                - prediction_confidence: float
+                - model_version: str
+                - predicted_at: str (ISO format)
+                - features: dict
+                - trace_id: str (optional)
+                - Plus any domain-specific fields (prediction_label, countries, etc.)
             trace_id: Optional trace ID for distributed tracing
 
         Raises:
             PostgresError: If storage fails
         """
         pool = self._ensure_connected()
+
+        group_id = prediction["group_id"]
+        domain = prediction["domain"]
 
         with trace_span(
             "postgres_store_prediction",
@@ -257,9 +259,10 @@ class PostgresClient:
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 """
 
-                # Convert features dict to JSON string for JSONB column
+                # Store the FULL prediction dictionary as JSONB in features column
+                # This includes all metadata like prediction_label, countries, etc.
                 import json
-                features_json = json.dumps(features) if isinstance(features, dict) else features
+                full_prediction_json = json.dumps(prediction)
 
                 async with pool.acquire() as conn:
                     # Add timeout to prevent hanging
@@ -267,14 +270,14 @@ class PostgresClient:
                     await asyncio.wait_for(
                         conn.execute(
                             query,
-                            group_id,
-                            domain,
-                            prediction_probability,
-                            prediction_confidence,
-                            model_version,
-                            features_json,
+                            prediction["group_id"],
+                            prediction["domain"],
+                            prediction["prediction_probability"],
+                            prediction["prediction_confidence"],
+                            prediction["model_version"],
+                            full_prediction_json,  # Store FULL prediction as JSONB
                             datetime.utcnow(),
-                            trace_id,
+                            prediction.get("trace_id", trace_id),
                         ),
                         timeout=5.0,  # 5 second timeout
                     )
@@ -285,7 +288,7 @@ class PostgresClient:
 
                 logger.debug(
                     f"Stored prediction: group_id={group_id}, domain={domain}, "
-                    f"model_version={model_version}, duration_seconds={duration_seconds:.4f}",
+                    f"model_version={prediction['model_version']}, duration_seconds={duration_seconds:.4f}",
                     extra={"trace_id": trace_id, "group_id": group_id},
                 )
 

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.8] - 2025-11-14
+
+### Changed - Filter Training Data to Reconciled Groups Only
+- **Parquet Loader Enhancement** (src/data/parquet_loader.py)
+  - Updated `prepare_conflict_training_data()` to filter WHERE has_conflict IS NOT NULL
+  - Only trains on reconciled groups (groups with GDELT labels)
+  - Excludes unreconciled groups (has_conflict=None) from training
+
+**Rationale:**
+- has_conflict = None → unreconciled (no GDELT labels, cannot train)
+- has_conflict = True → conflict event (label=1)
+- has_conflict = False → non-conflict event (label=0)
+
+**Benefits:**
+- Prevents training on unlabeled data
+- Ensures model only learns from ground truth GDELT labels
+- Avoids data leakage from unreconciled groups
+
+**Logging:**
+- Logs total groups, reconciled groups, and unreconciled groups
+- Raises error if no reconciled groups found
+- Logs conflict label distribution and conflict rate
+
+---
+
 ## [1.2.7] - 2025-11-13
 
 ### Changed - Feast SDK Client with Offline Store and Delta Lake Fallback ✅ ARCHITECTURE CHANGE

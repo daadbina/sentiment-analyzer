@@ -24,8 +24,8 @@ class ParquetDataLoader:
             root_path: Root path to the project
         """
         self.root_path = Path(root_path)
-        self.btc_features_path = self.root_path / "feast" / "offline_store" / "btc_features.parquet"
-        self.semantic_groups_path = self.root_path / "feast" / "offline_store" / "semantic_groups.parquet"
+        self.btc_features_path = self.root_path / "development" / "btc_price_prediction_dataset.parquet"
+        self.semantic_groups_path = self.root_path / "development" / "conflict_prediction_training_data.parquet"
         logger.info(f"ParquetDataLoader initialized with root: {self.root_path}")
 
     def load_btc_features(self) -> pd.DataFrame:
@@ -118,6 +118,11 @@ class ParquetDataLoader:
         Uses sentiment and entity features to predict conflict probability.
         Uses the has_conflict column from the parquet file as the label.
 
+        IMPORTANT: Only uses reconciled groups (has_conflict IS NOT NULL).
+        - has_conflict = True → conflict event (label=1)
+        - has_conflict = False → non-conflict event (label=0)
+        - has_conflict = None → unreconciled (EXCLUDED from training)
+
         Returns:
             Tuple of (features DataFrame, target Series)
         """
@@ -127,6 +132,30 @@ class ParquetDataLoader:
             # Use the has_conflict column directly from the parquet file
             if 'has_conflict' not in df.columns:
                 raise ValueError("has_conflict column not found in semantic_groups.parquet")
+
+            # FILTER: Only use reconciled groups (has_conflict IS NOT NULL)
+            df_reconciled = df[df['has_conflict'].notna()].copy()
+
+            logger.info(f"Total groups: {len(df)}")
+            logger.info(f"Reconciled groups (has_conflict IS NOT NULL): {len(df_reconciled)}")
+            logger.info(f"Unreconciled groups (has_conflict IS NULL): {len(df) - len(df_reconciled)}")
+
+            if len(df_reconciled) == 0:
+                raise ValueError("No reconciled groups found for training. All groups have has_conflict=None.")
+
+            # Extract number of countries from the countries column
+            if 'countries' in df_reconciled.columns:
+                # Countries are stored as comma-separated strings (e.g., "BG,CA,CN")
+                # Count the number of countries by splitting on comma
+                df_reconciled['num_countries'] = df_reconciled['countries'].apply(
+                    lambda x: len(str(x).split(',')) if pd.notna(x) and str(x).strip() else 0
+                )
+                logger.info(f"Added num_countries feature: min={df_reconciled['num_countries'].min()}, "
+                           f"max={df_reconciled['num_countries'].max()}, "
+                           f"mean={df_reconciled['num_countries'].mean():.2f}")
+            else:
+                logger.warning("'countries' column not found in data, setting num_countries=0")
+                df_reconciled['num_countries'] = 0
 
             # Define feature columns (semantic features)
             feature_cols = [
@@ -138,17 +167,18 @@ class ParquetDataLoader:
                 'entity_prominence', 'entity_concentration', 'avg_word_count',
                 'avg_title_length', 'language_diversity', 'domain_diversity',
                 'centroid_magnitude', 'intra_cluster_similarity_mean',
-                'intra_cluster_similarity_std', 'embedding_drift_score'
+                'intra_cluster_similarity_std', 'embedding_drift_score',
+                'num_countries'  # Number of countries involved (derived from countries column)
             ]
 
             # Convert boolean has_conflict to int (0/1) for model training
-            df['conflict_label'] = df['has_conflict'].astype(int)
+            df_reconciled['conflict_label'] = df_reconciled['has_conflict'].astype(int)
 
-            logger.info(f"Conflict labels: {df['conflict_label'].value_counts().to_dict()}")
-            logger.info(f"Conflict rate: {df['conflict_label'].mean():.2%}")
+            logger.info(f"Conflict labels: {df_reconciled['conflict_label'].value_counts().to_dict()}")
+            logger.info(f"Conflict rate: {df_reconciled['conflict_label'].mean():.2%}")
 
-            X = df[feature_cols].copy()
-            y = df['conflict_label'].copy()
+            X = df_reconciled[feature_cols].copy()
+            y = df_reconciled['conflict_label'].copy()
 
             # Check for nulls
             null_counts = X.isnull().sum()

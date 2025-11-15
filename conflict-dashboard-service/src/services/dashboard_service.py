@@ -122,9 +122,62 @@ class DashboardService:
             
         # Fetch from database
         stats = await self.postgres.get_dashboard_stats()
-        
+
         # Cache the results
         await self.cache.set(cache_key, stats)
-        
+
         return DashboardStats(**stats)
+
+    async def get_network_graph_data(
+        self,
+        min_confidence: float = 0.5,
+        hours: int = 168,
+    ) -> Dict[str, Any]:
+        """Get network graph data with caching."""
+        cache_key = f"network_graph:{min_confidence}:{hours}"
+
+        # Try cache first
+        cached = await self.cache.get(cache_key)
+        if cached:
+            logger.info("network_graph_from_cache")
+            return cached
+
+        # Fetch from database
+        graph_data = await self.postgres.get_network_graph_data(
+            min_confidence=min_confidence,
+            hours=hours,
+        )
+
+        # Cache the results
+        await self.cache.set(cache_key, graph_data)
+
+        return graph_data
+
+    async def get_btc_predictions(
+        self,
+        limit: int = 10,
+        min_confidence: float = 0.0,
+        hours: int = 24,
+    ) -> List[Dict[str, Any]]:
+        """Get Bitcoin predictions with caching."""
+        cache_key = f"btc_predictions:{limit}:{min_confidence}:{hours}"
+
+        # Try cache first
+        cached = await self.cache.get(cache_key)
+        if cached:
+            logger.info("btc_predictions_from_cache", count=len(cached))
+            return cached
+
+        # Fetch from database
+        predictions = await self.postgres.get_btc_predictions(
+            limit=limit,
+            min_confidence=min_confidence,
+            hours=hours,
+        )
+
+        # Cache the results
+        await self.cache.set(cache_key, predictions)
+
+        logger.info("get_btc_predictions_success", count=len(predictions))
+        return predictions
 

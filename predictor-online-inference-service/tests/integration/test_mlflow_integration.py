@@ -19,9 +19,16 @@ def mlflow_config():
     """Create MLflow configuration for testing."""
     return MLflowConfig(
         tracking_uri="http://localhost:5000",
-        model_name="sentiment_predictor",
+        btc_model_name="btc_prediction_xgboost_regressor",
+        btc_model_version="14",
+        conflict_model_name="conflict_prediction_random_forest",
+        conflict_model_version="18",
+        model_version="1",
         model_stage="Production",
-        timeout=30,
+        fallback_model_version=None,
+        model_load_timeout_seconds=30,
+        auto_select_best_model=False,
+        model_selection_metric="f1",
     )
 
 
@@ -79,12 +86,13 @@ class TestModelLoading:
         """Test loading model by stage."""
         mock_client = MagicMock()
         mock_model = MagicMock()
-        
+
         mlflow_client._client = mock_client
-        
+
         with patch("mlflow.pyfunc.load_model", return_value=mock_model):
-            model = await mlflow_client.load_model(stage="Production")
+            model, version = await mlflow_client.load_model(stage="Production")
             assert model is not None
+            assert version is not None
 
     @pytest.mark.asyncio
     @pytest.mark.integration
@@ -92,12 +100,13 @@ class TestModelLoading:
         """Test loading model by version."""
         mock_client = MagicMock()
         mock_model = MagicMock()
-        
+
         mlflow_client._client = mock_client
-        
+
         with patch("mlflow.pyfunc.load_model", return_value=mock_model):
-            model = await mlflow_client.load_model(version="5")
+            model, version = await mlflow_client.load_model(model_version="5")
             assert model is not None
+            assert version == "5"
 
     @pytest.mark.asyncio
     @pytest.mark.integration
@@ -218,11 +227,11 @@ class TestEndToEndWorkflow:
             await mlflow_client.connect()
         
         with patch("mlflow.pyfunc.load_model", return_value=mock_model):
-            model = await mlflow_client.load_model(stage="Production")
-        
+            model, version = await mlflow_client.load_model(stage="Production")
+
         # Make prediction
         predictions = model.predict([[0.5, 0.8], [0.6, 0.7]])
-        
+
         assert len(predictions) == 2
         assert predictions[0] == 0.75
         assert predictions[1] == 0.85
@@ -239,17 +248,17 @@ class TestEndToEndWorkflow:
         mock_model_v1.predict.return_value = [0.70]
         
         with patch("mlflow.pyfunc.load_model", return_value=mock_model_v1):
-            model_v1 = await mlflow_client.load_model(version="1")
+            model_v1, version_v1 = await mlflow_client.load_model(model_version="1")
             pred_v1 = model_v1.predict([[0.5, 0.8]])
-        
+
         # Load version 2
         mock_model_v2 = MagicMock()
         mock_model_v2.predict.return_value = [0.85]
-        
+
         with patch("mlflow.pyfunc.load_model", return_value=mock_model_v2):
-            model_v2 = await mlflow_client.load_model(version="2")
+            model_v2, version_v2 = await mlflow_client.load_model(model_version="2")
             pred_v2 = model_v2.predict([[0.5, 0.8]])
-        
+
         # Verify different predictions
         assert pred_v1[0] != pred_v2[0]
 

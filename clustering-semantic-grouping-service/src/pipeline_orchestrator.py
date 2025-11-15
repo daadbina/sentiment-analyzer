@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import asyncio
 from datetime import datetime
 from typing import List, Dict, Tuple
 import numpy as np
@@ -67,6 +68,18 @@ class PipelineOrchestrator:
 
     def __init__(self):
         """Initialize pipeline orchestrator."""
+        # Entity cache: article_id -> entities list
+        # NOW BACKED BY REDIS instead of in-memory dictionary
+        # Stores entity messages consumed from entities_extracted topic
+        # Used for country enrichment without re-consuming messages
+        # Redis cache survives service restarts and has 7-day TTL
+        self.entity_cache = {}  # Kept for backward compatibility during migration
+
+        # Background task control
+        self._entities_consumer_task = None
+        self._running = False
+        self._poll_count = 0
+
         self.time_window_manager = TimeWindowManager(
             window_size_hours=config.clustering.time_window_hours,
             overlap_hours=config.clustering.overlap_hours,
@@ -196,6 +209,10 @@ class PipelineOrchestrator:
             if not self.circuit_breaker.can_execute():
                 logger.error("Circuit breaker is open, skipping job")
                 return 0, 0, 0
+
+            # Step 0: Consume and cache entity messages
+            # This ensures entities are available for country enrichment later
+            self._consume_and_cache_entities()
 
             # Step 1: Calculate time window
             window_start, window_end = self.time_window_manager.calculate_window(
@@ -397,31 +414,26 @@ class PipelineOrchestrator:
             logger.error(f"Clustering job failed: {e}", exc_info=True)
             raise
 
-    def _enrich_clusters_with_countries(self, clusters: List[Dict]) -> List[Dict]:
+    def _consume_and_cache_entities(self) -> int:
         """
-        Enrich clusters with countries extracted from NER entities.
+        Consume entity messages from entities_extracted topic and cache them in Redis.
 
-        Args:
-            clusters: List of cluster dictionaries
+        This method is called at the start of each clustering job to ensure
+        entity messages are available for country enrichment later.
+
+        Now uses Redis for persistent caching (survives restarts, 7-day TTL).
 
         Returns:
-            List of enriched cluster dictionaries with updated countries field
+            Number of entity messages consumed and cached
         """
         try:
-            # Build article_id to cluster mapping
-            article_to_cluster = {}
-            for cluster in clusters:
-                for article_id in cluster.get("article_ids", []):
-                    article_to_cluster[article_id] = cluster
+            logger.info("Consuming and caching entity messages to Redis...")
 
-            # Consume ALL available entity messages in a loop
-            # Keep consuming until we get 3 consecutive empty batches
-            all_entity_messages = []
+            # Consume ALL available entity messages in batches
+            total_consumed = 0
             consecutive_empty_batches = 0
             max_empty_batches = 3
             batch_count = 0
-
-            logger.info("Starting to consume entity messages for country enrichment...")
 
             while consecutive_empty_batches < max_empty_batches:
                 batch_count += 1
@@ -431,11 +443,26 @@ class PipelineOrchestrator:
                 )
 
                 if entity_messages:
-                    all_entity_messages.extend(entity_messages)
+                    # Prepare batch for Redis
+                    entities_batch = {}
+                    for entity_msg in entity_messages:
+                        article_id = entity_msg.get("article_id")
+                        entities = entity_msg.get("entities", [])
+
+                        if article_id:
+                            entities_batch[article_id] = entities
+                            # Also update in-memory cache for backward compatibility
+                            self.entity_cache[article_id] = entities
+                            total_consumed += 1
+
+                    # Batch write to Redis for efficiency
+                    if entities_batch:
+                        self.cache.set_entities_batch(entities_batch)
+
                     consecutive_empty_batches = 0
                     logger.info(
-                        f"Consumed batch {batch_count}: {len(entity_messages)} entity messages "
-                        f"(total: {len(all_entity_messages)})"
+                        f"Cached batch {batch_count}: {len(entity_messages)} entity messages to Redis "
+                        f"(total consumed: {total_consumed})"
                     )
                 else:
                     consecutive_empty_batches += 1
@@ -444,33 +471,68 @@ class PipelineOrchestrator:
                         f"(batch {batch_count})"
                     )
 
-            if not all_entity_messages:
-                logger.info("No entity messages available for enrichment")
+            # Commit offsets after caching
+            if total_consumed > 0:
+                self.entities_consumer.commit_offsets()
+
+            # Get Redis cache size for logging
+            redis_cache_size = self.cache.get_entity_cache_size()
+            logger.info(
+                f"Entity caching complete: cached {total_consumed} new messages, "
+                f"Redis cache size: {redis_cache_size} articles"
+            )
+
+            return total_consumed
+
+        except Exception as e:
+            logger.error(f"Error consuming and caching entities: {e}", exc_info=True)
+            return 0
+
+    def _enrich_clusters_with_countries(self, clusters: List[Dict]) -> List[Dict]:
+        """
+        Enrich clusters with countries extracted from NER entities.
+
+        Now uses Redis-backed entity cache instead of in-memory cache.
+        This ensures entities are available even after service restarts.
+
+        Args:
+            clusters: List of cluster dictionaries
+
+        Returns:
+            List of enriched cluster dictionaries with updated countries field
+        """
+        try:
+            # Check Redis cache size
+            redis_cache_size = self.cache.get_entity_cache_size()
+            if redis_cache_size == 0:
+                logger.info("Redis entity cache is empty, no entities available for enrichment")
                 return clusters
 
             logger.info(
-                f"Finished consuming entity messages: {len(all_entity_messages)} total messages "
-                f"from {batch_count} batches"
+                f"Using Redis entity cache for country enrichment: {redis_cache_size} cached articles"
             )
 
-            # Extract countries from entities and map to clusters
+            # Build article_id to cluster mapping
+            article_to_cluster = {}
+            for cluster in clusters:
+                for article_id in cluster.get("article_ids", []):
+                    article_to_cluster[article_id] = cluster
+
+            # Extract countries from cached entities and map to clusters
             enrichment_count = 0
             articles_with_countries = 0
+            cache_hits = 0
+            cache_misses = 0
 
-            for entity_msg in all_entity_messages:
-                article_id = entity_msg.get("article_id")
-                entities = entity_msg.get("entities", [])
+            for article_id, cluster in article_to_cluster.items():
+                # Look up entities from Redis cache
+                entities = self.cache.get_entity(article_id)
 
-                if not article_id or not entities:
+                if not entities:
+                    cache_misses += 1
                     continue
 
-                # Find cluster containing this article
-                cluster = article_to_cluster.get(article_id)
-                if not cluster:
-                    logger.debug(
-                        f"Article {article_id} not found in any cluster (may be from previous clustering run)"
-                    )
-                    continue
+                cache_hits += 1
 
                 # Extract countries from entities
                 entity_countries = self.country_extractor.extract_countries_from_entities(entities)
@@ -493,13 +555,10 @@ class PipelineOrchestrator:
                             f"existing={list(existing_countries)}, new={list(new_countries)}, merged={merged_countries}"
                         )
 
-            # Commit offsets
-            self.entities_consumer.commit_offsets()
-
             logger.info(
-                f"Country enrichment complete: "
-                f"processed {len(all_entity_messages)} entity messages, "
-                f"found {articles_with_countries} articles with countries, "
+                f"Country enrichment complete (Redis-backed): "
+                f"cache_hits={cache_hits}, cache_misses={cache_misses}, "
+                f"articles_with_countries={articles_with_countries}, "
                 f"enriched {enrichment_count} clusters out of {len(clusters)} total clusters"
             )
 
@@ -517,6 +576,119 @@ class PipelineOrchestrator:
             logger.error(f"Error enriching clusters with countries: {e}", exc_info=True)
             # Return original clusters if enrichment fails
             return clusters
+
+    async def start_entities_consumer_background(self):
+        """Start background task to continuously consume entity messages."""
+        if self._entities_consumer_task is not None:
+            logger.warning("Entities consumer background task already running")
+            return
+
+        self._running = True
+        self._entities_consumer_task = asyncio.create_task(self._entities_consumer_loop())
+        logger.info("Started background entities consumer task")
+
+    async def stop_entities_consumer_background(self):
+        """Stop background entities consumer task."""
+        if self._entities_consumer_task is None:
+            return
+
+        self._running = False
+
+        # Wait for task to complete with timeout
+        try:
+            await asyncio.wait_for(self._entities_consumer_task, timeout=5.0)
+        except asyncio.TimeoutError:
+            logger.warning("Entities consumer task did not stop gracefully, cancelling")
+            self._entities_consumer_task.cancel()
+            try:
+                await self._entities_consumer_task
+            except asyncio.CancelledError:
+                pass
+
+        self._entities_consumer_task = None
+        logger.info("Stopped background entities consumer task")
+
+    async def _entities_consumer_loop(self):
+        """Background loop to continuously consume and cache entity messages."""
+        logger.info("Entities consumer loop started")
+
+        try:
+            while self._running:
+                try:
+                    # Consume entities in small batches with short timeout
+                    # This runs in a non-blocking way
+                    await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        self._consume_entities_batch_sync,
+                        50,  # batch_size
+                        1000  # timeout_ms
+                    )
+
+                    # Small sleep to yield control to event loop
+                    await asyncio.sleep(0.1)
+
+                except Exception as e:
+                    logger.error(f"Error in entities consumer loop: {e}", exc_info=True)
+                    await asyncio.sleep(1.0)  # Back off on error
+
+        except asyncio.CancelledError:
+            logger.info("Entities consumer loop cancelled")
+        except Exception as e:
+            logger.error(f"Fatal error in entities consumer loop: {e}", exc_info=True)
+        finally:
+            logger.info("Entities consumer loop stopped")
+
+    def _consume_entities_batch_sync(self, batch_size: int, timeout_ms: int):
+        """
+        Synchronous method to consume a batch of entity messages and cache to Redis.
+
+        This is called from the async loop via run_in_executor.
+        Logs every 100 polls to avoid repetitive logging.
+        """
+        self._poll_count += 1
+
+        # Log every 100 polls to show activity without being repetitive
+        if self._poll_count % 100 == 0:
+            redis_cache_size = self.cache.get_entity_cache_size()
+            logger.info(
+                f"Entities consumer poll #{self._poll_count}: "
+                f"Redis cache_size={redis_cache_size}"
+            )
+
+        try:
+            entity_messages = self.entities_consumer.consume_batch(
+                batch_size=batch_size,
+                timeout_ms=timeout_ms
+            )
+
+            if entity_messages:
+                # Prepare batch for Redis
+                entities_batch = {}
+                for entity_msg in entity_messages:
+                    article_id = entity_msg.get("article_id")
+                    entities = entity_msg.get("entities", [])
+
+                    if article_id:
+                        entities_batch[article_id] = entities
+                        # Also update in-memory cache for backward compatibility
+                        self.entity_cache[article_id] = entities
+
+                # Batch write to Redis for efficiency
+                if entities_batch:
+                    self.cache.set_entities_batch(entities_batch)
+
+                # Log when messages are actually consumed and cached
+                redis_cache_size = self.cache.get_entity_cache_size()
+                logger.info(
+                    f"Cached {len(entity_messages)} entity messages to Redis, "
+                    f"total Redis cache size: {redis_cache_size} articles"
+                )
+
+                # Commit offsets
+                self.entities_consumer.commit_offsets()
+
+        except Exception as e:
+            logger.error(f"Error consuming entities batch: {e}", exc_info=True)
 
     def close(self):
         """Close all connections."""

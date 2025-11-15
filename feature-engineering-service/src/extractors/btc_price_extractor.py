@@ -2,7 +2,7 @@
 
 import logging
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import numpy as np
 from .base import FeatureExtractor, SemanticGroup, Article, Actor
 
@@ -52,7 +52,7 @@ class BtcPriceExtractor(FeatureExtractor):
             f"features={self.features_extracted}, temporal_window_hours={self.temporal_window_hours}"
         )
 
-    def extract(
+    async def extract(
         self,
         group: SemanticGroup,
         articles: List[Article],
@@ -84,7 +84,7 @@ class BtcPriceExtractor(FeatureExtractor):
 
         # Query BTC data from btc_truth table with temporal alignment
         logger.info(f"BTC extractor: Fetching BTC data for timestamp: {created_at.isoformat()}")
-        btc_data = self._fetch_btc_data(created_at)
+        btc_data = await self._fetch_btc_data(created_at)
         logger.info(f"BTC extractor: Fetched BTC data: {btc_data}")
 
         if not btc_data:
@@ -95,7 +95,7 @@ class BtcPriceExtractor(FeatureExtractor):
 
         # Fetch historical data for technical indicators
         logger.info(f"Fetching historical BTC data for timestamp: {btc_data['timestamp']}")
-        historical_data = self._fetch_historical_btc_data(btc_data["timestamp"])
+        historical_data = await self._fetch_historical_btc_data(btc_data["timestamp"])
         logger.info(f"Historical BTC data fetched: {len(historical_data)} records")
 
         # Calculate technical indicators
@@ -148,10 +148,17 @@ class BtcPriceExtractor(FeatureExtractor):
             if isinstance(created_at_str, str):
                 # Handle both with and without timezone
                 created_at_str = created_at_str.replace("Z", "+00:00")
-                return datetime.fromisoformat(created_at_str)
+                dt = datetime.fromisoformat(created_at_str)
+                # Ensure timezone-aware
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt
             elif isinstance(created_at_str, datetime):
+                # Ensure timezone-aware
+                if created_at_str.tzinfo is None:
+                    created_at_str = created_at_str.replace(tzinfo=timezone.utc)
                 return created_at_str
-            
+
             return None
             
         except Exception as e:
@@ -161,12 +168,12 @@ class BtcPriceExtractor(FeatureExtractor):
             )
             return None
 
-    def _fetch_btc_data(self, timestamp: datetime) -> Optional[Dict[str, Any]]:
+    async def _fetch_btc_data(self, timestamp: datetime) -> Optional[Dict[str, Any]]:
         """Fetch BTC data from btc_truth table with temporal alignment.
-        
+
         Args:
             timestamp: Group creation timestamp
-            
+
         Returns:
             Dictionary of BTC data or None
         """
@@ -174,9 +181,15 @@ class BtcPriceExtractor(FeatureExtractor):
             # Calculate time window (±1 hour)
             start_time = timestamp - timedelta(hours=self.temporal_window_hours)
             end_time = timestamp + timedelta(hours=self.temporal_window_hours)
-            
+
+            # Convert to timezone-naive for PostgreSQL compatibility
+            # (btc_truth.timestamp column is TIMESTAMP without timezone)
+            start_time_naive = start_time.replace(tzinfo=None) if start_time.tzinfo else start_time
+            end_time_naive = end_time.replace(tzinfo=None) if end_time.tzinfo else end_time
+            timestamp_naive = timestamp.replace(tzinfo=None) if timestamp.tzinfo else timestamp
+
             # Query btc_truth table
-            # Note: Using %s placeholders for psycopg2 compatibility
+            # Note: Using $1, $2, etc. placeholders for asyncpg
             # Filter for Bitcoin only (close > 10000) to exclude ETH and other coins
             query = """
                 SELECT
@@ -187,20 +200,20 @@ class BtcPriceExtractor(FeatureExtractor):
                     timestamp,
                     close
                 FROM btc_truth
-                WHERE timestamp >= %s AND timestamp <= %s
+                WHERE timestamp >= $1 AND timestamp <= $2
                 AND close > 10000
-                ORDER BY ABS(EXTRACT(EPOCH FROM (timestamp - %s)))
+                ORDER BY ABS(EXTRACT(EPOCH FROM (timestamp - $3)))
                 LIMIT 1
             """
-            
-            # Execute query synchronously (postgres_client should support sync queries)
-            result = self.postgres_client.execute_query_sync(
+
+            # Execute query asynchronously
+            result = await self.postgres_client.execute_query(
                 query,
-                start_time,
-                end_time,
-                timestamp
+                start_time_naive,
+                end_time_naive,
+                timestamp_naive
             )
-            
+
             if result and len(result) > 0:
                 row = result[0]
                 btc_data = {
@@ -211,16 +224,16 @@ class BtcPriceExtractor(FeatureExtractor):
                     "timestamp": row["timestamp"],
                     "close": row["close"]
                 }
-                
+
                 logger.debug(
                     f"BTC data fetched from database: query_timestamp={timestamp.isoformat()}, "
                     f"btc_timestamp={row['timestamp'].isoformat() if row['timestamp'] else None}, btc_close={row['close']}"
                 )
-                
+
                 return btc_data
-            
+
             return None
-            
+
         except Exception as e:
             logger.error(
                 f"Failed to fetch BTC data: error_type={type(e).__name__}, timestamp={timestamp.isoformat()}, error={str(e)}"
@@ -249,7 +262,7 @@ class BtcPriceExtractor(FeatureExtractor):
             "btc_bb_width": 0.0,
         }
 
-    def _fetch_historical_btc_data(self, timestamp: datetime) -> List[Dict[str, Any]]:
+    async def _fetch_historical_btc_data(self, timestamp: datetime) -> List[Dict[str, Any]]:
         """Fetch historical BTC data for technical indicator calculation.
 
         Args:
@@ -259,6 +272,10 @@ class BtcPriceExtractor(FeatureExtractor):
             List of historical BTC data points (OHLCV)
         """
         try:
+            # Convert to timezone-naive for PostgreSQL compatibility
+            # (btc_truth.timestamp column is TIMESTAMP without timezone)
+            timestamp_naive = timestamp.replace(tzinfo=None) if timestamp.tzinfo else timestamp
+
             # Fetch last N periods before timestamp
             # Filter for Bitcoin only (close > 10000) to exclude ETH and other coins
             query = """
@@ -270,15 +287,15 @@ class BtcPriceExtractor(FeatureExtractor):
                     close,
                     volume
                 FROM btc_truth
-                WHERE timestamp <= %s
+                WHERE timestamp <= $1
                 AND close > 10000
                 ORDER BY timestamp DESC
-                LIMIT %s
+                LIMIT $2
             """
 
-            result = self.postgres_client.execute_query_sync(
+            result = await self.postgres_client.execute_query(
                 query,
-                timestamp,
+                timestamp_naive,
                 self.lookback_periods
             )
 
@@ -530,7 +547,7 @@ class BtcPriceExtractor(FeatureExtractor):
 
         return width
 
-    def generate_historical_btc_features(self, limit: int = 1000) -> List[Dict[str, Any]]:
+    async def generate_historical_btc_features(self, limit: int = 1000) -> List[Dict[str, Any]]:
         """Generate BTC features for historical data.
 
         Fetches the last N BTC records from btc_truth table and calculates
@@ -559,10 +576,10 @@ class BtcPriceExtractor(FeatureExtractor):
             FROM btc_truth
             WHERE close > 10000  -- Filter for Bitcoin only
             ORDER BY timestamp DESC
-            LIMIT %s
+            LIMIT $1
         """
 
-        result = self.postgres_client.execute_query_sync(query, limit)
+        result = await self.postgres_client.execute_query(query, limit)
 
         if not result:
             logger.warning("No BTC records found in database")

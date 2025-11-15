@@ -9,10 +9,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 - Kubernetes and Helm deployment
-- OpenTelemetry tracing integration
-- Advanced outlier handling
-- Incremental clustering for online updates
-- Cluster stability scoring
+
+## [0.8.0] - 2025-11-14
+
+### Added - Countries and Article IDs in Database
+- **Database Schema Enhancement** (schemas/migrations/003_add_countries_column.sql)
+  - Added `countries TEXT[]` column to `semantic_groups` table
+  - Added GIN index on countries column for efficient country-based queries
+  - Enables downstream services to access countries without re-querying entities
+
+- **Cluster Registry Enhancement** (src/cluster_registry.py)
+  - Updated `register_cluster()` to write `article_ids` to semantic_groups table
+  - Updated `register_cluster()` to write `countries` to semantic_groups table
+  - Both INSERT and UPDATE queries now include article_ids and countries
+  - Improved logging to show article and country counts
+
+### Fixed - Missing Data in Database
+- **Root Cause**: semantic_groups table was missing article_ids and countries columns
+  - This caused feature-engineering re-processing to fail (0 articles, no countries)
+  - Groups were filtered out during re-processing because they had no countries
+
+- **Solution**: Now clustering service writes complete group data to database
+  - article_ids: List of article UUIDs in the group
+  - countries: List of ISO country codes extracted from NER entities
+  - Enables feature-engineering to re-process groups from database with full context
+
+## [0.3.0] - 2025-11-14
+
+### Changed - Redis-Backed Entity Cache (BREAKING CHANGE)
+- **Migrated entity cache from in-memory to Redis** - Modified src/cache_manager.py, src/pipeline_orchestrator.py, src/main.py:
+  - **CacheManager**: Added `set_entity()`, `get_entity()`, `set_entities_batch()`, `get_entity_cache_size()` methods
+  - **PipelineOrchestrator**: Modified `_consume_and_cache_entities()` to write to Redis instead of in-memory dict
+  - **PipelineOrchestrator**: Modified `_enrich_clusters_with_countries()` to read from Redis cache
+  - **PipelineOrchestrator**: Modified `_consume_entities_batch_sync()` background consumer to write to Redis
+  - **Main API**: Added `POST /admin/migrate-entity-cache` endpoint for migration
+  - **Main API**: Added `GET /admin/entity-cache-status` endpoint for monitoring
+  - Entity cache now survives service restarts (7-day TTL)
+  - Eliminates issue where clusters lose country information after restart
+  - Batch operations for efficiency (pipeline writes)
+  - In-memory cache kept for backward compatibility during migration
+
+### Migration Required
+- **IMPORTANT**: Call `POST /admin/migrate-entity-cache` endpoint BEFORE restarting service
+- This exports current in-memory cache to Redis
+- See `MIGRATION_REDIS_ENTITY_CACHE.md` for detailed migration steps
+- After migration, entity cache will persist across restarts
+
+### Benefits
+- ✅ Entity cache survives service restarts
+- ✅ Automatic cleanup with 7-day TTL
+- ✅ No memory growth issues
+- ✅ Clusters retain country information across restarts
+- ✅ Better observability with cache status endpoint
+
+## [0.2.2] - 2025-11-14
+
+### Added - Continuous Entity Consumption
+- **Implemented background entity consumer** - Modified src/pipeline_orchestrator.py and src/main.py:
+  - Added `start_entities_consumer_background()` and `stop_entities_consumer_background()` methods
+  - Created `_entities_consumer_loop()` async background task for continuous entity consumption
+  - Added `_consume_entities_batch_sync()` method to consume and cache entities in batches
+  - Background task runs continuously, consuming entities from `entities_extracted` topic
+  - Entities are cached in `entity_cache` dictionary for country enrichment
+  - Logs show "Cached X entity messages, total cache size: Y articles" when messages are consumed
+  - Logs every 100 polls to show activity without being repetitive
+  - Task starts during service startup and stops during shutdown
+  - Eliminates the need to consume entities only during clustering jobs
+  - Ensures entities are always available for country enrichment
+
+## [0.2.1] - 2025-11-14
+
+### Fixed - Entity Caching for Country Enrichment
+- **Implemented entity caching** - Modified src/pipeline_orchestrator.py:
+  - Added `entity_cache` dictionary to store article_id → entities mapping
+  - Created `_consume_and_cache_entities()` method to consume and cache entity messages at job start
+  - Modified `_enrich_clusters_with_countries()` to use cached entities instead of consuming on-demand
+  - Eliminates timing issue where clustering tried to consume entities after they were already consumed
+  - Entities are now cached at the start of each clustering job (Step 0)
+  - Country enrichment uses the cache for fast lookup (no Kafka consumption during enrichment)
+
+### Root Cause
+- The clustering service consumed entity messages in real-time, but then tried to use them for country enrichment AFTER they had already been consumed
+- The `entities_extracted` topic had 354 messages, but clustering consumer offset was already at 354
+- When `_enrich_clusters_with_countries()` tried to consume messages, no new messages were available
+- Result: Empty countries in semantic groups
+
+### Solution
+- **Consume and cache entities at job start** (before clustering)
+- **Use cache during enrichment** (after clustering)
+- No timing issues - entities are always available when needed
+- Cache persists for the duration of the clustering job
+- Logs cache hits/misses for debugging
+
+### Benefits
+- ✅ Countries will be populated in semantic groups
+- ✅ No race conditions or timing issues
+- ✅ Faster enrichment (in-memory cache lookup vs Kafka consumption)
+- ✅ Better logging (cache hits/misses tracked)
 
 ## [0.2.0] - 2025-11-12
 

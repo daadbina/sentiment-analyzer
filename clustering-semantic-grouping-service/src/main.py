@@ -12,11 +12,13 @@ from .config import config
 from .scheduler import ClusteringScheduler
 from .migrations import MigrationRunner
 from .semantic_group_initializer import initialize_semantic_groups
+from .pipeline_orchestrator import PipelineOrchestrator
 
 logger = logging.getLogger(__name__)
 
-# Initialize scheduler
+# Initialize scheduler and orchestrator
 scheduler = ClusteringScheduler()
+orchestrator = scheduler.orchestrator  # Get reference to orchestrator
 
 # Prometheus metrics
 clustering_jobs_total = Counter(
@@ -59,6 +61,10 @@ async def lifespan(app: FastAPI):
         # )
         logger.info("Semantic groups initialization completed")
 
+        # Start background entities consumer
+        await orchestrator.start_entities_consumer_background()
+        logger.info("Background entities consumer started")
+
         # Start scheduler
         scheduler.start()
         logger.info("Service started successfully")
@@ -71,6 +77,10 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down clustering service")
     try:
+        # Stop background entities consumer
+        await orchestrator.stop_entities_consumer_background()
+        logger.info("Background entities consumer stopped")
+
         scheduler.stop()
         logger.info("Service shut down successfully")
     except Exception as e:
@@ -171,6 +181,68 @@ async def get_clustering_status():
     except Exception as e:
         logger.error(f"Error getting job status: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error getting job status")
+
+
+@app.post("/admin/migrate-entity-cache")
+async def migrate_entity_cache_to_redis():
+    """
+    MIGRATION ENDPOINT: Export current in-memory entity cache to Redis.
+
+    This endpoint should be called ONCE before upgrading to Redis-backed entity cache.
+    It will copy all entities from the in-memory cache to Redis.
+
+    After calling this endpoint and verifying success, you can restart the service
+    with the new Redis-backed implementation.
+    """
+    try:
+        # Get current in-memory cache
+        entity_cache = orchestrator.entity_cache
+
+        if not entity_cache:
+            return {
+                "status": "success",
+                "message": "Entity cache is empty, nothing to migrate",
+                "migrated_count": 0,
+            }
+
+        # Migrate to Redis using batch operation
+        migrated_count = orchestrator.cache.set_entities_batch(entity_cache)
+
+        logger.info(f"Migrated {migrated_count} entities from in-memory cache to Redis")
+
+        return {
+            "status": "success",
+            "message": f"Successfully migrated {migrated_count} entities to Redis",
+            "migrated_count": migrated_count,
+            "cache_size_before": len(entity_cache),
+            "redis_cache_size_after": orchestrator.cache.get_entity_cache_size(),
+        }
+
+    except Exception as e:
+        logger.error(f"Error migrating entity cache: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@app.get("/admin/entity-cache-status")
+async def get_entity_cache_status():
+    """
+    Get entity cache status (both in-memory and Redis).
+
+    Useful for verifying migration and monitoring cache health.
+    """
+    try:
+        in_memory_size = len(orchestrator.entity_cache)
+        redis_size = orchestrator.cache.get_entity_cache_size()
+
+        return {
+            "in_memory_cache_size": in_memory_size,
+            "redis_cache_size": redis_size,
+            "cache_type": "in-memory" if hasattr(orchestrator, '_use_memory_cache') else "redis",
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting entity cache status: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
 if __name__ == "__main__":

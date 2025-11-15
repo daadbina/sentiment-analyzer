@@ -1,13 +1,13 @@
 # Feature Engineering Service - TODO List
 
-**Service**: feature-engineering-service  
-**Version**: 0.2.4  
-**Last Updated**: 2025-11-09  
-**Status**: In Development - BTC Price Feature Integration
+**Service**: feature-engineering-service
+**Version**: 0.2.5
+**Last Updated**: 2025-11-14
+**Status**: In Development - Async Migration Complete
 
 ---
 
-## Current Sprint: BTC Price Feature Integration
+## Current Sprint: Async Migration and Connection Pool Implementation ✅ COMPLETE
 
 ### Task 1: BTC Price Feature Extractor ✅ COMPLETE
 - [x] Create src/extractors/btc_price_extractor.py

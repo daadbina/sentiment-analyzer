@@ -74,3 +74,6 @@ cache/
 *.parquet
 *.delta
 
+
+# Other
+.augment

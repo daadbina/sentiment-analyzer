@@ -12,6 +12,7 @@ from ulid import ULID
 from src.config import config
 from src.clients.api_clients import ACLEDFetcher, GDELTFetcher, BinanceFetcher, CCXTFetcher
 from src.clients.kafka_producer import KafkaProducerClient
+from src.clients.reconciliation_producer import ReconciliationProducer
 from src.clients.kafka_consumer import SemanticGroupConsumer
 from src.storage.delta_lake_writer import DeltaLakeWriter
 from src.storage.postgres_writer import PostgreSQLWriter
@@ -22,6 +23,7 @@ from src.validation.label_validator import LabelValidator, LicenseChecker, Fresh
 from src.validation.deduplication import DeduplicationEngine
 from src.validation.drift_detector import DriftDetector
 from src.utils.trace import get_logger, TimedOperation
+from src.utils.schema_registry import register_all_schemas
 from src.metrics import get_metrics
 from src.exceptions import LabelError
 from src.health import HealthChecker
@@ -52,6 +54,7 @@ class LabelerService:
         self.cached_gdelt_labels: List[Dict[str, Any]] = []
 
         self.kafka_producer = KafkaProducerClient()
+        self.reconciliation_producer = ReconciliationProducer()  # Producer for reconciliation_completed events
         self.kafka_consumer = SemanticGroupConsumer()  # Add Kafka consumer for semantic groups
         self.delta_lake_writer = DeltaLakeWriter()
         self.postgres_writer = PostgreSQLWriter()
@@ -91,8 +94,19 @@ class LabelerService:
         )
 
         try:
+            # Register all schemas BEFORE connecting producers
+            # This ensures schemas have consistent IDs across restarts
+            logger.info(
+                "Registering schemas with Schema Registry",
+                operation="start"
+            )
+            await register_all_schemas()
+
             # Connect to Kafka producer
             await self.kafka_producer.connect()
+
+            # Connect to reconciliation producer
+            await self.reconciliation_producer.connect()
 
             # Connect to Kafka consumer for semantic groups
             await self.kafka_consumer.connect()
@@ -200,6 +214,7 @@ class LabelerService:
                 )
 
             await self.kafka_producer.disconnect()
+            await self.reconciliation_producer.disconnect()
             await self.kafka_consumer.disconnect()
             await self.postgres_writer.disconnect()
 
@@ -500,6 +515,9 @@ class LabelerService:
                             source=source,
                             batch_id=batch_id
                         )
+
+                        # Publish reconciliation_completed events to Kafka
+                        await self._publish_reconciliation_events(reconciled, batch_id)
 
                     # Log to audit trail
                     if op.duration_ms is not None:
@@ -808,6 +826,97 @@ class LabelerService:
             "Background BTC fetcher stopped",
             operation="_fetch_btc_background"
         )
+
+    async def _publish_reconciliation_events(self, reconciled_results: List[Dict[str, Any]], batch_id: str):
+        """Publish reconciliation_completed events for each reconciled group.
+
+        Args:
+            reconciled_results: List of reconciliation results from reconciler
+            batch_id: Batch identifier for tracing
+        """
+        try:
+            # Group results by group_id
+            groups_dict = {}
+            for result in reconciled_results:
+                group_id = result.get("group_id")
+                if not group_id:
+                    continue
+
+                if group_id not in groups_dict:
+                    groups_dict[group_id] = {
+                        "labels": [],
+                        "conflict_count": 0,
+                        "non_conflict_count": 0,
+                        "countries": set()
+                    }
+
+                label = result.get("label", {})
+                groups_dict[group_id]["labels"].append(label)
+
+                # Count conflict vs non-conflict events
+                label_conflict = label.get("label_conflict")
+                if label_conflict == 1:
+                    groups_dict[group_id]["conflict_count"] += 1
+                elif label_conflict == 0:
+                    groups_dict[group_id]["non_conflict_count"] += 1
+
+                # Collect countries
+                countries = label.get("countries", [])
+                if countries:
+                    groups_dict[group_id]["countries"].update(countries)
+
+            # Publish event for each group
+            for group_id, group_data in groups_dict.items():
+                label_count = len(group_data["labels"])
+                conflict_count = group_data["conflict_count"]
+                non_conflict_count = group_data["non_conflict_count"]
+                countries = list(group_data["countries"])
+
+                # Determine has_conflict
+                if conflict_count > 0:
+                    has_conflict = True
+                elif non_conflict_count > 0:
+                    has_conflict = False
+                else:
+                    has_conflict = None  # No GDELT metadata
+
+                # Publish event
+                await self.reconciliation_producer.publish_reconciliation_completed(
+                    group_id=group_id,
+                    label_count=label_count,
+                    has_conflict=has_conflict,
+                    conflict_event_count=conflict_count,
+                    non_conflict_event_count=non_conflict_count,
+                    countries=countries,
+                    batch_id=batch_id,
+                    trace_id=None
+                )
+
+                logger.info(
+                    f"Published reconciliation_completed event",
+                    operation="_publish_reconciliation_events",
+                    group_id=group_id,
+                    has_conflict=has_conflict,
+                    label_count=label_count,
+                    conflict_count=conflict_count,
+                    non_conflict_count=non_conflict_count
+                )
+
+            logger.info(
+                f"Published {len(groups_dict)} reconciliation_completed events",
+                operation="_publish_reconciliation_events",
+                batch_id=batch_id,
+                group_count=len(groups_dict)
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Failed to publish reconciliation events: {str(e)}",
+                operation="_publish_reconciliation_events",
+                batch_id=batch_id,
+                error_type=type(e).__name__
+            )
+            # Don't raise - reconciliation was successful, event publishing is best-effort
 
     async def consume_semantic_groups(self):
         """Fetch semantic groups from PostgreSQL (legacy method for compatibility).

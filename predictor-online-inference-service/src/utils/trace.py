@@ -130,11 +130,17 @@ def trace_span(
         try:
             # Add trace_id attribute if provided
             if trace_id:
-                span.set_attribute("trace_id", trace_id)
+                span.set_attribute("trace_id", str(trace_id))
 
             # Add custom attributes
             if attributes:
                 for key, value in attributes.items():
+                    # Convert None to empty string to avoid OpenTelemetry warnings
+                    if value is None:
+                        value = ""
+                    # Ensure value is a valid type for OpenTelemetry
+                    elif not isinstance(value, (bool, str, bytes, int, float)):
+                        value = str(value)
                     span.set_attribute(key, value)
 
             yield span

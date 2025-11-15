@@ -230,3 +230,147 @@ class CacheManager:
             logger.error(f"Error clearing cache: {e}", exc_info=True)
             return 0
 
+    # Entity cache methods
+    def set_entity(
+        self,
+        article_id: str,
+        entities: List[Dict],
+        ttl: Optional[int] = None,
+    ) -> bool:
+        """
+        Store entities for an article in cache.
+
+        Args:
+            article_id: Article ID
+            entities: List of entity dictionaries
+            ttl: Optional TTL override (default: 7 days = 604800 seconds)
+
+        Returns:
+            True if successful
+        """
+        try:
+            key = f"entity:{article_id}"
+            value = json.dumps(entities)
+            # Default to 7 days TTL for entities
+            ttl = ttl or 604800
+
+            self.redis_client.setex(key, ttl, value)
+            logger.debug(f"Cached entities for article: {article_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error caching entities for {article_id}: {e}", exc_info=True)
+            return False
+
+    def get_entity(self, article_id: str) -> Optional[List[Dict]]:
+        """
+        Retrieve entities for an article from cache.
+
+        Args:
+            article_id: Article ID
+
+        Returns:
+            List of entity dictionaries or None
+        """
+        try:
+            key = f"entity:{article_id}"
+            value = self.redis_client.get(key)
+
+            if value:
+                return json.loads(value)
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error retrieving entities for {article_id}: {e}", exc_info=True)
+            return None
+
+    def set_entities_batch(
+        self,
+        entities_dict: Dict[str, List[Dict]],
+        ttl: Optional[int] = None,
+    ) -> int:
+        """
+        Store multiple entities in batch using pipeline for efficiency.
+
+        Args:
+            entities_dict: Dictionary mapping article_id to entities list
+            ttl: Optional TTL override (default: 7 days = 604800 seconds)
+
+        Returns:
+            Number of entities successfully cached
+        """
+        try:
+            # Default to 7 days TTL for entities
+            ttl = ttl or 604800
+
+            # Use pipeline for batch operations
+            pipe = self.redis_client.pipeline()
+
+            for article_id, entities in entities_dict.items():
+                key = f"entity:{article_id}"
+                value = json.dumps(entities)
+                pipe.setex(key, ttl, value)
+
+            # Execute all commands at once
+            pipe.execute()
+
+            logger.info(f"Batch cached {len(entities_dict)} entities")
+            return len(entities_dict)
+
+        except Exception as e:
+            logger.error(f"Error batch caching entities: {e}", exc_info=True)
+            return 0
+
+    def get_entity_cache_size(self) -> int:
+        """
+        Get the number of cached entities.
+
+        Returns:
+            Number of entity keys in cache
+        """
+        try:
+            keys = self.redis_client.keys("entity:*")
+            return len(keys)
+        except Exception as e:
+            logger.error(f"Error getting entity cache size: {e}", exc_info=True)
+            return 0
+
+    def set(self, key: str, value: str, ttl: Optional[int] = None) -> bool:
+        """
+        Generic set method for any key-value pair.
+
+        Args:
+            key: Cache key
+            value: Value to store
+            ttl: Optional TTL in seconds
+
+        Returns:
+            True if successful
+        """
+        try:
+            if ttl:
+                self.redis_client.setex(key, ttl, value)
+            else:
+                self.redis_client.set(key, value)
+            return True
+        except Exception as e:
+            logger.error(f"Error setting key {key}: {e}", exc_info=True)
+            return False
+
+    def get(self, key: str) -> Optional[str]:
+        """
+        Generic get method for any key.
+
+        Args:
+            key: Cache key
+
+        Returns:
+            Value or None
+        """
+        try:
+            return self.redis_client.get(key)
+        except Exception as e:
+            logger.error(f"Error getting key {key}: {e}", exc_info=True)
+            return None
+

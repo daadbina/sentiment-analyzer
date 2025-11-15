@@ -58,13 +58,14 @@ class TestMLflowConfig:
     def test_from_env_with_defaults(self, monkeypatch):
         """Test loading MLflow config from environment with defaults."""
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
-        
+
         config = MLflowConfig.from_env()
-        
+
         assert config.tracking_uri == "http://localhost:5000"
-        assert config.model_name == "predictor_model"
-        assert config.model_version == "v1.0.0"
-        assert config.model_stage == "Production"
+        assert config.btc_model_name is None  # Not set, should be None
+        assert config.conflict_model_name is None  # Not set, should be None
+        assert config.model_version is None  # Not set, should be None
+        assert config.model_stage is None  # Not set, should be None
 
 
 class TestInferenceConfig:

@@ -22,7 +22,7 @@ class SourceExtractor(FeatureExtractor):
             "source_diversity_score",
         ]
 
-    def extract(
+    async def extract(
         self,
         group: SemanticGroup,
         articles: List[Article],

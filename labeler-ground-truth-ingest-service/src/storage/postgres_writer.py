@@ -117,6 +117,10 @@ class PostgreSQLWriter:
                     temporal_confidence FLOAT,
                     semantic_confidence FLOAT,
                     countries TEXT[],
+                    event_code INT,
+                    event_type VARCHAR(100),
+                    goldstein_scale FLOAT,
+                    label_conflict INT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -129,6 +133,19 @@ class PostgreSQLWriter:
                 """)
             except Exception:
                 # Column might already exist - safe to ignore
+                pass
+
+            # Add GDELT metadata columns if they don't exist (migration)
+            try:
+                await conn.execute("""
+                    ALTER TABLE reconciliation_log
+                    ADD COLUMN IF NOT EXISTS event_code INT,
+                    ADD COLUMN IF NOT EXISTS event_type VARCHAR(100),
+                    ADD COLUMN IF NOT EXISTS goldstein_scale FLOAT,
+                    ADD COLUMN IF NOT EXISTS label_conflict INT
+                """)
+            except Exception:
+                # Columns might already exist - safe to ignore
                 pass
 
             # Create license_audit table
@@ -453,6 +470,13 @@ class PostgreSQLWriter:
             for result in results:
                 label = result.get("label", {})
                 countries = label.get("countries", [])
+
+                # Extract GDELT metadata if available
+                event_code = label.get("event_code")
+                event_type = label.get("event_type")
+                goldstein_scale = label.get("goldstein_scale")
+                label_conflict = label.get("label_conflict")
+
                 batch_data.append((
                     batch_id,
                     result.get("group_id"),
@@ -461,7 +485,11 @@ class PostgreSQLWriter:
                     "reconciled",
                     result.get("temporal_confidence"),
                     result.get("semantic_confidence"),
-                    countries if countries else []
+                    countries if countries else [],
+                    event_code,
+                    event_type,
+                    goldstein_scale,
+                    label_conflict
                 ))
 
             async with self.pool.acquire() as conn:
@@ -470,8 +498,9 @@ class PostgreSQLWriter:
                     await conn.executemany("""
                         INSERT INTO reconciliation_log (
                             batch_id, group_id, label_id, confidence, status,
-                            temporal_confidence, semantic_confidence, countries
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                            temporal_confidence, semantic_confidence, countries,
+                            event_code, event_type, goldstein_scale, label_conflict
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                     """, batch_data)
 
             duration_seconds = time.time() - start_time

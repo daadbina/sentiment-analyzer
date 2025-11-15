@@ -238,7 +238,7 @@ def create_ab_testing_strategy(
     enable_ab_testing: bool,
     default_version: str,
     variants: list[dict] | None = None,
-) -> ABTestingStrategy:
+) -> ABTestingStrategy | None:
     """
     Create A/B testing strategy from configuration.
 
@@ -249,7 +249,7 @@ def create_ab_testing_strategy(
             Each variant should have: version, traffic_percentage, description
 
     Returns:
-        ABTestingStrategy instance
+        ABTestingStrategy instance or None if A/B testing is disabled
 
     Example:
         strategy = create_ab_testing_strategy(
@@ -262,8 +262,8 @@ def create_ab_testing_strategy(
         )
     """
     if not enable_ab_testing or not variants or len(variants) == 1:
-        # No A/B testing, use single version
-        return NoABTestingStrategy(default_version)
+        # No A/B testing, return None
+        return None
 
     # Parse variants
     model_variants = []

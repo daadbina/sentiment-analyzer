@@ -11,36 +11,52 @@ class TestTemporalMatcher:
     """Test temporal matcher."""
 
     def test_temporal_match_within_threshold(self):
-        """Test temporal match within threshold."""
+        """Test temporal match within threshold.
+
+        R8: Groups must be created at least 24 hours AFTER the event.
+        """
         matcher = TemporalMatcher(threshold_hours=48)
 
+        # Event happened now, group created 25 hours later (should match)
         label_time = datetime.utcnow().isoformat()
-        group_time = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+        group_time = (datetime.utcnow() + timedelta(hours=25)).isoformat()
 
         matched, confidence = matcher.match(label_time, group_time)
         assert matched
         assert 0.0 < confidence <= 1.0
 
     def test_temporal_match_outside_threshold(self):
-        """Test temporal match outside threshold."""
+        """Test temporal match outside threshold.
+
+        R8: Groups must be created at least 24 hours AFTER the event.
+        Group created before or too soon after event should not match.
+        """
         matcher = TemporalMatcher(threshold_hours=48)
 
+        # Event happened now, group created 10 hours later (too soon, should not match)
         label_time = datetime.utcnow().isoformat()
-        group_time = (datetime.utcnow() - timedelta(hours=72)).isoformat()
+        group_time = (datetime.utcnow() + timedelta(hours=10)).isoformat()
 
         matched, confidence = matcher.match(label_time, group_time)
         assert not matched
         assert confidence == 0.0
 
     def test_temporal_match_exact_time(self):
-        """Test temporal match at exact time."""
+        """Test temporal match at exact 24 hour threshold.
+
+        R8: Groups created exactly 24 hours after event should match with high confidence.
+        """
         matcher = TemporalMatcher(threshold_hours=48)
 
-        time_str = datetime.utcnow().isoformat()
+        # Use same base time to avoid floating point precision issues
+        base_time = datetime.utcnow()
+        label_time = base_time.isoformat()
+        # Group created exactly 24 hours after event
+        group_time = (base_time + timedelta(hours=24)).isoformat()
 
-        matched, confidence = matcher.match(time_str, time_str)
+        matched, confidence = matcher.match(label_time, group_time)
         assert matched
-        assert confidence == 1.0
+        assert confidence >= 0.99  # Allow for tiny floating point differences
 
 
 class TestSemanticMatcher:
@@ -85,12 +101,18 @@ class TestLabelReconciler:
 
     @pytest.mark.asyncio
     async def test_reconcile_label_with_matching_group(self):
-        """Test reconcile label with matching group."""
+        """Test reconcile label with matching group.
+
+        R8: Group must be created at least 24 hours after the event.
+        """
         reconciler = LabelReconciler()
 
+        # Event happened now, group created 25 hours later
+        event_time = datetime.utcnow()
         label = {
             "event_id": "123",
             "description": "conflict in Syria",
+            "event_timestamp": event_time.isoformat(),
             "fetched_at": datetime.utcnow().isoformat(),
             "confidence": 0.85
         }
@@ -99,7 +121,7 @@ class TestLabelReconciler:
             {
                 "group_id": "group_1",
                 "topic_label": "conflict in Syria",
-                "created_at": (datetime.utcnow() - timedelta(hours=24)).isoformat()
+                "created_at": (event_time + timedelta(hours=25)).isoformat()
             }
         ]
 
@@ -110,12 +132,18 @@ class TestLabelReconciler:
 
     @pytest.mark.asyncio
     async def test_reconcile_label_no_matching_group(self):
-        """Test reconcile label with no matching group."""
+        """Test reconcile label with no matching group.
+
+        Group created too soon after event should not match.
+        """
         reconciler = LabelReconciler()
 
+        # Event happened now, group created only 10 hours later (too soon)
+        event_time = datetime.utcnow()
         label = {
             "event_id": "123",
             "description": "conflict in Syria",
+            "event_timestamp": event_time.isoformat(),
             "fetched_at": datetime.utcnow().isoformat(),
             "confidence": 0.85
         }
@@ -124,7 +152,7 @@ class TestLabelReconciler:
             {
                 "group_id": "group_1",
                 "topic_label": "weather in France",
-                "created_at": (datetime.utcnow() - timedelta(hours=72)).isoformat()
+                "created_at": (event_time + timedelta(hours=10)).isoformat()
             }
         ]
 
@@ -133,19 +161,25 @@ class TestLabelReconciler:
 
     @pytest.mark.asyncio
     async def test_reconcile_batch(self):
-        """Test reconcile batch of labels."""
+        """Test reconcile batch of labels.
+
+        R8: Groups must be created at least 24 hours after events.
+        """
         reconciler = LabelReconciler()
 
+        event_time = datetime.utcnow()
         labels = [
             {
                 "event_id": "123",
                 "description": "conflict in Syria",
+                "event_timestamp": event_time.isoformat(),
                 "fetched_at": datetime.utcnow().isoformat(),
                 "confidence": 0.85
             },
             {
                 "event_id": "124",
                 "description": "conflict in Iraq",
+                "event_timestamp": event_time.isoformat(),
                 "fetched_at": datetime.utcnow().isoformat(),
                 "confidence": 0.80
             }
@@ -155,7 +189,7 @@ class TestLabelReconciler:
             {
                 "group_id": "group_1",
                 "topic_label": "conflict in Syria",
-                "created_at": (datetime.utcnow() - timedelta(hours=24)).isoformat()
+                "created_at": (event_time + timedelta(hours=25)).isoformat()
             }
         ]
 

@@ -18,6 +18,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.14.0] - 2025-11-14
+
+### Added - Event-Driven Reconciliation Updates
+- **Reconciliation Producer** (src/clients/reconciliation_producer.py)
+  - New Kafka producer for publishing `reconciliation_completed` events
+  - Publishes event after each group is reconciled with GDELT labels
+  - Includes has_conflict status, label counts, conflict/non-conflict counts, countries
+  - Enables downstream services to update features in real-time when reconciliation completes
+
+- **Avro Schema** (schemas/reconciliation_completed.avsc)
+  - Defined schema for reconciliation_completed events
+  - Fields: group_id, reconciled_at, label_count, has_conflict, conflict_event_count, non_conflict_event_count, countries, batch_id, trace_id, schema_version
+  - Registered in Schema Registry for type safety
+
+- **Service Integration** (src/service.py)
+  - Added `_publish_reconciliation_events()` method to publish events after reconciliation
+  - Groups reconciliation results by group_id and calculates has_conflict per group
+  - Publishes one event per reconciled group
+  - Called automatically after `write_reconciliation_log()` completes
+
+**Why This Matters:**
+- **Timing Issue Fixed**: Previously, feature-engineering processed groups before labeler reconciled them
+- **Real-Time Updates**: Feature-engineering now re-processes groups when reconciliation completes
+- **Event-Driven Architecture**: Clean separation of concerns, scalable design
+- **No Polling**: Eliminates need for periodic database polling
+
+**Data Flow:**
+1. Labeler reconciles semantic group with GDELT events
+2. Writes reconciliation_log to PostgreSQL
+3. Publishes reconciliation_completed event to Kafka
+4. Feature-engineering consumes event and re-processes group
+5. Updates parquet file with correct has_conflict value
+
+---
+
+## [0.13.0] - 2025-11-14
+
+### Added - GDELT Event Metadata Storage
+- **PostgreSQL Schema Enhancement** (src/storage/postgres_writer.py)
+  - Added `event_code INT` column to `reconciliation_log` table (GDELT CAMEO event codes)
+  - Added `event_type VARCHAR(100)` column (conflict classification: PROTEST, RIOT, VIOLENCE_AGAINST_CIVILIANS, etc.)
+  - Added `goldstein_scale FLOAT` column (sentiment score -10 to +10, negative = conflict)
+  - Added `label_conflict INT` column (binary indicator: 1 = war/conflict event, 0 = non-conflict)
+  - Added migration to add columns if they don't exist (backward compatible)
+  - Updated `write_reconciliation_log()` to extract and save GDELT metadata from labels
+  - Enables downstream services to detect actual war/conflict events vs. data quality issues
+
+**Why This Matters:**
+- Previously, `has_conflict` feature only detected multiple label matches (data quality)
+- Now, downstream services can detect actual war/conflict events using GDELT metadata
+- GDELT event codes 18-23 indicate conflict events (PROTEST → MILITARY_ACTION)
+- Goldstein scale < -2 indicates negative/conflict events
+- `label_conflict=1` is GDELT's own binary conflict classification
+
+**Data Flow:**
+1. GDELT fetcher extracts event metadata (event_code, event_type, goldstein_scale, label_conflict)
+2. Reconciler matches semantic groups to GDELT events
+3. PostgreSQL writer stores GDELT metadata in reconciliation_log
+4. Feature-engineering reads metadata to calculate conflict features
+
+---
+
 ## [0.12.0] - 2025-11-12
 
 ### Added - Reconciliation Countries Storage

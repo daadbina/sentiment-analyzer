@@ -43,11 +43,31 @@ class ParquetFeatureLoader:
         return self._btc_df
 
     def _load_semantic_groups(self) -> pd.DataFrame:
-        """Load semantic groups features from parquet file (cached)."""
+        """
+        Load semantic groups features from parquet file (cached).
+
+        IMPORTANT: Only loads unreconciled groups (has_conflict IS NULL).
+        - Reconciled groups (has_conflict = True/False) are excluded from prediction
+        - Only unreconciled groups need predictions
+        """
         if self._semantic_groups_df is None:
             logger.info(f"Loading semantic groups from {self.semantic_groups_path}")
-            self._semantic_groups_df = pd.read_parquet(self.semantic_groups_path)
-            logger.info(f"Loaded semantic groups: {self._semantic_groups_df.shape[0]} rows, {self._semantic_groups_df.shape[1]} columns")
+            df = pd.read_parquet(self.semantic_groups_path)
+
+            # FILTER: Only use unreconciled groups (has_conflict IS NULL)
+            if 'has_conflict' in df.columns:
+                df_unreconciled = df[df['has_conflict'].isna()].copy()
+
+                logger.info(f"Total groups: {len(df)}")
+                logger.info(f"Unreconciled groups (has_conflict IS NULL): {len(df_unreconciled)}")
+                logger.info(f"Reconciled groups (has_conflict IS NOT NULL): {len(df) - len(df_unreconciled)}")
+
+                self._semantic_groups_df = df_unreconciled
+            else:
+                logger.warning("has_conflict column not found - loading all groups")
+                self._semantic_groups_df = df
+
+            logger.info(f"Loaded semantic groups for prediction: {self._semantic_groups_df.shape[0]} rows, {self._semantic_groups_df.shape[1]} columns")
         return self._semantic_groups_df
 
     def get_btc_features(self, timestamp: Optional[pd.Timestamp] = None) -> Dict[str, Any]:

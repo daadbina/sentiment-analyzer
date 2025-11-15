@@ -21,7 +21,7 @@ class SentimentExtractor(FeatureExtractor):
             "sentiment_volatility",
         ]
 
-    def extract(
+    async def extract(
         self,
         group: SemanticGroup,
         articles: List[Article],

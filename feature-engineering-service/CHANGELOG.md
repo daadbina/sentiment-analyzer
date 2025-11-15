@@ -5,6 +5,294 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.12] - 2025-11-15
+
+### Fixed - PostgreSQL Timezone-Aware/Naive Datetime Mismatch
+- **Critical Bug Fix** (src/extractors/btc_price_extractor.py)
+  - Fixed "can't subtract offset-naive and offset-aware datetimes" PostgreSQL error
+  - Added timezone-naive conversion before passing datetime parameters to PostgreSQL queries
+  - Updated `_fetch_btc_data()` to convert start_time, end_time, and timestamp to timezone-naive
+  - Updated `_fetch_historical_btc_data()` to convert timestamp to timezone-naive
+  - Root cause: btc_truth.timestamp column is TIMESTAMP (without timezone), but Python code was passing timezone-aware datetime objects
+
+**Bug Description:**
+- BTC price extractor was failing with PostgreSQL error during query execution
+- Error: "invalid input for query argument $1: can't subtract offset-naive and offset-aware datetimes"
+- Occurred in ORDER BY clause: `ORDER BY ABS(EXTRACT(EPOCH FROM (timestamp - $3)))`
+- Python code passed timezone-aware datetime (with tzinfo=UTC) to query
+- PostgreSQL btc_truth.timestamp column is TIMESTAMP (timezone-naive)
+- PostgreSQL cannot perform arithmetic between timezone-aware and timezone-naive timestamps
+
+**Fix:**
+```python
+# Convert to timezone-naive for PostgreSQL compatibility
+start_time_naive = start_time.replace(tzinfo=None) if start_time.tzinfo else start_time
+end_time_naive = end_time.replace(tzinfo=None) if end_time.tzinfo else end_time
+timestamp_naive = timestamp.replace(tzinfo=None) if timestamp.tzinfo else timestamp
+```
+
+**Result:**
+- BTC price queries now execute successfully without timezone errors
+- All datetime parameters are converted to timezone-naive before PostgreSQL queries
+- Maintains UTC consistency (all datetimes are UTC, just without tzinfo for PostgreSQL)
+
+## [0.3.11] - 2025-11-14
+
+### Fixed - BTC Parquet Generation Never Retries After Initial Failure
+- **Critical Bug Fix** (src/service.py)
+  - Fixed `_check_and_generate_btc_features()` logic that prevented BTC parquet regeneration
+  - Changed condition from "return if None" to "generate if None"
+  - Now retries BTC feature generation every hour if initial generation failed
+
+**Bug Description:**
+- When database was empty on startup, BTC feature generation failed
+- `btc_features_last_generated` remained `None`
+- Hourly check incorrectly returned early if `None`, thinking "already generated on startup"
+- BTC parquet file was never created, even after BTC data was added to database
+
+**Fix:**
+```python
+if self.btc_features_last_generated is None:
+    # First generation failed or not yet attempted, try now
+    await self._generate_btc_features()
+    return
+```
+
+**Result:**
+- BTC features now regenerate every hour until successful
+- If database is empty initially, will retry when data becomes available
+- Logs "BTC features not yet generated successfully, attempting generation"
+
+## [0.3.10] - 2025-11-14
+
+### Fixed - Re-processing Groups from Database
+- **Database Query Enhancement** (src/service.py)
+  - Updated `_fetch_group_from_database()` to fetch `countries` column from semantic_groups table
+  - Updated `_fetch_group_from_database()` to handle None values for article_ids and countries
+  - Ensures re-processed groups have complete data (article_ids, countries)
+  - Fixes issue where re-processed groups had 0 articles and no countries
+
+### Fixed - BTC Price Extractor Timezone Issue
+- **Timezone Handling** (src/extractors/btc_price_extractor.py)
+  - Fixed "can't subtract offset-naive and offset-aware datetimes" error
+  - Updated `_get_group_timestamp()` to always return timezone-aware datetime objects
+  - Added timezone.utc to naive datetime objects
+  - Imported timezone from datetime module
+
+### Changed - Dependency on Clustering Service
+- **Requires**: clustering-service v0.8.0 or higher
+  - Clustering service now writes article_ids and countries to semantic_groups table
+  - Feature-engineering can now re-process groups from database with full context
+  - No longer need to query entities or Kafka for countries during re-processing
+
+## [0.3.9] - 2025-11-14
+
+### Added - Event-Driven Reconciliation Updates
+- **Reconciliation Consumer** (src/clients/reconciliation_consumer.py)
+  - New Kafka consumer for `reconciliation_completed` events from labeler service
+  - Consumes events when semantic groups are reconciled with GDELT labels
+  - Triggers re-processing of groups to update has_conflict values
+  - Runs as background task alongside main semantic_groups consumer
+
+- **Group Re-Processing** (src/service.py)
+  - Added `_consume_reconciliation_events()` background task
+  - Added `_reprocess_group()` method to re-extract features when reconciliation completes
+  - Added `_fetch_group_from_database()` to retrieve group data for re-processing
+  - Updates Delta Lake parquet files with correct has_conflict values
+  - Runs continuously in background, processing reconciliation events as they arrive
+
+**Why This Matters:**
+- **Timing Issue Fixed**: Previously, feature-engineering processed groups BEFORE labeler reconciled them
+  - Result: All groups had `has_conflict=None` (unreconciled)
+  - Even after labeler reconciled them, parquet files still showed `None`
+- **Real-Time Updates**: Now re-processes groups when reconciliation completes
+  - Parquet files get updated with correct `has_conflict=True/False` values
+  - Training data is always up-to-date with latest reconciliation status
+- **Event-Driven Architecture**: No polling, clean separation of concerns
+
+**Data Flow:**
+1. Feature-engineering processes semantic group → saves with `has_conflict=None` (unreconciled)
+2. Labeler reconciles group with GDELT → publishes reconciliation_completed event
+3. Feature-engineering consumes event → re-processes group
+4. Queries reconciliation_log → gets updated has_conflict value
+5. Updates Delta Lake parquet file with correct has_conflict
+
+**Background Tasks:**
+- Main task: Consumes semantic_groups topic (new groups)
+- Reconciliation task: Consumes reconciliation_completed topic (updates)
+- Both run concurrently, independent of each other
+
+---
+
+## [0.3.8] - 2025-11-14
+
+### Fixed - has_conflict Returns None for Unreconciled Groups
+- **Critical fix for ML training** - Modified src/extractors/embedding_extractor.py:
+  - Changed `_check_conflict_status()` return type from `bool` to `Optional[bool]`
+  - Now returns `None` for unreconciled groups (no GDELT labels) instead of `False`
+  - Returns `None` for reconciled groups without GDELT metadata (old data)
+  - Only returns `True`/`False` for groups with actual GDELT conflict labels
+
+**Problem Fixed:**
+- Previously: Unreconciled groups had `has_conflict=False` (looked like a real label)
+- Now: Unreconciled groups have `has_conflict=None` (correctly indicates "not labeled")
+
+**Why This Matters:**
+- `False` = "This is a non-conflict event" (a real label from GDELT)
+- `None` = "We don't know if this is conflict or not" (not labeled yet)
+- Training on `False` values for unreconciled groups creates **label noise**
+- ML training should ONLY use groups where `has_conflict` is `True` or `False` (not `None`)
+
+**Behavior:**
+- Unreconciled groups (no reconciliation_log entry): `has_conflict=None`
+- Reconciled but no GDELT metadata (old data): `has_conflict=None`
+- Reconciled with `label_conflict=1`: `has_conflict=True`
+- Reconciled with `label_conflict=0`: `has_conflict=False`
+
+**Impact:**
+- Parquet files now correctly distinguish labeled vs unlabeled groups
+- Training service can filter to only labeled groups (`has_conflict IS NOT NULL`)
+- Prediction service can filter to only unlabeled groups (`has_conflict IS NULL`)
+
+---
+
+## [0.3.7] - 2025-11-14
+
+### Changed - Filter Groups Without Countries
+- **Added country filter** - Modified src/service.py:
+  - Now skips semantic groups that have no countries (empty or whitespace-only)
+  - Filter applied after all feature extraction is complete
+  - Returns empty features dict to trigger skip logic
+  - Rationale: Cannot predict conflicts between countries if no countries are present
+  - Reduces dataset size and focuses on geographically-specific events
+  - Logs skipped groups with reason: "Skipping semantic group without countries"
+
+**Behavior:**
+- Groups with `countries=""` or `countries="   "` are skipped
+- Groups with valid countries (e.g., `countries="US,CN"`) are processed normally
+- Skipped groups do NOT get written to parquet files or Feast feature store
+
+**Impact:**
+- Cleaner training dataset - only groups with country information
+- Smaller parquet files - no empty country rows
+- Aligns with goal of predicting conflicts between countries
+
+---
+
+## [0.3.6] - 2025-11-14
+
+### Changed - has_conflict Feature Now Detects Actual War/Conflict Events
+- **Enhanced conflict detection** - Modified src/extractors/embedding_extractor.py:
+  - Changed `_check_conflict_status()` to detect actual war/conflict events using GDELT metadata
+  - Now queries ONLY `max_label_conflict` (GDELT conflict indicator)
+  - Returns True if any matched GDELT event has `label_conflict=1` (actual war/conflict)
+  - Removed data quality check (multiple label_ids) - this is for war detection, not data quality
+  - Updated docstring to clarify new behavior
+  - Simplified logging to show only max_label_conflict
+
+**Previous Behavior:**
+- `has_conflict = True` only when group_id had multiple different label_ids
+- This indicated data quality issues (ambiguous labeling), NOT actual conflict events
+- Feature name was misleading - sounded like war detection but was actually label ambiguity
+
+**New Behavior:**
+- `has_conflict = True` ONLY when any matched GDELT event has `label_conflict=1`
+- Purely for war/conflict detection, NOT data quality issues
+- Requires labeler service v0.13.0+ with GDELT metadata columns
+
+**GDELT Conflict Indicators:**
+- `event_code` in [18, 19, 20, 21, 22, 23] = conflict events (PROTEST → MILITARY_ACTION)
+- `goldstein_scale < -2` = negative/conflict events
+- `label_conflict = 1` = GDELT's binary conflict classification
+
+**Dependencies:**
+- Requires `reconciliation_log` table to have `label_conflict` column (added in labeler v0.13.0)
+- Backward compatible: if column doesn't exist, falls back to label_count check only
+
+---
+
+## [0.3.5] - 2025-11-14
+
+### Fixed - Countries Data Source (Read from Kafka Message)
+- **Fixed countries extraction** - Modified src/extractors/embedding_extractor.py:
+  - Changed countries data source from reconciliation_log database query to semantic_groups Kafka message
+  - Removed _fetch_countries_from_reconciliation() method (no longer needed)
+  - Countries are now read directly from the message: `group.get("countries", [])`
+  - Eliminates race condition where feature-engineering processed messages before reconciliation_log was populated
+  - Clustering service already extracts countries from NER entities and includes them in semantic_groups messages
+  - No database query needed - faster and more reliable
+  - Updated docstring to clarify postgres_client is only used for conflict checking
+
+### Root Cause
+- The clustering-semantic-grouping-service extracts countries from NER entities and includes them in the semantic_groups Kafka message (Avro schema field: "countries")
+- The labeler-ground-truth-ingest-service also consumes semantic_groups and writes countries to reconciliation_log table
+- Both services consume from the same topic in parallel, creating a race condition
+- Feature-engineering-service was querying reconciliation_log instead of reading from the message
+- This caused empty countries when feature-engineering processed messages before labeler wrote to the database
+
+### Solution
+- Read countries directly from the semantic_groups Kafka message (source of truth)
+- No dependency on reconciliation_log timing
+- No race condition
+- Simpler and faster (no database query)
+
+## [0.3.4] - 2025-11-14
+
+### Fixed - Async Migration and Connection Pool Implementation
+- **Migrated PostgresClient to asyncpg** - Modified src/clients/postgres_client.py:
+  - Replaced psycopg2 (synchronous) with asyncpg (asynchronous)
+  - Changed from single connection to connection pool (min_size=2, max_size=10)
+  - Converted all methods to async: connect(), get_actors_by_ids(), get_actor_by_id(), get_articles_by_ids(), get_all_actors(), execute_query(), close()
+  - Changed SQL placeholders from %s to $1, $2, etc. (asyncpg format)
+  - Added proper connection pool management with automatic reconnection
+  - Fixed "connection already closed" errors that were occurring in extractors
+- **Updated EmbeddingExtractor** - Modified src/extractors/embedding_extractor.py:
+  - Made extract() method async
+  - Made _fetch_countries_from_reconciliation() async with await
+  - Made _check_conflict_status() async with await
+  - Updated SQL placeholders from %s to $1
+  - Changed execute_query_sync() calls to execute_query() with await
+- **Updated BtcPriceExtractor** - Modified src/extractors/btc_price_extractor.py:
+  - Made extract() method async
+  - Made _fetch_btc_data() async with await
+  - Made _fetch_historical_btc_data() async with await
+  - Made generate_historical_btc_features() async with await
+  - Updated SQL placeholders from %s to $1, $2, etc.
+  - Changed execute_query_sync() calls to execute_query() with await
+- **Updated FeatureExtractor base class** - Modified src/extractors/base.py:
+  - Changed extract() abstract method signature to async
+  - All extractors now inherit async pattern
+- **Updated all other extractors** - Modified src/extractors/:
+  - SourceExtractor: Made extract() method async
+  - TemporalExtractor: Made extract() method async
+  - SentimentExtractor: Made extract() method async
+  - EntityExtractor: Made extract() method async
+  - ContentExtractor: Made extract() method async
+- **Updated FeatureEngineeringService** - Modified src/service.py:
+  - Made start() method async with await for postgres_client.connect()
+  - Made _consume_loop() method async
+  - Made _process_message() method async
+  - Made _extract_features() method async with await for extractor.extract()
+  - Made _check_and_generate_btc_features() method async
+  - Made _generate_btc_features() method async with await
+  - Made shutdown() method async with await for postgres_client.close()
+- **Updated main entry point** - Modified src/main.py:
+  - Added asyncio import
+  - Created async_main() async function
+  - Updated main() to use asyncio.run(async_main())
+  - Service now runs in async event loop
+- **Testing and Verification**:
+  - Service restarted successfully with no connection errors
+  - PostgreSQL connection pool established successfully
+  - BTC features generated successfully (1000 records)
+  - No "connection already closed" errors in logs
+  - All connections established and service running correctly
+
+### Root Cause Fixed
+- **Original Problem**: "connection already closed" InterfaceError in embedding_extractor and btc_price_extractor
+- **Root Cause**: Single psycopg2 connection shared across multiple extractors with no connection pooling or reconnection logic
+- **Solution**: Migrated to asyncpg with connection pooling, automatic reconnection, and proper async/await pattern throughout the service
+
 ## [0.3.3] - 2025-11-13
 
 ### Changed - Centralized Offline Store Location

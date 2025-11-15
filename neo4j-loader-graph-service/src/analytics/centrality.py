@@ -93,7 +93,7 @@ class CentralityComputer:
             )
             raise QueryError(
                 message=f"Failed to compute degree centrality: {str(e)}",
-                query_type="centrality_computation",
+                query=query,
                 details={"node_label": node_label},
                 trace_id=trace_id,
             ) from e
@@ -194,7 +194,7 @@ class CentralityComputer:
             )
             raise QueryError(
                 message=f"Failed to compute betweenness centrality: {str(e)}",
-                query_type="centrality_computation",
+                query=compute_query,
                 details={"node_label": node_label},
                 trace_id=trace_id,
             ) from e
@@ -295,7 +295,7 @@ class CentralityComputer:
             )
             raise QueryError(
                 message=f"Failed to compute closeness centrality: {str(e)}",
-                query_type="centrality_computation",
+                query=compute_query,
                 details={"node_label": node_label},
                 trace_id=trace_id,
             ) from e

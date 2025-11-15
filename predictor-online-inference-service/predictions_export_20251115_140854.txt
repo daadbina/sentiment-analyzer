@@ -1,0 +1,244 @@
+====================================================================================================
+PREDICTION TABLE DATA EXPORT
+Generated: 2025-11-15T14:08:54.428373
+Total Records: 14
+====================================================================================================
+
+
+====================================================================================================
+PREDICTION #1
+====================================================================================================
+ID:                      14
+Group ID:                772787c8-eadf-43d5-c47e-2e087f9b22eb
+Domain:                  conflict
+Prediction Probability:  0.695107
+Prediction Confidence:   0.390214
+Model Version:           18
+Predicted At:            2025-11-15T05:35:19.818593
+Created At:              2025-11-15T05:35:19.855741
+Trace ID:                b049fa42-9e7b-4d46-981d-82e46aac30df
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"conflict\", \"features\": {}, \"group_id\": \"772787c8-eadf-43d5-c47e-2e087f9b22eb\", \"trace_id\": \"b049fa42-9e7b-4d46-981d-82e46aac30df\", \"predicted_at\": \"2025-11-15T05:35:19.759656\", \"model_version\": \"18\", \"prediction_confidence\": 0.3902137772556753, \"prediction_probability\": 0.6951068886278376}"
+
+====================================================================================================
+PREDICTION #2
+====================================================================================================
+ID:                      13
+Group ID:                772787c8-eadf-43d5-c47e-2e087f9b22eb
+Domain:                  btc
+Prediction Probability:  0.947000
+Prediction Confidence:   0.947000
+Model Version:           14
+Predicted At:            2025-11-15T05:35:18.885644
+Created At:              2025-11-15T05:35:18.932121
+Trace ID:                b049fa42-9e7b-4d46-981d-82e46aac30df
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"btc\", \"features\": {}, \"group_id\": \"772787c8-eadf-43d5-c47e-2e087f9b22eb\", \"trace_id\": \"b049fa42-9e7b-4d46-981d-82e46aac30df\", \"predicted_at\": \"2025-11-15T05:35:18.822734\", \"model_version\": \"14\", \"prediction_value\": -1.5165154933929443, \"prediction_strength\": \"strong\", \"prediction_direction\": \"down\", \"prediction_magnitude\": 1.5165154933929443, \"prediction_confidence\": 0.947, \"prediction_description\": \"Strong downward movement: -1.52%\", \"prediction_probability\": 0.947}"
+
+====================================================================================================
+PREDICTION #3
+====================================================================================================
+ID:                      12
+Group ID:                e31779fc-d137-e295-b535-28d5264d4e33
+Domain:                  conflict
+Prediction Probability:  0.760384
+Prediction Confidence:   0.520768
+Model Version:           18
+Predicted At:            2025-11-15T05:34:42.706878
+Created At:              2025-11-15T05:34:42.754477
+Trace ID:                66da200f-9bfe-4bb2-ae8a-75f06df5b9cc
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"conflict\", \"features\": {}, \"group_id\": \"e31779fc-d137-e295-b535-28d5264d4e33\", \"trace_id\": \"66da200f-9bfe-4bb2-ae8a-75f06df5b9cc\", \"predicted_at\": \"2025-11-15T05:34:42.656052\", \"model_version\": \"18\", \"prediction_confidence\": 0.5207683601684188, \"prediction_probability\": 0.7603841800842094}"
+
+====================================================================================================
+PREDICTION #4
+====================================================================================================
+ID:                      11
+Group ID:                e31779fc-d137-e295-b535-28d5264d4e33
+Domain:                  btc
+Prediction Probability:  0.947000
+Prediction Confidence:   0.947000
+Model Version:           14
+Predicted At:            2025-11-15T05:34:41.778475
+Created At:              2025-11-15T05:34:41.815815
+Trace ID:                66da200f-9bfe-4bb2-ae8a-75f06df5b9cc
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"btc\", \"features\": {}, \"group_id\": \"e31779fc-d137-e295-b535-28d5264d4e33\", \"trace_id\": \"66da200f-9bfe-4bb2-ae8a-75f06df5b9cc\", \"predicted_at\": \"2025-11-15T05:34:41.715143\", \"model_version\": \"14\", \"prediction_value\": -1.5165154933929443, \"prediction_strength\": \"strong\", \"prediction_direction\": \"down\", \"prediction_magnitude\": 1.5165154933929443, \"prediction_confidence\": 0.947, \"prediction_description\": \"Strong downward movement: -1.52%\", \"prediction_probability\": 0.947}"
+
+====================================================================================================
+PREDICTION #5
+====================================================================================================
+ID:                      10
+Group ID:                bb5526cc-4c2e-aa3d-7c2d-eac239611784
+Domain:                  conflict
+Prediction Probability:  0.753335
+Prediction Confidence:   0.506671
+Model Version:           18
+Predicted At:            2025-11-15T05:34:38.613625
+Created At:              2025-11-15T05:34:38.646930
+Trace ID:                63ccee33-14ef-4f12-9563-ed24b4dfaffd
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"conflict\", \"features\": {}, \"group_id\": \"bb5526cc-4c2e-aa3d-7c2d-eac239611784\", \"trace_id\": \"63ccee33-14ef-4f12-9563-ed24b4dfaffd\", \"predicted_at\": \"2025-11-15T05:34:38.550779\", \"model_version\": \"18\", \"prediction_confidence\": 0.5066706101075633, \"prediction_probability\": 0.7533353050537817}"
+
+====================================================================================================
+PREDICTION #6
+====================================================================================================
+ID:                      9
+Group ID:                bb5526cc-4c2e-aa3d-7c2d-eac239611784
+Domain:                  btc
+Prediction Probability:  0.947000
+Prediction Confidence:   0.947000
+Model Version:           14
+Predicted At:            2025-11-15T05:34:37.779592
+Created At:              2025-11-15T05:34:37.819008
+Trace ID:                63ccee33-14ef-4f12-9563-ed24b4dfaffd
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"btc\", \"features\": {}, \"group_id\": \"bb5526cc-4c2e-aa3d-7c2d-eac239611784\", \"trace_id\": \"63ccee33-14ef-4f12-9563-ed24b4dfaffd\", \"predicted_at\": \"2025-11-15T05:34:37.716660\", \"model_version\": \"14\", \"prediction_value\": -1.5165154933929443, \"prediction_strength\": \"strong\", \"prediction_direction\": \"down\", \"prediction_magnitude\": 1.5165154933929443, \"prediction_confidence\": 0.947, \"prediction_description\": \"Strong downward movement: -1.52%\", \"prediction_probability\": 0.947}"
+
+====================================================================================================
+PREDICTION #7
+====================================================================================================
+ID:                      8
+Group ID:                6385956c-2d58-0fd6-bfe5-cfc0a97053a9
+Domain:                  conflict
+Prediction Probability:  0.679332
+Prediction Confidence:   0.358663
+Model Version:           18
+Predicted At:            2025-11-15T05:34:36.221032
+Created At:              2025-11-15T05:34:36.266849
+Trace ID:                9b44de86-c8fc-4fd9-80d4-2b89e98d06c5
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"conflict\", \"features\": {}, \"group_id\": \"6385956c-2d58-0fd6-bfe5-cfc0a97053a9\", \"trace_id\": \"9b44de86-c8fc-4fd9-80d4-2b89e98d06c5\", \"predicted_at\": \"2025-11-15T05:34:36.169189\", \"model_version\": \"18\", \"prediction_confidence\": 0.35866304541987826, \"prediction_probability\": 0.6793315227099391}"
+
+====================================================================================================
+PREDICTION #8
+====================================================================================================
+ID:                      7
+Group ID:                6385956c-2d58-0fd6-bfe5-cfc0a97053a9
+Domain:                  btc
+Prediction Probability:  0.947000
+Prediction Confidence:   0.947000
+Model Version:           14
+Predicted At:            2025-11-15T05:34:32.457951
+Created At:              2025-11-15T05:34:32.491400
+Trace ID:                9b44de86-c8fc-4fd9-80d4-2b89e98d06c5
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"btc\", \"features\": {}, \"group_id\": \"6385956c-2d58-0fd6-bfe5-cfc0a97053a9\", \"trace_id\": \"9b44de86-c8fc-4fd9-80d4-2b89e98d06c5\", \"predicted_at\": \"2025-11-15T05:34:32.048793\", \"model_version\": \"14\", \"prediction_value\": -1.5165154933929443, \"prediction_strength\": \"strong\", \"prediction_direction\": \"down\", \"prediction_magnitude\": 1.5165154933929443, \"prediction_confidence\": 0.947, \"prediction_description\": \"Strong downward movement: -1.52%\", \"prediction_probability\": 0.947}"
+
+====================================================================================================
+PREDICTION #9
+====================================================================================================
+ID:                      6
+Group ID:                e26e1df8-70e5-19ce-0a17-ea9db8537715
+Domain:                  btc
+Prediction Probability:  0.947000
+Prediction Confidence:   0.947000
+Model Version:           14
+Predicted At:            2025-11-15T03:56:25.741358
+Created At:              2025-11-15T03:56:25.774621
+Trace ID:                bddf4abc-c184-4a07-a58b-8b97eb6b1d28
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"btc\", \"features\": {\"countries\": \"IN,PK\", \"has_conflict\": null, \"semantic_group_features:btc_volume\": 0.0, \"semantic_group_features:num_sources\": 2, \"semantic_group_features:entity_count\": 9, \"semantic_group_features:sentiment_std\": 0.01631272196658742, \"semantic_group_features:avg_word_count\": 189.42857142857142, \"semantic_group_features:sentiment_mean\": 0.009964285714285703, \"semantic_group_features:btc_label_spike\": 0, \"semantic_group_features:time_span_hours\": 80.92694444444444, \"semantic_group_features:avg_title_length\": 10.0, \"semantic_group_features:domain_diversity\": 2, \"semantic_group_features:entity_diversity\": 2, \"semantic_group_features:entity_prominence\": 0.23809523809523808, \"semantic_group_features:btc_change_pct_10h\": 0.0, \"semantic_group_features:centroid_magnitude\": 1.000000002226096, \"semantic_group_features:language_diversity\": 1, \"semantic_group_features:btc_volatility_score\": 0.0, \"semantic_group_features:entity_concentration\": 0.8994375017061169, \"semantic_group_features:publication_velocity\": 0.08649776719057312, \"semantic_group_features:sentiment_volatility\": 0.028166666666666673, \"semantic_group_features:embedding_drift_score\": 0.036084044608971404, \"semantic_group_features:source_credibility_avg\": 0.8142857142857143, \"semantic_group_features:source_credibility_std\": 0.09897433186107873, \"semantic_group_features:source_diversity_score\": 0.9852281360342516, \"semantic_group_features:temporal_concentration\": 0.14285714285714285, \"semantic_group_features:days_since_first_article\": 3.4529437903125, \"semantic_group_features:sentiment_polarity_ratio\": 0.0, \"semantic_group_features:intra_cluster_similarity_std\": 0.12686409056186676, \"semantic_group_features:intra_cluster_similarity_mean\": 0.662956714630127}, \"group_id\": \"e26e1df8-70e5-19ce-0a17-ea9db8537715\", \"trace_id\": \"bddf4abc-c184-4a07-a58b-8b97eb6b1d28\", \"predicted_at\": \"2025-11-15T03:56:25.678700\", \"model_version\": \"14\", \"prediction_strength\": \"strong\", \"prediction_direction\": \"down\", \"prediction_magnitude\": 1.8692396879196167, \"prediction_confidence\": 0.947, \"prediction_description\": \"Strong downward movement: -1.87%\", \"prediction_probability\": 0.947}"
+
+====================================================================================================
+PREDICTION #10
+====================================================================================================
+ID:                      5
+Group ID:                5732dc93-e1a7-e01f-baa1-0f1cf948d64d
+Domain:                  btc
+Prediction Probability:  0.947000
+Prediction Confidence:   0.947000
+Model Version:           14
+Predicted At:            2025-11-15T03:56:22.816050
+Created At:              2025-11-15T03:56:22.848690
+Trace ID:                4f7e0d96-e756-4501-9a7d-507e36ed93a4
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"btc\", \"features\": {\"countries\": \"CN,GH,RU,US,ZA\", \"has_conflict\": null, \"semantic_group_features:btc_volume\": 0.0, \"semantic_group_features:num_sources\": 1, \"semantic_group_features:entity_count\": 64, \"semantic_group_features:sentiment_std\": 0.7915425460594157, \"semantic_group_features:avg_word_count\": 352.6666666666667, \"semantic_group_features:sentiment_mean\": 0.30376666666666663, \"semantic_group_features:btc_label_spike\": 0, \"semantic_group_features:time_span_hours\": 27.82472222222222, \"semantic_group_features:avg_title_length\": 8.0, \"semantic_group_features:domain_diversity\": 2, \"semantic_group_features:entity_diversity\": 3, \"semantic_group_features:entity_prominence\": 0.11363636363636363, \"semantic_group_features:btc_change_pct_10h\": 0.0, \"semantic_group_features:centroid_magnitude\": 1.0000000215315779, \"semantic_group_features:language_diversity\": 1, \"semantic_group_features:btc_volatility_score\": 0.0, \"semantic_group_features:entity_concentration\": 0.8887606292738591, \"semantic_group_features:publication_velocity\": 0.10781778793838413, \"semantic_group_features:sentiment_volatility\": 0.8523499999999999, \"semantic_group_features:embedding_drift_score\": 0.036084121288409404, \"semantic_group_features:source_credibility_avg\": 0.6999999999999998, \"semantic_group_features:source_credibility_std\": 0.00000000000000011102230246251565, \"semantic_group_features:source_diversity_score\": 0.0, \"semantic_group_features:temporal_concentration\": 0.3333333333333333, \"semantic_group_features:days_since_first_article\": 1.6510937504861112, \"semantic_group_features:sentiment_polarity_ratio\": 0.040546510810816436, \"semantic_group_features:intra_cluster_similarity_std\": 0.16973653435707092, \"semantic_group_features:intra_cluster_similarity_mean\": 0.5683901906013489}, \"group_id\": \"5732dc93-e1a7-e01f-baa1-0f1cf948d64d\", \"trace_id\": \"4f7e0d96-e756-4501-9a7d-507e36ed93a4\", \"predicted_at\": \"2025-11-15T03:56:22.753346\", \"model_version\": \"14\", \"prediction_strength\": \"strong\", \"prediction_direction\": \"down\", \"prediction_magnitude\": 1.8692396879196167, \"prediction_confidence\": 0.947, \"prediction_description\": \"Strong downward movement: -1.87%\", \"prediction_probability\": 0.947}"
+
+====================================================================================================
+PREDICTION #11
+====================================================================================================
+ID:                      4
+Group ID:                583a804e-88bd-05b2-436c-00cc4be24974
+Domain:                  btc
+Prediction Probability:  0.947000
+Prediction Confidence:   0.947000
+Model Version:           14
+Predicted At:            2025-11-15T03:56:19.580931
+Created At:              2025-11-15T03:56:19.613820
+Trace ID:                f7cc58b9-4123-471e-b1cb-1a4b4695a8c2
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"btc\", \"features\": {\"countries\": \"CH,US\", \"has_conflict\": null, \"semantic_group_features:btc_volume\": 0.0, \"semantic_group_features:num_sources\": 4, \"semantic_group_features:entity_count\": 39, \"semantic_group_features:sentiment_std\": 0.658452302296833, \"semantic_group_features:avg_word_count\": 174.0, \"semantic_group_features:sentiment_mean\": 0.42533, \"semantic_group_features:btc_label_spike\": 0, \"semantic_group_features:time_span_hours\": 49.71, \"semantic_group_features:avg_title_length\": 12.2, \"semantic_group_features:domain_diversity\": 1, \"semantic_group_features:entity_diversity\": 3, \"semantic_group_features:entity_prominence\": 0.12857142857142856, \"semantic_group_features:btc_change_pct_10h\": 0.0, \"semantic_group_features:centroid_magnitude\": 1.0000000117626349, \"semantic_group_features:language_diversity\": 1, \"semantic_group_features:btc_volatility_score\": 0.0, \"semantic_group_features:entity_concentration\": 0.9152008958990617, \"semantic_group_features:publication_velocity\": 0.10058338362502514, \"semantic_group_features:sentiment_volatility\": 0.9892999999999998, \"semantic_group_features:embedding_drift_score\": 0.03608429385736584, \"semantic_group_features:source_credibility_avg\": 0.8300000000000001, \"semantic_group_features:source_credibility_std\": 0.1077032961426901, \"semantic_group_features:source_diversity_score\": 0.9609640474436811, \"semantic_group_features:temporal_concentration\": 0.2, \"semantic_group_features:days_since_first_article\": 2.0887335813310184, \"semantic_group_features:sentiment_polarity_ratio\": 0.05108256237659907, \"semantic_group_features:intra_cluster_similarity_std\": 0.1476076990365982, \"semantic_group_features:intra_cluster_similarity_mean\": 0.5808733701705933}, \"group_id\": \"583a804e-88bd-05b2-436c-00cc4be24974\", \"trace_id\": \"f7cc58b9-4123-471e-b1cb-1a4b4695a8c2\", \"predicted_at\": \"2025-11-15T03:56:19.516930\", \"model_version\": \"14\", \"prediction_strength\": \"strong\", \"prediction_direction\": \"down\", \"prediction_magnitude\": 1.8692396879196167, \"prediction_confidence\": 0.947, \"prediction_description\": \"Strong downward movement: -1.87%\", \"prediction_probability\": 0.947}"
+
+====================================================================================================
+PREDICTION #12
+====================================================================================================
+ID:                      3
+Group ID:                07326ccd-2076-66e6-67eb-85c03379a4a7
+Domain:                  conflict
+Prediction Probability:  0.756152
+Prediction Confidence:   0.512303
+Model Version:           18
+Predicted At:            2025-11-15T03:54:16.683667
+Created At:              2025-11-15T03:54:16.716715
+Trace ID:                67a771a0-1a92-4649-8a0f-2d50d036dbce
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"conflict\", \"features\": {\"countries\": \"AF,US,VE\", \"has_conflict\": null, \"semantic_group_features:btc_volume\": 0.0, \"semantic_group_features:num_sources\": 2, \"semantic_group_features:entity_count\": 14, \"semantic_group_features:sentiment_std\": 0.05270018184661855, \"semantic_group_features:avg_word_count\": 296.8333333333333, \"semantic_group_features:sentiment_mean\": 0.026675000000000004, \"semantic_group_features:btc_label_spike\": 0, \"semantic_group_features:time_span_hours\": 41.13, \"semantic_group_features:avg_title_length\": 9.0, \"semantic_group_features:domain_diversity\": 2, \"semantic_group_features:entity_diversity\": 3, \"semantic_group_features:entity_prominence\": 0.15789473684210525, \"semantic_group_features:btc_change_pct_10h\": 0.0, \"semantic_group_features:centroid_magnitude\": 0.9999999851404641, \"semantic_group_features:language_diversity\": 1, \"semantic_group_features:btc_volatility_score\": 0.0, \"semantic_group_features:entity_concentration\": 0.9566089729477021, \"semantic_group_features:publication_velocity\": 0.14587892049598833, \"semantic_group_features:sentiment_volatility\": 0.07325999999999992, \"semantic_group_features:embedding_drift_score\": 0.036084318730529696, \"semantic_group_features:source_credibility_avg\": 0.7333333333333334, \"semantic_group_features:source_credibility_std\": 0.07453559924999302, \"semantic_group_features:source_diversity_score\": 0.6500224216483541, \"semantic_group_features:temporal_concentration\": 0.16666666666666666, \"semantic_group_features:days_since_first_article\": 2.2590078258217594, \"semantic_group_features:sentiment_polarity_ratio\": 0.0, \"semantic_group_features:intra_cluster_similarity_std\": 0.0710124522447586, \"semantic_group_features:intra_cluster_similarity_mean\": 0.7063223719596863}, \"group_id\": \"07326ccd-2076-66e6-67eb-85c03379a4a7\", \"trace_id\": \"67a771a0-1a92-4649-8a0f-2d50d036dbce\", \"countries\": [\"AF\", \"US\", \"VE\"], \"predicted_at\": \"2025-11-15T03:54:16.619667\", \"model_version\": \"18\", \"prediction_label\": \"conflict\", \"prediction_certainty\": \"moderate\", \"prediction_confidence\": 0.5123033013871126, \"prediction_description\": \"Moderate certainty: conflict (75.6%)\", \"prediction_probability\": 0.7561516506935563}"
+
+====================================================================================================
+PREDICTION #13
+====================================================================================================
+ID:                      2
+Group ID:                583a804e-88bd-05b2-436c-00cc4be24974
+Domain:                  conflict
+Prediction Probability:  0.775688
+Prediction Confidence:   0.551376
+Model Version:           18
+Predicted At:            2025-11-15T03:53:40.426478
+Created At:              2025-11-15T03:53:40.459590
+Trace ID:                d2473099-a363-4fd6-a4f5-a97393637d2e
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"conflict\", \"features\": {\"countries\": \"CH,US\", \"has_conflict\": null, \"semantic_group_features:btc_volume\": 0.0, \"semantic_group_features:num_sources\": 4, \"semantic_group_features:entity_count\": 39, \"semantic_group_features:sentiment_std\": 0.658452302296833, \"semantic_group_features:avg_word_count\": 174.0, \"semantic_group_features:sentiment_mean\": 0.42533, \"semantic_group_features:btc_label_spike\": 0, \"semantic_group_features:time_span_hours\": 49.71, \"semantic_group_features:avg_title_length\": 12.2, \"semantic_group_features:domain_diversity\": 1, \"semantic_group_features:entity_diversity\": 3, \"semantic_group_features:entity_prominence\": 0.12857142857142856, \"semantic_group_features:btc_change_pct_10h\": 0.0, \"semantic_group_features:centroid_magnitude\": 1.0000000117626349, \"semantic_group_features:language_diversity\": 1, \"semantic_group_features:btc_volatility_score\": 0.0, \"semantic_group_features:entity_concentration\": 0.9152008958990617, \"semantic_group_features:publication_velocity\": 0.10058338362502514, \"semantic_group_features:sentiment_volatility\": 0.9892999999999998, \"semantic_group_features:embedding_drift_score\": 0.03608429385736584, \"semantic_group_features:source_credibility_avg\": 0.8300000000000001, \"semantic_group_features:source_credibility_std\": 0.1077032961426901, \"semantic_group_features:source_diversity_score\": 0.9609640474436811, \"semantic_group_features:temporal_concentration\": 0.2, \"semantic_group_features:days_since_first_article\": 2.0887335813310184, \"semantic_group_features:sentiment_polarity_ratio\": 0.05108256237659907, \"semantic_group_features:intra_cluster_similarity_std\": 0.1476076990365982, \"semantic_group_features:intra_cluster_similarity_mean\": 0.5808733701705933}, \"group_id\": \"583a804e-88bd-05b2-436c-00cc4be24974\", \"trace_id\": \"d2473099-a363-4fd6-a4f5-a97393637d2e\", \"countries\": [\"CH\", \"US\"], \"predicted_at\": \"2025-11-15T03:53:40.340479\", \"model_version\": \"18\", \"prediction_label\": \"conflict\", \"prediction_certainty\": \"moderate\", \"prediction_confidence\": 0.5513763669777756, \"prediction_description\": \"Moderate certainty: conflict (77.6%)\", \"prediction_probability\": 0.7756881834888878}"
+
+====================================================================================================
+PREDICTION #14
+====================================================================================================
+ID:                      1
+Group ID:                583a804e-88bd-05b2-436c-00cc4be24974
+Domain:                  conflict
+Prediction Probability:  1.000000
+Prediction Confidence:   0.700000
+Model Version:           18
+Predicted At:            2025-11-15T03:52:20.658985
+Created At:              2025-11-15T03:52:20.693689
+Trace ID:                5bd77863-a67f-49b7-8efa-21e709a03b06
+
+Features (Full Metadata):
+----------------------------------------------------------------------------------------------------
+"{\"domain\": \"conflict\", \"features\": {\"countries\": \"CH,US\", \"has_conflict\": null, \"semantic_group_features:btc_volume\": 0.0, \"semantic_group_features:num_sources\": 4, \"semantic_group_features:entity_count\": 39, \"semantic_group_features:sentiment_std\": 0.658452302296833, \"semantic_group_features:avg_word_count\": 174.0, \"semantic_group_features:sentiment_mean\": 0.42533, \"semantic_group_features:btc_label_spike\": 0, \"semantic_group_features:time_span_hours\": 49.71, \"semantic_group_features:avg_title_length\": 12.2, \"semantic_group_features:domain_diversity\": 1, \"semantic_group_features:entity_diversity\": 3, \"semantic_group_features:entity_prominence\": 0.12857142857142856, \"semantic_group_features:btc_change_pct_10h\": 0.0, \"semantic_group_features:centroid_magnitude\": 1.0000000117626349, \"semantic_group_features:language_diversity\": 1, \"semantic_group_features:btc_volatility_score\": 0.0, \"semantic_group_features:entity_concentration\": 0.9152008958990617, \"semantic_group_features:publication_velocity\": 0.10058338362502514, \"semantic_group_features:sentiment_volatility\": 0.9892999999999998, \"semantic_group_features:embedding_drift_score\": 0.03608429385736584, \"semantic_group_features:source_credibility_avg\": 0.8300000000000001, \"semantic_group_features:source_credibility_std\": 0.1077032961426901, \"semantic_group_features:source_diversity_score\": 0.9609640474436811, \"semantic_group_features:temporal_concentration\": 0.2, \"semantic_group_features:days_since_first_article\": 2.0887335813310184, \"semantic_group_features:sentiment_polarity_ratio\": 0.05108256237659907, \"semantic_group_features:intra_cluster_similarity_std\": 0.1476076990365982, \"semantic_group_features:intra_cluster_similarity_mean\": 0.5808733701705933}, \"group_id\": \"583a804e-88bd-05b2-436c-00cc4be24974\", \"trace_id\": \"5bd77863-a67f-49b7-8efa-21e709a03b06\", \"countries\": [\"CH\", \"US\"], \"predicted_at\": \"2025-11-15T03:52:20.594985\", \"model_version\": \"18\", \"prediction_label\": \"conflict\", \"prediction_certainty\": \"high\", \"prediction_confidence\": 0.7, \"prediction_description\": \"High certainty: conflict (100.0%)\", \"prediction_probability\": 1.0}"

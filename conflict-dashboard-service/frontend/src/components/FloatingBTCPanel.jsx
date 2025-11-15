@@ -34,17 +34,16 @@ const FloatingBTCPanel = ({ predictions, loading, error }) => {
   };
 
   const formatPercentChange = (magnitude) => {
-    // magnitude is already the percent change value
+    // magnitude is already the percent change value (always positive)
     return Math.abs(magnitude).toFixed(2);
   };
 
-  const getPredictionDirection = (direction, magnitude) => {
-    // direction is 'up', 'down', or 'neutral'
-    // magnitude is the percent change value
-    if (direction === 'up' || magnitude > 0) {
+  const getPredictionDirection = (direction) => {
+    // direction is 'up', 'down', or 'neutral' from the predictor service
+    if (direction === 'up') {
       return { text: '📈 UP', color: 'text-green-400', sign: '+' };
     }
-    if (direction === 'down' || magnitude < 0) {
+    if (direction === 'down') {
       return { text: '📉 DOWN', color: 'text-red-400', sign: '-' };
     }
     return { text: '➡️ NEUTRAL', color: 'text-yellow-400', sign: '' };
@@ -104,8 +103,7 @@ const FloatingBTCPanel = ({ predictions, loading, error }) => {
             <div className="space-y-3">
               {predictions.map((pred, index) => {
                 const direction = getPredictionDirection(
-                  pred.prediction_direction || 'neutral',
-                  pred.prediction_magnitude || 0
+                  pred.prediction_direction || 'neutral'
                 );
                 return (
                   <motion.div
@@ -124,18 +122,10 @@ const FloatingBTCPanel = ({ predictions, loading, error }) => {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <div className="text-gray-400 text-xs">Predicted Change</div>
-                        <div className={`font-semibold ${direction.color}`}>
-                          {direction.sign}{formatPercentChange(pred.prediction_magnitude || 0)}%
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-gray-400 text-xs">Confidence</div>
-                        <div className="text-white font-semibold">
-                          {formatConfidence(pred.prediction_confidence)}%
-                        </div>
+                    <div className="text-sm">
+                      <div className="text-gray-400 text-xs mb-1">Predicted Change</div>
+                      <div className={`font-bold text-2xl ${direction.color}`}>
+                        {direction.sign}{formatPercentChange(pred.prediction_magnitude || 0)}%
                       </div>
                     </div>
 
